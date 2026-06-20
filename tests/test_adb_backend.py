@@ -36,5 +36,22 @@ def test_launch_uses_monkey():
     calls = []
     b = AdbBackend(serial="d", runner=make_runner(calls))
     b.launch("com.android.settings")
-    cmd = calls[0][0]
-    assert "monkey" in cmd and "com.android.settings" in cmd
+    assert calls[0][0] == ["adb", "-s", "d", "shell", "monkey", "-p",
+                           "com.android.settings", "-c",
+                           "android.intent.category.LAUNCHER", "1"]
+
+def test_adb_no_serial_omits_s_flag():
+    calls = []
+    b = AdbBackend(serial=None, runner=make_runner(calls, stdout="device"))
+    b.get_state()
+    assert calls[0][0] == ["adb", "get-state"]
+
+def test_screencap_writes_bytes_and_returns_path(tmp_path):
+    calls = []
+    png = b"\x89PNG\r\n\x1a\nFAKEDATA"
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout_bytes=png))
+    dest = str(tmp_path / "snap.png")
+    out = b.screencap(dest)
+    assert out == dest
+    assert (tmp_path / "snap.png").read_bytes() == png
+    assert calls[0][0] == ["adb", "-s", "d", "exec-out", "screencap", "-p"]
