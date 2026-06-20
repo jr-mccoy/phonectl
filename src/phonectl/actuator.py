@@ -41,6 +41,8 @@ def _matches(el, text, id):
 
 def wait_for(backend, session, text=None, id=None, timeout: float = 5.0,
              interval: float = 0.5, sleep=time.sleep):
+    if text is None and id is None:
+        raise ValueError("wait_for requires text or id")
     deadline = timeout
     while True:
         snap = observer.observe(backend, session)

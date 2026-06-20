@@ -1,3 +1,4 @@
+import pytest
 from phonectl.session import Session
 from phonectl import actuator
 
@@ -21,6 +22,7 @@ class ScriptBackend:
     def input_tap(self, x, y): self.calls.append(("tap", x, y))
     def input_text(self, t): self.calls.append(("text", t))
     def input_key(self, k): self.calls.append(("key", k))
+    def input_swipe(self, x1, y1, x2, y2, ms=200): self.calls.append(("swipe", x1, y1, x2, y2, ms))
 
 def test_tap_by_index_resolves_center_then_reobserves():
     s = Session()
@@ -51,3 +53,18 @@ def test_wait_for_finds_text_after_polling():
                              sleep=lambda *_: calls.append(1))
     assert snap is not None
     assert any(e["text"] == "Bluetooth" for e in snap["elements"])
+
+def test_swipe_records_and_reobserves():
+    s = Session()
+    b = ScriptBackend()
+    from phonectl import observer
+    observer.observe(b, s)  # seed snapshot (XML_A)
+    snap = actuator.swipe(b, s, 100, 200, 100, 800)
+    assert ("swipe", 100, 200, 100, 800, 200) in b.calls
+    assert snap["elements"][0]["text"] == "Bluetooth"  # re-observed XML_B
+
+def test_wait_for_requires_text_or_id():
+    s = Session()
+    b = ScriptBackend()
+    with pytest.raises(ValueError):
+        actuator.wait_for(b, s)
