@@ -148,7 +148,8 @@ The agent can tap anything, so v1 ships with:
 
 - **Audit log** — every `act()` appended to JSONL (timestamp, verb, target, resulting app+hash).
 - **Three modes** — `auto` (act freely), `confirm` (print intended action, require a confirm
-  token before executing), `dry-run` (log only, no injection). **Default: `confirm`.**
+  token before executing), `dry-run` (log only, no injection). **Defaults: `auto` for local
+  dev builds, `confirm` for the released build** (set via config, not code).
 - **Guarded packages** — optional denylist (banking, store-purchase screens) where `act()`
   refuses or forces confirm, keyed off `observe().app.package`.
 - **Kill switch** — a sentinel file that hard-disables all action injection instantly.
