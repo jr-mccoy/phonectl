@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phonectl"
+version = "0.1.0"
+description = "Android computer-use bridge over ADB (no root)"
+requires-python = ">=3.9"
+
+[project.scripts]
+phonectl = "phonectl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
