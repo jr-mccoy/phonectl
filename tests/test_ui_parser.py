@@ -25,10 +25,20 @@ def test_parse_elements_center_and_flags():
 def test_screen_hash_stable_and_sensitive():
     els = ui_parser.parse_elements(FIXTURE)
     h1 = ui_parser.screen_hash(els)
+    # stable across re-parse
     assert h1 == ui_parser.screen_hash(ui_parser.parse_elements(FIXTURE))
-    changed = [dict(e) for e in els]
-    changed[1] = {**changed[1], "text": "Wi-Fi (off)"}
-    assert ui_parser.screen_hash(changed) != h1
+    # sensitive to text changes
+    changed_text = [dict(e) for e in els]
+    changed_text[1] = {**changed_text[1], "text": "Wi-Fi (off)"}
+    assert ui_parser.screen_hash(changed_text) != h1
+    # sensitive to id changes
+    changed_id = [dict(e) for e in els]
+    changed_id[1] = {**changed_id[1], "id": "android:id/summary"}
+    assert ui_parser.screen_hash(changed_id) != h1
+    # sensitive to bounds changes
+    changed_bounds = [dict(e) for e in els]
+    changed_bounds[1] = {**changed_bounds[1], "bounds": [0, 0, 1, 1]}
+    assert ui_parser.screen_hash(changed_bounds) != h1
 
 def test_parse_elements_tolerates_device_trailing_line():
     # `uiautomator dump /dev/tty` appends a status line after </hierarchy>
