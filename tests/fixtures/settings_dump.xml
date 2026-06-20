@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<hierarchy rotation="0">
+  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" content-desc="" clickable="false" bounds="[0,0][1080,2400]">
+    <node index="0" text="Settings" resource-id="com.android.settings:id/title" class="android.widget.TextView" content-desc="" clickable="false" bounds="[44,120][400,200]"/>
+    <node index="1" text="Wi-Fi" resource-id="android:id/title" class="android.widget.TextView" content-desc="" clickable="true" bounds="[44,380][1036,520]"/>
+    <node index="2" text="Bluetooth" resource-id="android:id/title" class="android.widget.TextView" content-desc="" clickable="true" bounds="[44,540][1036,680]"/>
+    <node index="3" text="" resource-id="" class="android.widget.ImageView" content-desc="Search" clickable="true" bounds="[960,120][1040,200]"/>
+  </node>
+</hierarchy>
