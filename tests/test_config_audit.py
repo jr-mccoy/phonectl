@@ -27,3 +27,21 @@ def test_log_action_appends_jsonl(tmp_path, monkeypatch):
     assert rec["verb"] == "tap" and rec["target"] == {"i": 7}
     assert rec["app"] == "com.x" and rec["hash"] == "abc"
     assert "ts" in rec
+
+
+def test_log_action_appends_multiple_lines(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    audit.log_action("tap", {"i": 1}, {"app": {"package": "com.a"}, "hash": "h1"})
+    audit.log_action("key", {"key": "back"}, {"app": {"package": "com.b"}, "hash": "h2"})
+    lines = (tmp_path / "actions.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0])["app"] == "com.a"
+    assert json.loads(lines[1])["app"] == "com.b"
+
+
+def test_log_action_defensive_when_result_missing_keys(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    audit.log_action("tap", {"i": 0}, {})
+    rec = json.loads((tmp_path / "actions.jsonl").read_text().strip().splitlines()[0])
+    assert rec["app"] == "" and rec["hash"] == ""
+
