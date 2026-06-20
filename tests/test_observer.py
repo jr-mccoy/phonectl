@@ -1,3 +1,4 @@
+import pytest
 from phonectl.session import Session
 from phonectl import observer
 
@@ -32,3 +33,22 @@ def test_session_resolve_returns_center():
     s = Session()
     observer.observe(CannedBackend(XML, WINDOW), s)
     assert s.resolve(0) == (540, 450)
+
+def test_parse_focused_app_short_dot_activity():
+    line = "mCurrentFocus=Window{8b1c2d3 u0 com.android.settings/.Settings}"
+    assert observer.parse_focused_app(line) == {
+        "package": "com.android.settings", "activity": ".Settings"}
+
+def test_parse_focused_app_empty_returns_blank():
+    assert observer.parse_focused_app("") == {"package": "", "activity": ""}
+
+def test_session_resolve_no_snapshot_raises():
+    s = Session()
+    with pytest.raises(KeyError):
+        s.resolve(0)
+
+def test_session_resolve_unknown_index_raises():
+    s = Session()
+    observer.observe(CannedBackend(XML, WINDOW), s)
+    with pytest.raises(KeyError):
+        s.resolve(99)

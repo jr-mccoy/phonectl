@@ -6,7 +6,7 @@ class Session:
         self.last = snap
 
     def resolve(self, i: int) -> tuple[int, int]:
-        if not self.last:
+        if self.last is None:
             raise KeyError("no snapshot; call observe() first")
         for e in self.last["elements"]:
             if e["i"] == i:
