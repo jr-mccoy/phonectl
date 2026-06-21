@@ -216,3 +216,94 @@ def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
     assert second["data"]["hash"] == "after1"
     assert second["idempotent_replay"] is True
     assert second["request_id"] == "req1"
+
+
+def _payment_observe(b, s, **kw):
+    s.set_snapshot(
+        {
+            "hash": "h",
+            "app": {"package": "com.x"},
+            "elements": [
+                {"text": "Confirm payment", "content_desc": "", "password": False}
+            ],
+        }
+    )
+
+
+def test_run_action_denies_critical_risk(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(runtime.observer, "observe", _payment_observe)
+    acted = []
+    env = runtime.run_action(
+        "tap",
+        lambda b, s: acted.append(1),
+        {"i": 0},
+        build=lambda cfg: (backend, sess, FakeConn()),
+    )
+    assert env["ok"] is False
+    assert env["error"]["code"] == "guarded_action"
+    assert env["risk_level"] == "critical"
+    assert acted == []
+
+
+def test_run_action_high_risk_confirm_requires_yes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    backend = FakeBackend()
+    sess = FakeSession()
+
+    def observe(b, s, **kw):
+        s.set_snapshot(
+            {
+                "hash": "h",
+                "app": {"package": "com.x"},
+                "elements": [
+                    {"text": "", "content_desc": "Password", "password": True}
+                ],
+            }
+        )
+
+    monkeypatch.setattr(runtime.observer, "observe", observe)
+    env = runtime.run_action(
+        "type",
+        lambda b, s: {"hash": "x"},
+        {"text": "<x>"},
+        build=lambda cfg: (backend, sess, FakeConn()),
+        yes=False,
+    )
+    assert env["error"]["code"] == "confirmation_required"
+    assert env["risk_level"] == "high"
+
+    env2 = runtime.run_action(
+        "type",
+        lambda b, s: {"hash": "x"},
+        {"text": "<x>"},
+        build=lambda cfg: (backend, sess, FakeConn()),
+        yes=True,
+    )
+    assert env2["ok"] is True and env2["risk_level"] == "high"
+
+
+def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot(
+            {
+                "hash": "h",
+                "app": {"package": "com.x"},
+                "elements": [{"text": "Wi-Fi"}],
+            }
+        ),
+    )
+    env = runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"i": 0},
+        build=lambda cfg: (backend, sess, FakeConn()),
+    )
+    assert env["ok"] is True and env["risk_level"] == "low"

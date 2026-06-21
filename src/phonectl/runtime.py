@@ -4,7 +4,7 @@ from __future__ import annotations
 import threading
 import uuid
 
-from phonectl import audit, config, errors, observer, results
+from phonectl import audit, config, errors, observer, policy, results
 
 _action_lock = threading.Lock()
 _idempotency_cache: dict = {}
@@ -72,18 +72,42 @@ def _run_action_body(
             backend, session, conn = build(cfg)
             conn.ensure()
             observer.observe(backend, session)
+            decision = policy.explain(session.last, verb, target, cfg)
+            risk = {
+                "risk_level": decision["risk_level"],
+                "reasons": decision["reasons"],
+            }
+            if decision["decision"] == "deny":
+                return results.err(
+                    errors.GuardedActionError(
+                        f"{verb} blocked: risk={decision['risk_level']}"
+                    ),
+                    user_action=decision["recommended_action"],
+                    **risk,
+                    **base,
+                )
+            if decision["decision"] == "confirm" and not yes:
+                return results.err(
+                    errors.ConfirmationRequiredError(
+                        f"{verb} needs confirmation: risk={decision['risk_level']}"
+                    ),
+                    user_action="Re-run with --yes to confirm this action.",
+                    **risk,
+                    **base,
+                )
             if mode == "dry-run":
                 return results.ok(
                     capability=f"ui.{verb}",
                     provider="adb",
                     data=session.last,
                     dry_run=True,
+                    **risk,
                     **base,
                 )
             snap = fn(backend, session)
             log(verb, target, snap, request_id=rid, cfg=cfg)
             return results.ok(
-                capability=f"ui.{verb}", provider="adb", data=snap, **base
+                capability=f"ui.{verb}", provider="adb", data=snap, **risk, **base
             )
         except errors.PhonectlError as e:
             return results.err(e, **getattr(e, "lock_state", {}), **base)
