@@ -45,3 +45,56 @@ def test_log_action_defensive_when_result_missing_keys(tmp_path, monkeypatch):
     rec = json.loads((tmp_path / "actions.jsonl").read_text().strip().splitlines()[0])
     assert rec["app"] == "" and rec["hash"] == ""
 
+
+def test_log_action_default_redacted_scrubs_sensitive_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    audit.log_action(
+        "type",
+        {"text": "code 482913"},
+        {"app": {"package": "com.x"}, "hash": "h"},
+        request_id="r1",
+    )
+    rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
+    assert rec["request_id"] == "r1"
+    assert "482913" not in json.dumps(rec)
+    assert "[REDACTED]" in rec["target"]["text"]
+
+
+def test_log_action_redacted_is_noop_on_benign_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    audit.log_action(
+        "tap",
+        {"selector": {"text": "Wi-Fi"}},
+        {"app": {"package": "com.x"}, "hash": "h"},
+    )
+    rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
+    assert rec["target"] == {"selector": {"text": "Wi-Fi"}}
+
+
+def test_log_action_metadata_level_drops_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"audit_level": "metadata"})
+    audit.log_action(
+        "tap",
+        {"i": 7},
+        {"app": {"package": "com.x"}, "hash": "h"},
+        request_id="r2",
+    )
+    rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
+    assert "target" not in rec and rec["verb"] == "tap" and rec["request_id"] == "r2"
+
+
+def test_log_action_none_level_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"audit_level": "none"})
+    audit.log_action("tap", {"i": 1}, {"app": {"package": "com.x"}, "hash": "h"})
+    assert not (tmp_path / "actions.jsonl").exists()
+
+
+def test_log_action_full_level_keeps_raw_target(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"audit_level": "full"})
+    audit.log_action("type", {"text": "code 482913"}, {"app": {}, "hash": "h"})
+    rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
+    assert rec["target"]["text"] == "code 482913"
+
