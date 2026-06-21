@@ -1247,3 +1247,206 @@ If this strategy is converted into immediate implementation plans, start with:
 ## 17. Product principle
 
 `phonectl` should remain local-first, transparent, testable, and user-controlled. It should incorporate proven open-source ideas wherever licenses and architecture allow, but it should not depend on proprietary automation apps or closed ecosystems for its core value. If a useful Tasker/MacroDroid-style capability cannot be directly reused, rebuild the capability behind `phonectl`'s provider interfaces with explicit permissions, safety policy, auditability, and local execution.
+
+## 18. Additional brainstorming pass: turn primitives into an agent operating system
+
+The next strategic leap is to stop thinking of `phonectl` as a bag of tools and start treating it as a small **agent operating system for Android**. The agent should not merely ask for `tap(7)`; it should ask for durable capabilities such as "open this conversation," "collect the latest notification from this app," "wait until a login code arrives," "reply with this text after user confirmation," or "restore the phone to the previous foreground app." The platform can still execute those goals through low-level ADB, Accessibility, notification, intent, clipboard, and Termux providers, but the agent-facing layer should be semantic, observable, cancellable, and policy-checked.
+
+This implies three product surfaces, all backed by the same runtime:
+
+1. **Low-level computer-use tools** for raw observe/act loops when the agent genuinely needs flexible UI control.
+2. **Typed Android capability tools** for common phone-native jobs such as notifications, intents, clipboard, packages, files, media, contacts, SMS where available, and settings.
+3. **Declarative automations** that can run without the agent actively polling: triggers, conditions, actions, variables, schedules, retries, cancellation, and user approval steps.
+
+The key design principle is **progressive autonomy**. A user should be able to start with manual/confirm mode, graduate specific recipes into unattended execution, and revoke or inspect every permission and macro decision later.
+
+## 19. Research-informed provider notes
+
+A brief web research pass reinforces the provider direction rather than a single-backend design:
+
+- Android's AccessibilityService API can observe UI events and, when configured for it, dispatch custom gestures such as taps, swipes, and multi-touch. This makes Accessibility the right persistent, low-latency UI provider once the companion APK exists, while ADB remains a powerful bootstrap and shell provider.
+- Android notification automation should be a first-class provider, not a UI-scraping afterthought. NotificationListenerService is the platform primitive for observing posted notifications, and direct reply flows are built around notification actions and RemoteInput. The correct abstraction is therefore `notifications.list`, `notifications.wait`, `notifications.dismiss`, and `notifications.reply` with capability flags for whether a specific notification exposes a reply action.
+- Termux:API is useful as a bridge to Android device functions from command-line programs, especially for sensors, clipboard, notifications, telephony-adjacent functions, camera, battery, vibration, and TTS. It should be an optional provider discovered at runtime, not a mandatory dependency.
+- Shizuku is best treated as an optional privilege provider that grants app code access to APIs with ADB/shell-like privileges on supported devices. It can close gaps between pure ADB and an installed companion APK, but it must be opt-in because its setup and privilege model are more advanced than the baseline no-root flow.
+
+These sources do not change the core roadmap; they sharpen it. ADB-first remains the correct bootstrap. Accessibility and NotificationListener become the persistent event surfaces. Termux:API and Shizuku become optional capability boosters.
+
+## 20. Agent-facing tool taxonomy
+
+The MCP layer should avoid exposing only the raw CLI verbs. Agents perform better when tools have crisp contracts, stable schemas, and explicit failure modes. A suggested taxonomy:
+
+### 20.1 Observation tools
+
+- `phone.observe_ui(options)` — returns foreground app, screen metrics, elements, tree, relations, optional screenshot, and snapshot ID.
+- `phone.find(selector, options)` — resolves a selector against the current or fresh snapshot and returns candidates with confidence and relation context.
+- `phone.describe_screen()` — returns a compact, agent-friendly summary of likely tasks, primary actions, forms, lists, and hazards.
+- `phone.watch_ui(selector_or_predicate, timeout)` — waits for UI state without busy polling.
+- `phone.get_foreground_app()` — cheap app/activity query.
+
+### 20.2 Action tools
+
+- `phone.tap(target)` — accepts index, selector, semantic target, or coordinates, but always records how the target resolved.
+- `phone.set_text(target, text, mode)` — prefers Accessibility `ACTION_SET_TEXT`, falls back to focus+input, clipboard paste, or ADB text escaping.
+- `phone.scroll_until(selector, container, direction, limit)` — a first-class primitive because scrolling lists is one of the most common and brittle agent loops.
+- `phone.navigate(action)` — back, home, recents, notifications shade, quick settings, app switch where supported.
+- `phone.launch(package_or_intent)` — package launch, activity launch, deep link, or explicit intent.
+- `phone.confirmed_action(intent)` — wraps high-risk actions in a user-visible approval flow.
+
+### 20.3 Android capability tools
+
+- `phone.notifications.list/filter/wait/reply/dismiss`.
+- `phone.clipboard.read/write/clear`.
+- `phone.intents.send/preview`.
+- `phone.packages.list/resolve/launch/stop/clear_cache_when_allowed`.
+- `phone.files.pick/share/open` for SAF-mediated user-approved file operations.
+- `phone.media.capture_screenshot/capture_screen_recording` where permitted.
+- `phone.device.state` for battery, charging, network, lock state, orientation, volume, do-not-disturb, locale, and permission state.
+
+### 20.4 Runtime tools
+
+- `phone.macro.create/validate/run/cancel/status`.
+- `phone.events.subscribe` for UI, notification, clipboard, package, power, network, and schedule events.
+- `phone.policy.explain(action)` to tell the agent why an action is allowed, denied, or needs confirmation.
+- `phone.audit.query/export` for traceability.
+- `phone.diagnostics.bundle` for support and bug reports.
+
+## 21. Capability contracts and graceful degradation
+
+Every tool should expose both a **logical capability** and the **provider path** that satisfied it. For example, `phone.set_text` might report:
+
+```json
+{
+  "ok": true,
+  "capability": "ui.set_text",
+  "provider": "accessibility",
+  "fallbacks_considered": ["adb_input_text", "clipboard_paste"],
+  "target_resolution": {"selector": {"id": "com.example:id/message"}, "matched_i": 14},
+  "snapshot_before": "snap_abc",
+  "snapshot_after": "snap_def"
+}
+```
+
+If the action is unavailable, the error should be actionable:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "CAPABILITY_UNAVAILABLE",
+    "capability": "notifications.reply",
+    "missing_provider": "notification_listener",
+    "user_action": "Enable phonectl Notification Access in Android Settings > Notifications > Device & app notifications > Notification access."
+  }
+}
+```
+
+This matters because an autonomous agent must distinguish "try a different UI route" from "ask the user to grant a permission" from "this phone cannot do that." Silent boolean failures are not acceptable at platform scale.
+
+## 22. The daemon as the heart of the platform
+
+A daemon should become the single writer and event broker for all phone actions. CLI and MCP clients should become frontends. The daemon provides:
+
+- **Serialized action execution** so two agents or tools cannot tap/type simultaneously.
+- **Snapshot cache and invalidation** with monotonic snapshot IDs, foreground app checks, and stale-index protection.
+- **Provider lifecycle management** for ADB connections, companion APK WebSocket/Unix socket transports, notification subscriptions, Termux command probes, and optional Shizuku sessions.
+- **Event fanout** to MCP clients, macros, logs, and optional local UI.
+- **Policy enforcement** at one choke point rather than duplicated safety checks in every command.
+- **Durable run records** with action IDs, parent task IDs, before/after snapshots, provider choice, errors, retries, and user approvals.
+
+The daemon should start as an explicit `phonectl daemon` process, then later support Termux boot integration or a companion APK foreground service. Do not require a daemon for v1 primitives, but design new APIs so daemonization is a compatible evolution.
+
+## 23. Macro/runtime design sketch
+
+A macro should be a signed, auditable plan, not an opaque script. A YAML or JSON macro might look like:
+
+```yaml
+name: reply_to_priority_message
+permissions:
+  notifications.read: ["com.whatsapp", "org.signal"]
+  notifications.reply: ["com.whatsapp", "org.signal"]
+  ui.act: confirm
+trigger:
+  type: notification.posted
+  filters:
+    package_in: ["com.whatsapp", "org.signal"]
+    text_regex: "urgent|asap|emergency"
+conditions:
+  - type: time_window
+    after: "08:00"
+    before: "22:00"
+  - type: battery_min
+    percent: 15
+actions:
+  - type: agent.summarize_notification
+    save_as: summary
+  - type: user.confirm
+    message: "Reply to priority message? ${summary}"
+  - type: notification.reply
+    text: "I saw this and will respond shortly."
+limits:
+  max_runs_per_hour: 5
+  cooldown_seconds: 300
+```
+
+Important runtime semantics:
+
+- Each run has a `run_id`, parent trigger event, policy decision, and cancellation token.
+- Variables are scoped: trigger variables, macro variables, secret variables, and runtime outputs.
+- Actions are idempotent where possible and explicitly non-idempotent where not possible.
+- Retries use bounded backoff and must not replay high-risk actions without policy re-check.
+- Macros can require foreground user approval before crossing risk boundaries.
+
+## 24. Safety model expansion: from denylist to risk ledger
+
+The safety system should evolve from package denylist plus modes into a **risk ledger**:
+
+| Risk level | Examples | Default behavior |
+|---|---|---|
+| Low | observe UI, read battery, list installed packages | allow + audit |
+| Medium | tap benign settings, copy clipboard, launch app | allow in auto for trusted macros, audit |
+| High | send message, post notification reply, change connectivity, install/uninstall package | require policy grant or confirmation |
+| Critical | payments, purchases, password managers, banking, destructive data deletion, device admin, unknown consent dialogs | deny or require explicit one-time human approval |
+
+The runtime should classify risk from multiple signals: package name, activity name, UI text, notification category, action type, selector text, intent action, amount/currency regexes, password fields, and whether the action leaves the device. The classifier does not need to be perfect; it needs to be conservative, explainable, and overrideable by the user.
+
+Add a `policy.explain` output that agents can read before acting. This discourages blind retries when an action is blocked.
+
+## 25. Memory, state, and knowledge layer
+
+A capable autonomous phone agent needs durable memory, but it must be narrow and user-controlled:
+
+- **Device profile:** Android version, OEM skin, screen metrics, density, navigation mode, wireless debugging behavior, installed providers, permissions granted, known flaky commands.
+- **App profiles:** package names, launch intents, common selectors, known screens, risk hints, deep links, notification capabilities.
+- **User preferences:** confirmation thresholds, quiet hours, guarded apps, allowed contacts/apps for autonomous replies, redaction rules.
+- **Selector library:** stable selectors learned from successful interactions, keyed by app version and locale.
+- **Failure memory:** provider errors, stale selector rates, uiautomator failure modes, reconnect history.
+
+This should not become unrestricted personal-data hoarding. Store only operational metadata by default, redact text aggressively in logs, and make export/delete easy.
+
+## 26. Evaluation and benchmark suite
+
+The project should define repeatable phone-agent benchmarks early, even before all providers exist:
+
+1. **Settings navigation:** launch Settings, find Wi-Fi, toggle a harmless setting only in confirm/dry-run tests, return home.
+2. **Form filling:** open a local test APK or web page, fill fields with Unicode text, submit, verify state.
+3. **Notification OTP flow:** receive a synthetic notification, extract code, paste into a test field.
+4. **Messaging dry run:** detect a reply-capable notification, produce a would-reply action, require confirmation, and audit the denial/approval path.
+5. **List extraction:** scroll a long RecyclerView and extract unique rows without duplicates.
+6. **Recovery drill:** kill ADB connection, rotate screen, lock/wake device, and verify structured errors or reconnection.
+7. **Safety drill:** show fake purchase/payment/password screens and verify policy blocks or requires confirmation.
+
+Benchmarks should report success rate, median latency, action count, stale-target rate, provider fallback count, and number of human interventions.
+
+## 27. Concrete next planning artifacts to add
+
+Convert this brainstorming into focused implementation docs in this order:
+
+1. `2026-06-21-phonectl-selector-and-tree-observation.md` — selectors, hierarchy, relations, stale snapshots, and matching confidence.
+2. `2026-06-21-phonectl-provider-capabilities.md` — capability schema, provider registry, graceful degradation, structured errors.
+3. `2026-06-21-phonectl-daemon-runtime.md` — single-writer action queue, event bus, run IDs, snapshot cache, audit schema v2.
+4. `2026-06-21-phonectl-notification-provider.md` — companion APK NotificationListener design, reply semantics, privacy redaction, permission UX.
+5. `2026-06-21-phonectl-accessibility-companion.md` — AccessibilityService event stream, gesture dispatch, text setting, transport, safety constraints.
+6. `2026-06-21-phonectl-macro-engine.md` — trigger/condition/action schema, variables, scheduler, policy gates, cancellation.
+7. `2026-06-21-phonectl-evaluation-suite.md` — benchmark tasks, fixtures, fake provider simulator, real-device manual lane.
+
+The implementation order should still protect the already-planned ADB foundation. The mistake to avoid is bolting platform concepts onto ad hoc CLI commands later. Add small seams now: capability discovery, selectors, structured errors, request IDs, and audit fields. Those seams make the larger automation platform possible without rewriting v1.
