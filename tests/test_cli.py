@@ -202,3 +202,21 @@ def test_tap_busy_when_lock_held_maps_to_exit_1(tmp_path, monkeypatch, capsys):
     finally:
         runtime._action_lock.release()
     assert rc == 1 and out["error"]["code"] == "busy"
+
+
+def test_policy_explain_reports_decision(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    class PayBackend(FakeBackend):
+        def ui_dump(self):
+            return (
+                """<?xml version='1.0'?><hierarchy rotation="0">"""
+                """<node index="0" text="Confirm payment" class="T" clickable="true" """
+                """bounds="[0,0][10,10]"/></hierarchy>"""
+            )
+
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: PayBackend())
+    rc = cli.main(["policy", "explain", "--text", "Confirm payment", "--json"])
+    out = _json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["risk_level"] == "critical" and out["decision"] == "deny"

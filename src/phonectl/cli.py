@@ -9,6 +9,7 @@ from phonectl import (
     config,
     errors,
     observer,
+    policy,
     results,
     runtime,
     ui_parser,
@@ -199,6 +200,25 @@ def _cmd_doctor(args):
     return 0
 
 
+def _cmd_policy(args):
+    if getattr(args, "policy_cmd", None) != "explain":
+        print("phonectl: policy requires explain")
+        return 2
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session)
+    target = _selector_from_args(args)
+    if target is None and getattr(args, "index", None) is not None:
+        target = {"i": args.index}
+    out = policy.explain(snap, args.verb, target or {}, cfg)
+    if getattr(args, "json", False):
+        print(json.dumps(out, indent=2))
+    else:
+        print(f"phonectl: {args.verb} -> {out['decision']} (risk={out['risk_level']})")
+    return 0
+
+
 def _cmd_audit(args):
     if args.audit_cmd == "tail":
         for rec in audit.read_entries(limit=args.limit):
@@ -283,6 +303,19 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("doctor")
     d.add_argument("--json", action="store_true")
     d.set_defaults(func=_cmd_doctor)
+
+    po = sub.add_parser("policy")
+    posub = po.add_subparsers(dest="policy_cmd")
+    po.set_defaults(func=_cmd_policy)
+    pe = posub.add_parser("explain")
+    pe.add_argument("--verb", default="tap")
+    pe.add_argument("--text")
+    pe.add_argument("--id")
+    pe.add_argument("--selector")
+    pe.add_argument("--index", type=int)
+    pe.add_argument("--nth", type=int)
+    pe.add_argument("--json", action="store_true")
+    pe.set_defaults(func=_cmd_policy)
 
     au = sub.add_parser("audit")
     ausub = au.add_subparsers(dest="audit_cmd")

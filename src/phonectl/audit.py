@@ -19,6 +19,7 @@ def log_action(
     result: dict,
     request_id: str | None = None,
     cfg: dict | None = None,
+    outcome: str = "ok",
 ) -> None:
     level = audit_level(cfg)
     if level == "none":
@@ -29,6 +30,7 @@ def log_action(
         "request_id": request_id,
         "app": (result.get("app", {}) or {}).get("package", ""),
         "hash": result.get("hash", ""),
+        "outcome": outcome,
     }
     if level == "full":
         rec["target"] = target

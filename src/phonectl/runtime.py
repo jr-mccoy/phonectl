@@ -38,6 +38,11 @@ def _save_rate(history) -> None:
     _rate_path().write_text(json.dumps(history))
 
 
+def _blocked_result(session) -> dict:
+    snap = session.last or {}
+    return {"app": snap.get("app", {}), "hash": snap.get("hash", "")}
+
+
 def run_action(
     verb,
     fn,
@@ -112,6 +117,14 @@ def _run_action_body(
                 "reasons": decision["reasons"],
             }
             if decision["decision"] == "deny":
+                log(
+                    verb,
+                    target,
+                    _blocked_result(session),
+                    request_id=rid,
+                    cfg=cfg,
+                    outcome="blocked",
+                )
                 return results.err(
                     errors.GuardedActionError(
                         f"{verb} blocked: risk={decision['risk_level']}"
@@ -121,6 +134,14 @@ def _run_action_body(
                     **base,
                 )
             if decision["decision"] == "confirm" and not yes:
+                log(
+                    verb,
+                    target,
+                    _blocked_result(session),
+                    request_id=rid,
+                    cfg=cfg,
+                    outcome="blocked",
+                )
                 return results.err(
                     errors.ConfirmationRequiredError(
                         f"{verb} needs confirmation: risk={decision['risk_level']}"
@@ -135,6 +156,14 @@ def _run_action_body(
                 history, verb, risk["risk_level"], cfg.get("rate_limits", DEFAULT_LIMITS), ts
             )
             if not allowed:
+                log(
+                    verb,
+                    target,
+                    _blocked_result(session),
+                    request_id=rid,
+                    cfg=cfg,
+                    outcome="blocked",
+                )
                 return results.err(
                     errors.RateLimitError(f"rate limit exceeded for {bucket}"),
                     bucket=bucket,

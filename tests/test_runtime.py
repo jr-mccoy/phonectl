@@ -383,3 +383,20 @@ def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
         now=lambda: 1120.0,
     )
     assert later["ok"] is True
+
+
+def test_blocked_action_is_audited(tmp_path, monkeypatch):
+    import json as _json
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(runtime.observer, "observe", _payment_observe)
+    runtime.run_action(
+        "tap",
+        lambda b, s: None,
+        {"i": 0},
+        build=lambda cfg: (backend, sess, FakeConn()),
+    )
+    rec = _json.loads((tmp_path / "actions.jsonl").read_text().strip().splitlines()[-1])
+    assert rec["outcome"] == "blocked" and rec["verb"] == "tap"
