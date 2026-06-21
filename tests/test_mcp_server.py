@@ -1,4 +1,5 @@
 import builtins
+import inspect
 
 import pytest
 
@@ -202,11 +203,13 @@ def test_register_registers_all_tools_on_fake_app(tmp_path, monkeypatch):
     class FakeApp:
         def __init__(self):
             self.registered = []
+            self.functions = {}
 
         def tool(self, name=None, description=None):
             self.registered.append(name)
 
             def deco(fn):
+                self.functions[name] = fn
                 return fn
 
             return deco
@@ -216,6 +219,13 @@ def test_register_registers_all_tools_on_fake_app(tmp_path, monkeypatch):
     names = mcp_server._register(app, build=build)
     assert set(names) == set(mcp_server.TOOLS)
     assert "phone_tap" in app.registered
+    assert all(
+        not param.name.startswith("_")
+        for fn in app.functions.values()
+        for param in inspect.signature(fn).parameters.values()
+    )
+    env = app.functions["phone_observe_ui"]()
+    assert env["ok"] is True and env["capability"] == "ui.observe"
 
 
 def test_serve_raises_capability_unavailable_without_sdk(monkeypatch):
