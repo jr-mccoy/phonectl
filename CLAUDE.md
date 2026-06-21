@@ -4,10 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-The **observe→act→observe core is built, unit-tested (45 tests, stdlib-only runtime),
-reviewed, and validated on a real device** (Samsung Galaxy S25 Ultra over Wireless Debugging
-from inside Termux + PRoot). The shipped modules live in `src/phonectl/`: `ui_parser`,
-`adb_backend`, `session`, `observer`, `actuator`, `config`, `audit`, `connection`, `cli`.
+The **observe→act→observe core plus Phase 1.1 (structured results & capabilities) and Phase 1.2
+(selectors & tree observation) are built and unit-tested (83 tests, stdlib-only runtime)**; the core was
+also reviewed and validated on a real device (Samsung Galaxy S25 Ultra over Wireless Debugging from inside
+Termux + PRoot). The shipped modules live in `src/phonectl/`: `ui_parser`, `adb_backend`, `session`,
+`observer`, `actuator`, `config`, `audit`, `connection`, `cli`, plus the Phase-1.1 seams `errors`,
+`results`, `capabilities`, `backend`.
+
+**All four Phase-1 plans are now written.** 1.1 and 1.2 are **complete (implemented + green)**; 1.3 and 1.4
+are **written and ready to execute** (next up: 1.3).
 
 Source-of-truth documents (read the spec, then the roadmap, before any plan):
 
@@ -15,9 +20,11 @@ Source-of-truth documents (read the spec, then the roadmap, before any plan):
 - `docs/superpowers/phonectl-automation-platform-strategy.md` — the strategy/critique that reframes phonectl as a local automation platform / "agent OS for Android" (the vision being operationalized).
 - **`docs/superpowers/phonectl-platform-roadmap.md` — the ACTIVE source-of-truth roadmap.** Phases the work from the shipped core through selectors/capabilities → single-writer runtime & risk policy → provider graph → companion-APK event providers → daemon → macro engine → ecosystem. **Read this before writing or executing any plan.**
 - `docs/superpowers/plans/2026-06-20-phonectl-observe-act-core.md` — the **done** core plan.
-- `docs/superpowers/plans/2026-06-22-phonectl-structured-results-and-capabilities.md` — **Phase 1.1**, the first plan to execute (typed errors, result envelope, capability discovery, `Backend` Protocol).
-- `docs/superpowers/plans/2026-06-22-phonectl-selector-and-tree-observation.md` — **Phase 1.2** (selectors, hierarchy/metadata, stale-snapshot protection); depends on 1.1.
-- `docs/superpowers/plans/2026-06-22-phonectl-remaining-plans-meta-plan.md` — the **index** that scopes every remaining plan (Phases 1.3 → 7 + the cross-cutting evaluation suite) and carries the supersession map.
+- `docs/superpowers/plans/2026-06-22-phonectl-structured-results-and-capabilities.md` — **Phase 1.1 (DONE)**: typed errors, result envelope, capability discovery, `Backend` Protocol.
+- `docs/superpowers/plans/2026-06-22-phonectl-selector-and-tree-observation.md` — **Phase 1.2 (DONE)**: selectors, hierarchy/metadata, stale-snapshot protection; depended on 1.1.
+- `docs/superpowers/plans/2026-06-22-phonectl-resilience-and-connection-recovery.md` — **Phase 1.3 (WRITTEN, not yet executed)**: observe retry/settle, structured lock-state, auto-wake, layered port rediscovery, `reconnect` verb. Depends on 1.1, lands on 1.2's `observe`. **This is the next plan to execute.**
+- `docs/superpowers/plans/2026-06-22-phonectl-setup-and-diagnostics.md` — **Phase 1.4 (WRITTEN, not yet executed)**: modular `setup <module>` wizard + redacted diagnostics bundle (`doctor --json`/`--bundle`). Depends on 1.1; opportunistic on 1.3.
+- `docs/superpowers/plans/2026-06-22-phonectl-remaining-plans-meta-plan.md` — the **index** that scopes every remaining plan (Phases 2 → 7 + the cross-cutting evaluation suite) and carries the supersession map; all four Phase-1 plans are now written.
 - `docs/superpowers/specs/2026-06-21-phonectl-resilience-and-followup.md` — the earlier follow-up spec; **partially superseded** by the roadmap (its backlog is re-homed across the phases).
 - `docs/superpowers/plans/archive/2026-06-21-phonectl-*.md` — the **six SUPERSEDED follow-up plans**, kept for traceability only. Their fully-specified tasks are re-homed by the roadmap/meta-plan; **do not execute them as-is.**
 
@@ -69,9 +76,10 @@ piece only when executing its phase's plan — **don't pull work forward across 
 boundaries**, and **don't bolt platform concepts onto ad-hoc commands** (add the Phase-1 seams
 first: structured results/errors, capability discovery, selectors, request IDs, audit fields).
 
-Execution order: **Phase 1.1** (structured results & capabilities) → **1.2** (selectors & tree)
-are written in full; **1.3** (resilience), **1.4** (setup + diagnostics), and Phases 2–7 are
-scoped in the meta-plan and become full plans when their phase begins.
+Execution order: **Phase 1.1** (structured results & capabilities) and **1.2** (selectors & tree) are
+**DONE** (implemented + green); **1.3** (resilience) and **1.4** (setup + diagnostics) are **written in
+full and ready to execute** (do 1.3 next). Phases 2–7 are scoped in the meta-plan and become full plans
+when their phase begins.
 
 Spec-first (needs its own brainstorm → spec before any plan): the **daemon/event runtime**
 (Phase 5 — the single-writer loop + event bus + snapshot cache + scheduler + Termux:Boot
