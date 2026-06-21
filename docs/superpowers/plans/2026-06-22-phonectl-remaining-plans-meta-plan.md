@@ -1,14 +1,16 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 1.3 → 7 + cross-cutting evaluation suite
+**Status:** Authoring index for Phases 2 → 7 + cross-cutting evaluation suite (all of Phase 1 now written)
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
-This document is the **instruction set for writing the remaining implementation plans**. Phase 1.1
-(`2026-06-22-phonectl-structured-results-and-capabilities.md`) and Phase 1.2
-(`2026-06-22-phonectl-selector-and-tree-observation.md`) are already written in full. Everything else is
-**scoped here** and turned into a full TDD plan when its phase begins — one plan document at a time, in
-roadmap order.
+This document is the **instruction set for writing the remaining implementation plans**. **All four
+Phase-1 plans are now written in full:** Phase 1.1
+(`2026-06-22-phonectl-structured-results-and-capabilities.md`), Phase 1.2
+(`2026-06-22-phonectl-selector-and-tree-observation.md`), Phase 1.3
+(`2026-06-22-phonectl-resilience-and-connection-recovery.md`), and Phase 1.4
+(`2026-06-22-phonectl-setup-and-diagnostics.md`). Everything from Phase 2 onward is **scoped here** and
+turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order.
 
 ---
 
@@ -50,9 +52,12 @@ roadmap order.
 Each stub gives: **goal**, **files**, **key interfaces**, **dependencies**, **strategy refs**. Expand to
 the full template when authoring.
 
-### Phase 1 (finish the foundation)
+### Phase 1 (finish the foundation) — ✅ all written
 
-**1.3 — Resilience & connection recovery**
+**1.3 — Resilience & connection recovery** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-22-phonectl-resilience-and-connection-recovery.md` (9 tasks: re-homes the
+superseded resilience plan's Tasks 2–9, drops its Task 1, and adds structured lock-state + the monotonic
+`wait_for` and rotation-aware orientation polish folds). Original scope below, retained for traceability.
 *Goal:* survive unattended use — auto-wake, retry the `uiautomator` "could not get idle state" dump,
 detect the lock screen, rediscover the volatile Wireless-Debugging port, and return **structured
 lock-state** (strategy §7.2) rather than only raising.
@@ -67,7 +72,10 @@ born in 1.1) and **emit structured lock-state** in the snapshot/envelope (`lock_
 *Config keys added:* `last_port`, `probe_ports`. *Deps:* 1.1 (errors). *Strategy:* §7, §14.3.
 *Folds polish:* monotonic `wait_for` deadline; rotation-aware orientation via `parse_rotation`.
 
-**1.4 — Setup wizard + diagnostics bundle**
+**1.4 — Setup wizard + diagnostics bundle** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-22-phonectl-setup-and-diagnostics.md` (10 tasks: re-homes the superseded
+setup-wizard plan's Tasks 1–6 and adds modular `setup <module>` reports + the `redact_config`/`collect`/
+`bundle` diagnostics pipeline and `doctor --bundle`). Original scope below, retained for traceability.
 *Goal:* interactive onboarding + a support bundle. `phonectl setup` walks Wireless-Debugging
 pairing/connect/verify/persist; make it **modular** (`setup adb|accessibility|notifications|termux-api|
 all`) where each module reports required permission, current status, how to enable, capabilities
