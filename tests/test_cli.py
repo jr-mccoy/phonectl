@@ -178,3 +178,27 @@ def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
     audit.log_action("tap", {"i": 1}, {"app": {}, "hash": "h"})
     rc = cli.main(["audit", "purge"])
     assert rc == 0 and not (tmp_path / "actions.jsonl").exists()
+
+
+def test_tap_json_emits_run_action_envelope(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["tap", "--xy", "1", "2", "--json"])
+    out = _json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True and out["verb"] == "tap"
+    assert "request_id" in out
+
+
+def test_tap_busy_when_lock_held_maps_to_exit_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    from phonectl import runtime
+
+    runtime._action_lock.acquire()
+    try:
+        rc = cli.main(["tap", "--xy", "1", "2", "--json"])
+        out = _json.loads(capsys.readouterr().out)
+    finally:
+        runtime._action_lock.release()
+    assert rc == 1 and out["error"]["code"] == "busy"

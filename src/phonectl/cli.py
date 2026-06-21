@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
-from phonectl import __version__, config, audit, observer, actuator, results, errors, ui_parser
+from phonectl import (
+    __version__,
+    actuator,
+    audit,
+    config,
+    errors,
+    observer,
+    results,
+    runtime,
+    ui_parser,
+)
 from phonectl.adb_backend import AdbBackend
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
@@ -23,13 +33,6 @@ def _emit(snap) -> None:
     print(json.dumps(snap, indent=2))
 
 
-def _guard_action(cfg) -> int | None:
-    if audit.kill_switch_active():
-        print("phonectl: action refused (kill switch STOP present)")
-        return 2
-    return None
-
-
 def _cmd_observe(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
@@ -46,24 +49,29 @@ def _cmd_observe(args):
 
 
 def _do_action(args, verb, fn, target):
-    cfg = config.load()
-    blocked = _guard_action(cfg)
-    if blocked is not None:
-        return blocked
-    mode = config.get_mode(cfg)
-    if mode == "confirm" and not args.yes:
-        print(f"phonectl: {verb} {target} requires --yes in confirm mode")
-        return 3
-    backend, session, conn = build_runtime(cfg)
-    conn.ensure()
-    observer.observe(backend, session)
-    if mode == "dry-run":
-        print(f"phonectl: dry-run {verb} {target} (not executed)")
+    env = runtime.run_action(
+        verb,
+        fn,
+        target,
+        build=build_runtime,
+        yes=getattr(args, "yes", False),
+        request_id=getattr(args, "request_id", None),
+        idempotency_key=getattr(args, "idempotency_key", None),
+    )
+    if env["ok"]:
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        elif env.get("dry_run"):
+            print(f"phonectl: dry-run {verb} {target} (not executed)")
+        else:
+            _emit(env["data"])
         return 0
-    snap = fn(backend, session)
-    audit.log_action(verb, target, snap)
-    _emit(snap)
-    return 0
+    code = env["error"]["code"]
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return {"stopped": 2, "confirmation_required": 3}.get(code, 1)
 
 
 def _selector_from_args(args):
@@ -213,6 +221,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="cmd")
 
+    def _action_flags(sp):
+        sp.add_argument("--yes", action="store_true")
+        sp.add_argument("--json", action="store_true")
+        sp.add_argument("--request-id", default=None)
+        sp.add_argument("--idempotency-key", default=None)
+
     o = sub.add_parser("observe")
     o.add_argument("--screenshot", action="store_true")
     o.add_argument("--screenshot-path", default=None)
@@ -228,7 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--selector")
     g.add_argument("--text")
     g.add_argument("--id")
-    t.add_argument("--yes", action="store_true")
+    _action_flags(t)
     t.add_argument("--nth", type=int)
     t.add_argument("--expected-hash")
     t.add_argument("--stale-ok", action="store_true")
@@ -236,22 +250,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     ty = sub.add_parser("type")
     ty.add_argument("text")
-    ty.add_argument("--yes", action="store_true")
+    _action_flags(ty)
     ty.set_defaults(func=_cmd_type)
 
     sw = sub.add_parser("swipe")
     sw.add_argument("coords", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"))
-    sw.add_argument("--yes", action="store_true")
+    _action_flags(sw)
     sw.set_defaults(func=_cmd_swipe)
 
     k = sub.add_parser("key")
     k.add_argument("keycode")
-    k.add_argument("--yes", action="store_true")
+    _action_flags(k)
     k.set_defaults(func=_cmd_key)
 
     la = sub.add_parser("launch")
     la.add_argument("package")
-    la.add_argument("--yes", action="store_true")
+    _action_flags(la)
     la.set_defaults(func=_cmd_launch)
 
     w = sub.add_parser("wait-for")
