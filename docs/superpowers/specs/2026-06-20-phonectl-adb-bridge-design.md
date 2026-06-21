@@ -166,6 +166,21 @@ envelope builders, and `phonectl.capabilities` for provider capability discovery
 Providers expose capabilities through the backend seam so unavailable features can
 be explained before an agent attempts them.
 
+### 9.2 Single-writer action funnel and audit v2
+
+All mutating actions route through `runtime.run_action`. This is the single choke point for
+mode checks, the kill switch, request IDs, process-local action serialization, idempotency-key
+replay, audit logging, and later policy/rate-limit checks. CLI action verbs, the future MCP
+server, and the daemon call this funnel instead of reimplementing guardrails at the surface.
+
+Every action envelope and audit record carries a `request_id`. Concurrent mutating callers get
+the structured `busy` error instead of racing. A present `STOP` file returns the structured
+`stopped` error; confirm mode without `--yes` returns `confirmation_required`.
+
+Audit logging is level-aware via `audit_level`: `none`, `metadata`, `redacted` (default), or
+`full`. The default redacted level scrubs OTP-like codes, emails, phone numbers, card-like
+numbers, and URL token parameters from audit targets while preserving benign selector labels.
+
 ## 10. Testing strategy
 
 - **Unit (the bulk):** `ui_parser` against real captured `uiautomator` XML fixtures —

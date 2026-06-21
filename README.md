@@ -165,6 +165,47 @@ phonectl type "hello" --yes
 
 Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/phonectl/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, and screen hash. Dry-run actions are not logged.
 
+### Single-writer runtime & audit
+
+All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers with a process-local lock, stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
+
+Action verbs accept `--json` to print the full structured result envelope:
+
+```bash
+phonectl tap --xy 100 200 --json
+phonectl type "hello" --request-id req-123 --idempotency-key msg-1 --json
+```
+
+The action envelope includes `verb`, `target`, and `request_id`. A repeated `--idempotency-key` replays the first process-local envelope with `idempotent_replay: true` instead of executing the action again. Durable cross-process idempotency is deferred to the daemon runtime.
+
+Single-writer control errors use stable codes:
+
+| Code | Exit | Meaning |
+|---|---:|---|
+| `busy` | `1` | Another action holds the process-local writer lock; retry later. |
+| `stopped` | `2` | The `STOP` kill-switch file is present. |
+| `confirmation_required` | `3` | Confirm mode refused the action because `--yes` was not supplied. |
+
+Set `audit_level` in `config.json` to control audit detail:
+
+| Level | Behavior |
+|---|---|
+| `none` | Write no audit record. |
+| `metadata` | Write timestamp, verb, request ID, resulting app, and hash only. |
+| `redacted` | Default. Write metadata plus a redacted target. |
+| `full` | Write the raw target. |
+
+Redaction scrubs OTP-like numeric codes, email addresses, phone numbers, card-like numbers, and URL query secrets such as `token=`, `access_token=`, `code=`, and `key=`. Non-sensitive selectors such as `{"text": "Wi-Fi"}` are left unchanged.
+
+Audit inspection commands:
+
+```bash
+phonectl audit tail --limit 20
+phonectl audit export audit.json
+phonectl audit export audit-full.json --no-redact
+phonectl audit purge
+```
+
 ### Kill switch
 
 Create the file `~/.config/phonectl/STOP` (or `$PHONECTL_HOME/STOP`) to instantly refuse all action verbs regardless of mode:
@@ -231,6 +272,9 @@ Stable error codes:
 | `capability_unavailable` | false | true | The active provider cannot perform the requested capability. |
 | `guarded_action` | false | true | Policy or a guardrail blocked the action. |
 | `rate_limited` | true | false | Action rate limiting blocked the request temporarily. |
+| `busy` | true | false | Another action holds the process-local writer lock. |
+| `stopped` | false | true | The kill switch is active. |
+| `confirmation_required` | false | true | The action requires explicit confirmation. |
 
 Capability keys exposed by providers:
 
@@ -305,6 +349,7 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 |---|---|
 | `config.json` | Device serial and mode (`auto` / `confirm` / `dry-run`) |
 | `actions.jsonl` | Append-only audit log of executed actions |
+| `config.json:audit_level` | Audit detail (`none`, `metadata`, `redacted`, or `full`) |
 | `STOP` | Kill-switch sentinel — create to disable all actions |
 
 ---
