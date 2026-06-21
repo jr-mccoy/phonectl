@@ -103,3 +103,18 @@ def test_mdns_services_runs_adb_and_parses():
     b = AdbBackend(serial="d", runner=make_runner(calls, stdout=out))
     assert b.mdns_services() == ["10.0.0.5:43210"]
     assert calls[0][0] == ["adb", "-s", "d", "mdns", "services"]
+
+
+def test_adb_version_runs_version():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Android Debug Bridge version 1.0.41\n"))
+    assert "1.0.41" in b.adb_version()
+    assert calls[0][0] == ["adb", "-s", "d", "version"]
+
+
+def test_devices_runs_devices_l():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="List of devices attached\n127.0.0.1:41000 device\n"))
+    out = b.devices()
+    assert "127.0.0.1:41000" in out
+    assert calls[0][0] == ["adb", "-s", "d", "devices", "-l"]

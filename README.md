@@ -51,6 +51,56 @@ If `phonectl doctor` prints a guidance message instead of "connected", see the t
 
 ---
 
+## Getting started: `phonectl setup`
+
+`phonectl setup` is the recommended onboarding wizard. It detects whether `adb` is installed, guides Android 11+ Wireless Debugging pairing, connects to the device, verifies `adb get-state`, and persists the working serial plus the volatile Wireless Debugging connect port for later reconnect attempts.
+
+If `adb` is missing in Termux, install it first:
+
+```bash
+pkg install android-tools
+```
+
+Run the wizard and answer the three prompts from the Wireless Debugging screen:
+
+```bash
+phonectl setup
+# Pairing host:port: 127.0.0.1:<pairPort>
+# 6-digit pairing code: <code>
+# Connect host:port: 127.0.0.1:<connPort>
+```
+
+Re-running `phonectl setup` is idempotent: if the device is already connected, phonectl short-circuits with an "already connected" message and does not prompt again. Setup can also report provider modules:
+
+```bash
+phonectl setup adb
+phonectl setup accessibility
+phonectl setup notifications
+phonectl setup termux-api
+phonectl setup all
+```
+
+Each module report states the required permission, current availability, how to enable it, capabilities unlocked, and safety implications. `accessibility` and `notifications` are companion-APK providers planned for Phase 4; `termux-api` is optional and discovered from the local Termux:API commands.
+
+## Diagnostics
+
+`phonectl doctor` checks connectivity; `phonectl doctor --json` returns the structured result envelope with connection state and backend capabilities.
+
+```bash
+phonectl doctor
+phonectl doctor --json
+```
+
+For support, write a redacted diagnostics bundle:
+
+```bash
+phonectl doctor --bundle /tmp/phonectl-diag.zip
+```
+
+The bundle contains `manifest.json`, `adb-version.txt`, and `adb-devices.txt`. The manifest includes config with secrets masked, capability status, device state, `adb version`, `adb devices -l`, mDNS results when available, host-shim status, and a metadata-only audit tail (`ts`/`verb`/`app`/`hash`).
+
+---
+
 ## Command reference
 
 All subcommands connect to the device using the serial stored in `~/.config/phonectl/config.json` (override with `PHONECTL_HOME`).
@@ -123,10 +173,12 @@ Exit codes: `0` on match, `1` on timeout, `2` if neither `--text` nor `--id` is 
 
 ### `doctor`
 
-Check device connectivity and print a one-line status.
+Check device connectivity, print structured JSON, or create a redacted diagnostics bundle.
 
 ```bash
 phonectl doctor
+phonectl doctor --json
+phonectl doctor --bundle /tmp/phonectl-diag.zip
 # phonectl: connected (serial=127.0.0.1:PORT, state=device)
 ```
 

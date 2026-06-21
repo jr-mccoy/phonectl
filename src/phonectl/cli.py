@@ -12,6 +12,8 @@ from phonectl import (
     policy,
     results,
     runtime,
+    setup as setup_mod,
+    diagnostics,
     ui_parser,
 )
 from phonectl.adb_backend import AdbBackend
@@ -193,11 +195,21 @@ def _cmd_doctor(args):
         "state": backend.get_state(),
         "capabilities": backend.capabilities(),
     }
+    if getattr(args, "bundle", None):
+        path = diagnostics.bundle(args.bundle, backend, cfg)
+        print(f"phonectl: diagnostics bundle written to {path}")
+        return 0
     if getattr(args, "json", False):
         print(json.dumps(results.ok(provider="adb", data=data), indent=2))
     else:
         print(f"phonectl: connected (serial={backend.serial}, state={data['state']})")
     return 0
+
+
+def _cmd_setup(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    return setup_mod.run_module(args.module, conn)
 
 
 def _cmd_policy(args):
@@ -313,7 +325,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sub.add_parser("doctor")
     d.add_argument("--json", action="store_true")
+    d.add_argument("--bundle", default=None, metavar="ZIP")
     d.set_defaults(func=_cmd_doctor)
+
+    su = sub.add_parser("setup")
+    su.add_argument("module", nargs="?", default="adb",
+                    choices=list(setup_mod.MODULES) + ["all"])
+    su.set_defaults(func=_cmd_setup)
 
     po = sub.add_parser("policy")
     posub = po.add_subparsers(dest="policy_cmd")
