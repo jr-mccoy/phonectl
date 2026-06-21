@@ -185,13 +185,17 @@ def call_tool(name, args, build=_default_build) -> dict:
         return results.err(e, **getattr(e, "lock_state", {}))
 
 
+def _make_tool(name, build):
+    def tool(**kwargs):
+        return call_tool(name, kwargs, build=build)
+
+    return tool
+
+
 def _register(app, build=_default_build) -> list[str]:
     names = []
     for name, entry in TOOLS.items():
-        @app.tool(name=name, description=entry["description"])
-        def _tool(_name=name, **kwargs):
-            return call_tool(_name, kwargs, build=build)
-
+        app.tool(name=name, description=entry["description"])(_make_tool(name, build))
         names.append(name)
     return names
 
