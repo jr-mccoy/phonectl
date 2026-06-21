@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-06-22** — distributed across `docs/superpowers/phonectl-platform-roadmap.md` (named swipe → Phase 3.3; monotonic `wait_for` + rotation-aware orientation → Phase 1.2/1.3; remaining cleanups → opportunistic). Item-level disposition is in `docs/superpowers/plans/2026-06-22-phonectl-remaining-plans-meta-plan.md` §4. Kept for traceability; do not execute as-is.
+
 # phonectl Polish & Minor Findings Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

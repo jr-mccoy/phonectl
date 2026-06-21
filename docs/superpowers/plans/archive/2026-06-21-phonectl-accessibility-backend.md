@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-06-22** — folded into `docs/superpowers/phonectl-platform-roadmap.md` (Phase 4.1; the `Backend` Protocol seam was pulled forward to Phase 1.1). Task-level re-homing is in `docs/superpowers/plans/2026-06-22-phonectl-remaining-plans-meta-plan.md`. Kept for traceability; do not execute as-is.
+
 # phonectl AccessibilityService APK Backend Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
