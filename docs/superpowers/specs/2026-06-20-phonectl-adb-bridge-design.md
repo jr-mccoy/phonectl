@@ -150,10 +150,12 @@ The agent can tap anything, so v1 ships with:
 - **Three modes** — `auto` (act freely), `confirm` (print intended action, require a confirm
   token before executing), `dry-run` (log only, no injection). **Defaults: `auto` for local
   dev builds, `confirm` for the released build** (set via config, not code).
-- **Guarded packages** — optional denylist (banking, store-purchase screens) where `act()`
-  refuses or forces confirm, keyed off `observe().app.package`.
+- **Risk classifier + policy** — every mutating action is classified from the observed
+  package, screen text, password fields, OTP-like content, and configured guarded package
+  prefixes. Per-level policy maps `low|medium|high|critical` to `allow|confirm|deny`.
 - **Kill switch** — a sentinel file that hard-disables all action injection instantly.
-- **Rate limiting** — cap actions/min to bound runaway loops.
+- **Bucketed rate limiting** — per-verb, global, and high-risk sliding-window buckets bound
+  runaway loops.
 
 
 
@@ -170,8 +172,8 @@ be explained before an agent attempts them.
 
 All mutating actions route through `runtime.run_action`. This is the single choke point for
 mode checks, the kill switch, request IDs, process-local action serialization, idempotency-key
-replay, audit logging, and later policy/rate-limit checks. CLI action verbs, the future MCP
-server, and the daemon call this funnel instead of reimplementing guardrails at the surface.
+replay, policy/rate-limit checks, and audit logging. CLI action verbs, the future MCP server,
+and the daemon call this funnel instead of reimplementing guardrails at the surface.
 
 Every action envelope and audit record carries a `request_id`. Concurrent mutating callers get
 the structured `busy` error instead of racing. A present `STOP` file returns the structured
@@ -180,6 +182,21 @@ the structured `busy` error instead of racing. A present `STOP` file returns the
 Audit logging is level-aware via `audit_level`: `none`, `metadata`, `redacted` (default), or
 `full`. The default redacted level scrubs OTP-like codes, emails, phone numbers, card-like
 numbers, and URL token parameters from audit targets while preserving benign selector labels.
+
+### 9.3 Risk ledger and policy explain
+
+Risk classification now generalizes the earlier guarded-package denylist and single
+actions-per-minute limit. `phonectl.risk` and `phonectl.policy` are pure modules: they read the
+parsed snapshot and configured policy only, never adb. `runtime.run_action` observes, calls
+`policy.explain(snapshot, verb, target, cfg)`, then denies, requires `--yes`, or proceeds. Denied,
+confirmation-required, and rate-limited outcomes are returned as structured envelopes with
+`risk_level`, `reasons`, and, for rate limits, the blocked `bucket`.
+
+Rate-limit history is persisted as `$PHONECTL_HOME/ratelimit.json`; each allowed action counts
+against `global` and its verb bucket, with `high_risk` added for high or critical actions. Audit
+records include `outcome` so blocked policy decisions are traceable. The `phonectl policy explain`
+verb exposes the same classifier/decision result for agents and users before a mutating action is
+attempted.
 
 ## 10. Testing strategy
 
@@ -210,7 +227,7 @@ numbers, and URL token parameters from audit targets while preserving benign sel
    `observe()`.
 2. `actuator` verbs + `session` index resolution → full `observe→act→observe` loop (CLI).
 3. `connection` recovery + `setup` wizard → reliable, reboot-surviving, installable.
-4. Safety guardrails (modes, audit log, guarded packages, kill switch).
+4. Safety guardrails (modes, audit log, risk policy, bucketed rate limits, kill switch).
 5. `mcp_server` wrapper → native agent tools.
 6. (Optional, later) AccessibilityService APK backend behind the same interface.
 

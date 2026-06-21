@@ -163,7 +163,7 @@ phonectl type "hello" --yes
 
 ### Audit log
 
-Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/phonectl/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, and screen hash. Dry-run actions are not logged.
+Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/phonectl/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, screen hash, and `outcome` (`ok` or `blocked`). Dry-run actions are not logged.
 
 ### Single-writer runtime & audit
 
@@ -185,6 +185,62 @@ Single-writer control errors use stable codes:
 | `busy` | `1` | Another action holds the process-local writer lock; retry later. |
 | `stopped` | `2` | The `STOP` kill-switch file is present. |
 | `confirmation_required` | `3` | Confirm mode refused the action because `--yes` was not supplied. |
+
+### Risk ledger & policy
+
+Before any mutating action executes, `runtime.run_action` observes the current screen and classifies the pending action as `low`, `medium`, `high`, or `critical`. The classifier reads the foreground package and parsed UI element metadata; it does not call adb directly.
+
+| Signal | Level | Trigger |
+|---|---|---|
+| `guarded_package` | `high` | Foreground package starts with a configured guarded prefix. |
+| `password_field` | `high` | A parsed element has `password: true`. |
+| `payment_keyword` | `critical` | Screen text contains payment/purchase/bank/card wording. |
+| `destructive_keyword` | `critical` | Screen text contains factory reset, wipe, delete account, or uninstall wording. |
+| `install_keyword` | `high` | Screen text contains install, allow, grant, subscribe, or send. |
+| `otp_like_content` | `medium` | Visible element text contains a 4-8 digit code. |
+| `high_risk_verb` | `high` | Reserved seam for future high-risk provider verbs. |
+
+Effective default policy:
+
+```json
+{
+  "risk_policy": {
+    "low": "allow",
+    "medium": "allow",
+    "high": "confirm",
+    "critical": "deny"
+  },
+  "guarded_packages": [],
+  "rate_limits": {
+    "tap": 120,
+    "type": 30,
+    "swipe": 120,
+    "key": 120,
+    "launch": 20,
+    "high_risk": 1,
+    "global": 180
+  }
+}
+```
+
+The `risk_policy` values are `allow`, `confirm`, or `deny`. A risk-policy `confirm` returns `confirmation_required` unless the action is re-run with `--yes`; `deny` returns `guarded_action`. Successful action envelopes and policy/rate failures include `risk_level` and `reasons`.
+
+Rate limits are bucketed sliding windows over the last minute. Every allowed action counts against `global` and its verb bucket; `high` and `critical` actions also count against `high_risk`. Rate state is stored in `$PHONECTL_HOME/ratelimit.json`. A limit breach returns `rate_limited` with `bucket`.
+
+Use `policy explain` to inspect a decision before acting:
+
+```bash
+phonectl policy explain --verb tap --text "Pay now" --json
+```
+
+```json
+{
+  "risk_level": "critical",
+  "reasons": [{"signal": "payment_keyword", "detail": "screen text matches payment_keyword"}],
+  "decision": "deny",
+  "recommended_action": "blocked by policy; override risk_policy to permit"
+}
+```
 
 Set `audit_level` in `config.json` to control audit detail:
 
@@ -227,7 +283,7 @@ phonectl: action refused (kill switch STOP present)
 | Code | Meaning |
 |---|---|
 | `0` | Success |
-| `1` | Timeout (`wait-for`) or connection error |
+| `1` | Timeout (`wait-for`), connection error, policy denial, rate limit, or busy writer |
 | `2` | Kill switch active, or `wait-for` called without `--text`/`--id` |
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
 
@@ -347,8 +403,9 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 
 | File | Purpose |
 |---|---|
-| `config.json` | Device serial and mode (`auto` / `confirm` / `dry-run`) |
-| `actions.jsonl` | Append-only audit log of executed actions |
+| `config.json` | Device serial, mode, audit level, risk policy, guarded packages, and rate limits |
+| `actions.jsonl` | Append-only audit log of executed and blocked actions |
+| `ratelimit.json` | Recent per-bucket action timestamps for sliding-window rate limits |
 | `config.json:audit_level` | Audit detail (`none`, `metadata`, `redacted`, or `full`) |
 | `STOP` | Kill-switch sentinel — create to disable all actions |
 
@@ -358,7 +415,7 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 
 The observe-act-observe core (library + CLI) is implemented and unit-tested. The real-device connectivity proof (build-step-zero: pairing `adb` inside PRoot against `adbd` over the loopback) and the end-to-end smoke run are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure.
 
-Features deferred to follow-on work: mDNS auto-discovery for silent reconnect after reboot, `phonectl setup` interactive wizard, guarded-package denylist, MCP server wrapper, and AccessibilityService APK backend.
+Features deferred to follow-on work: `phonectl setup` interactive wizard, MCP server wrapper, richer provider graph, macro runtime, and AccessibilityService APK backend.
 
 ## Selector targeting and tree observation
 
