@@ -103,7 +103,7 @@ phonectl key KEYCODE_VOLUME_UP
 
 ### `launch`
 
-Start an app by package name using `am start`, bypassing the launcher.
+Start an app by package name using the monkey launcher-intent mechanism (`monkey -p <pkg> -c android.intent.category.LAUNCHER 1`). The package must expose a LAUNCHER activity.
 
 ```bash
 phonectl launch com.android.settings

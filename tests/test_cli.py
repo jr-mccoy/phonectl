@@ -22,6 +22,7 @@ class FakeBackend:
     def window_dump(self): return "mCurrentFocus=Window{a b com.x/.A}"
     def wm_size(self): return (1080, 2400)
     def input_tap(self, x, y): self.calls.append(("tap", x, y))
+    def input_text(self, t): self.calls.append(("text", t))
 
 def test_observe_prints_json(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
@@ -92,4 +93,16 @@ def test_doctor_reports_connected(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "connected" in out
+
+# Fix C: type command redacts text in audit log
+def test_type_redacts_text_in_audit_log(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["type", "hunter2"])
+    assert rc == 0
+    assert ("text", "hunter2") in fb.calls          # real text WAS typed
+    log = (tmp_path / "actions.jsonl").read_text()
+    assert "hunter2" not in log                       # but NOT in the audit log
+    assert "<7 chars>" in log                         # redacted surrogate present
 

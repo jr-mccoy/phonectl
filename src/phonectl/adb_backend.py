@@ -1,3 +1,4 @@
+import shlex
 import subprocess
 
 class AdbBackend:
@@ -28,7 +29,7 @@ class AdbBackend:
         return path
 
     def window_dump(self) -> str:
-        return self._adb("shell", "dumpsys", "window", "windows")
+        return self._adb("shell", "dumpsys", "window")
 
     def wm_size(self) -> tuple[int, int]:
         out = self._adb("shell", "wm", "size")
@@ -41,7 +42,10 @@ class AdbBackend:
         self._adb("shell", "input", "tap", str(x), str(y))
 
     def input_text(self, text: str) -> None:
-        self._adb("shell", "input", "text", text.replace(" ", "%s"))
+        # Shell-quote so the device shell does not interpret metacharacters.
+        # (shlex.quote wraps in single quotes and handles spaces correctly,
+        #  superseding the old space->%s substitution.)
+        self._adb("shell", "input", "text", shlex.quote(text))
 
     def input_swipe(self, x1, y1, x2, y2, ms: int = 200) -> None:
         self._adb("shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))

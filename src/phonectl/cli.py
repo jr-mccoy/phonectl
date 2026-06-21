@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 from phonectl import __version__, config, audit, observer, actuator
@@ -69,7 +71,7 @@ def _cmd_tap(args):
 
 def _cmd_type(args):
     return _do_action(args, "type", lambda b, s: actuator.type_text(b, s, args.text),
-                      {"text": args.text})
+                      {"text": f"<{len(args.text)} chars>"})
 
 
 def _cmd_swipe(args):

@@ -55,3 +55,22 @@ def test_screencap_writes_bytes_and_returns_path(tmp_path):
     assert out == dest
     assert (tmp_path / "snap.png").read_bytes() == png
     assert calls[0][0] == ["adb", "-s", "d", "exec-out", "screencap", "-p"]
+
+# Fix A: window_dump uses "dumpsys window" (not "dumpsys window windows")
+def test_window_dump_builds_correct_command():
+    calls = []
+    sample = "mCurrentFocus=Window{abc123 u0 com.android.settings/.Settings}\n"
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=sample))
+    out = b.window_dump()
+    assert calls[0][0] == ["adb", "-s", "d", "shell", "dumpsys", "window"]
+    assert "mCurrentFocus" in out
+    assert out == sample
+
+# Fix B: input_text shell-quotes metacharacters via shlex.quote
+def test_input_text_shell_quotes_metacharacters():
+    import shlex
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls))
+    b.input_text("a b$c")
+    expected_quoted = shlex.quote("a b$c")
+    assert calls[0][0] == ["adb", "-s", "d", "shell", "input", "text", expected_quoted]
