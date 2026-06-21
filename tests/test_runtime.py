@@ -140,3 +140,39 @@ def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
     assert env["error"]["code"] == "device_locked"
     assert env["lock_state"] == "locked_secure"
     assert env["verb"] == "tap"
+
+
+def test_run_action_reports_busy_when_lock_held(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    runtime._action_lock.acquire()
+    try:
+        env = runtime.run_action(
+            "tap",
+            lambda b, s: None,
+            {"x": 1},
+            build=lambda cfg: (_ for _ in ()).throw(AssertionError("no build")),
+        )
+    finally:
+        runtime._action_lock.release()
+    assert env["ok"] is False
+    assert env["error"]["code"] == "busy"
+    assert env["error"]["retryable"] is True
+
+
+def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h"}),
+    )
+    runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"x": 1},
+        build=lambda cfg: (backend, sess, FakeConn()),
+    )
+    assert runtime._action_lock.acquire(blocking=False) is True
+    runtime._action_lock.release()

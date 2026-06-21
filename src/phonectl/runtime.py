@@ -1,9 +1,12 @@
 """Single-writer action funnel for mutating UI operations."""
 from __future__ import annotations
 
+import threading
 import uuid
 
 from phonectl import audit, config, errors, observer, results
+
+_action_lock = threading.Lock()
 
 
 def _new_request_id() -> str:
@@ -42,22 +45,27 @@ def run_action(
             **base,
         )
 
+    if not _action_lock.acquire(blocking=False):
+        return results.err(errors.BusyError("another action is already in progress"), **base)
     try:
-        backend, session, conn = build(cfg)
-        conn.ensure()
-        observer.observe(backend, session)
-        if mode == "dry-run":
+        try:
+            backend, session, conn = build(cfg)
+            conn.ensure()
+            observer.observe(backend, session)
+            if mode == "dry-run":
+                return results.ok(
+                    capability=f"ui.{verb}",
+                    provider="adb",
+                    data=session.last,
+                    dry_run=True,
+                    **base,
+                )
+            snap = fn(backend, session)
+            log(verb, target, snap, request_id=rid, cfg=cfg)
             return results.ok(
-                capability=f"ui.{verb}",
-                provider="adb",
-                data=session.last,
-                dry_run=True,
-                **base,
+                capability=f"ui.{verb}", provider="adb", data=snap, **base
             )
-        snap = fn(backend, session)
-        log(verb, target, snap, request_id=rid, cfg=cfg)
-        return results.ok(
-            capability=f"ui.{verb}", provider="adb", data=snap, **base
-        )
-    except errors.PhonectlError as e:
-        return results.err(e, **getattr(e, "lock_state", {}), **base)
+        except errors.PhonectlError as e:
+            return results.err(e, **getattr(e, "lock_state", {}), **base)
+    finally:
+        _action_lock.release()
