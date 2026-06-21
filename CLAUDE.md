@@ -4,18 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is **spec + plan, no code yet**. The two source-of-truth documents are:
+The **observe→act→observe core is built, unit-tested (45 tests, stdlib-only runtime),
+reviewed, and validated on a real device** (Samsung Galaxy S25 Ultra over Wireless Debugging
+from inside Termux + PRoot). The shipped modules live in `src/phonectl/`: `ui_parser`,
+`adb_backend`, `session`, `observer`, `actuator`, `config`, `audit`, `connection`, `cli`.
+
+Source-of-truth documents (read the spec before any plan):
 
 - `docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md` — the design (goals, non-goals, architecture, constraints, safety, risks).
-- `docs/superpowers/plans/2026-06-20-phonectl-observe-act-core.md` — the TDD task-by-task implementation plan. Tasks 1–8 build the library + CLI; Task 9 is a manual real-device smoke test. Each task has a failing-test step and a one-task-per-commit rule.
+- `docs/superpowers/plans/2026-06-20-phonectl-observe-act-core.md` — the **done** core plan (Tasks 1–8 built the library + CLI; Task 9 was the real-device smoke test).
+- `docs/superpowers/specs/2026-06-21-phonectl-resilience-and-followup.md` — the follow-up spec (resilience, safety, polish, deferred backlog).
+- `docs/superpowers/plans/2026-06-21-phonectl-*.md` — **six follow-up backlog plans**, each implemented in its own session. Recommended order: `resilience` → `safety-completeness` → `mcp-server` → `setup-wizard` → `accessibility-backend` → `polish`. (`resilience` and `safety-completeness` both create/append `src/phonectl/errors.py`, so keep that order.)
 
-Read the spec first, then the plan. Do not start writing code from a fresh interpretation — execute the plan's tasks in order so the test-first discipline and the commit boundaries are preserved.
+Do not start writing code from a fresh interpretation — execute the relevant plan's tasks in order so the test-first discipline and the commit boundaries are preserved.
 
 ## Project: phonectl
 
 A Python CLI that lets an AI agent observe the host Android phone as structured JSON and act on it (`tap`/`type`/`swipe`/`key`/`launch`) over **ADB with no root**, from inside Termux + PRoot-Distro. The contract is an `observe → act → observe` loop driven by element indices, not pixels.
 
-## Commands (once Task 1 lands)
+## Commands
 
 ```bash
 pip install -e .           # install the package + console-script `phonectl`
@@ -47,8 +54,17 @@ There is no linter or formatter configured in the plan; do not add one unless th
 
 - **One commit per task minimum.** The plan's Task N → Step 5 commit messages are the canonical commit shapes; follow them.
 - **TDD order is non-negotiable:** write the failing test, run it to confirm it fails for the right reason, then write the minimum code to pass. Do not pre-implement ahead of the test.
-- **Do not skip Task 9 mentally.** The build-step-zero connectivity proof (pair, `adb shell echo ok` from inside the distro) is what validates — or refutes, triggering the host-Termux shim — the whole topology. If you're about to claim observe/act works, you've actually run it against a real device.
+- **Don't claim device behavior you haven't run.** The core was proven by a build-step-zero connectivity smoke (pair, `adb shell echo ok` from inside the distro). Resilience-class work (port recovery, keyguard strings, the host-Termux shim) is ROM-specific and only truly validated against the real device — its plans flag exactly which steps need an on-device smoke. Unit tests use injected fakes; they prove the logic, not the topology.
 
 ## What's deferred (do not build without an explicit ask)
 
-mDNS auto-discovery, the full interactive `phonectl setup` wizard, guarded-package denylist, MCP server wrapper, AccessibilityService APK backend, density-aware swipe scaling. These are listed at the bottom of the plan — they belong to follow-on plans, not this one.
+The follow-up backlog (resilience/port-recovery, rate-limiting + guarded-package denylist,
+the interactive `phonectl setup` wizard, the MCP server wrapper, the AccessibilityService
+APK backend, density-aware swipe scaling, and the §4 polish items) is now scoped in the six
+`docs/superpowers/plans/2026-06-21-phonectl-*.md` plans. Build a piece only when executing
+its plan — don't pull work forward across plan boundaries.
+
+Still un-planned (needs its own brainstorm → spec first): the **autonomous-runner daemon**
+(the long-lived loop + wakelock management + scheduler + Termux:Boot autostart + LLM
+controller + watchdog) that is phonectl's north-star. The AccessibilityService **APK itself**
+(Kotlin) also needs a dedicated Android spec; its plan covers only the Python-side backend.
