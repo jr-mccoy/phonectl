@@ -41,3 +41,21 @@ class GuardedActionError(PhonectlError):
 class RateLimitError(PhonectlError):
     code = "rate_limited"
     retryable = True
+
+
+class BusyError(PhonectlError):
+    # Another mutating action holds the single-writer lock.
+    code = "busy"
+    retryable = True
+
+
+class StoppedError(PhonectlError):
+    # Emergency stop: the kill-switch STOP sentinel is present.
+    code = "stopped"
+    requires_user = True
+
+
+class ConfirmationRequiredError(PhonectlError):
+    # Confirm mode or a future risk-policy confirm without --yes.
+    code = "confirmation_required"
+    requires_user = True
