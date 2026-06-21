@@ -31,3 +31,13 @@ def test_ensure_raises_guidance_when_no_serial(tmp_path, monkeypatch):
     with pytest.raises(ConnectionError) as e:
         Connection(b, {}).ensure()
     assert GUIDANCE in str(e.value)
+
+def test_ensure_raises_guidance_when_reconnect_fails(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = StateBackend(["offline", "offline"])
+    with pytest.raises(ConnectionError) as e:
+        Connection(b, {"serial": "127.0.0.1:5555"}).ensure()
+    # a reconnect WAS attempted using the configured serial...
+    assert ("connect", "127.0.0.1:5555") in b.adb_calls
+    # ...but state never reached "device", so guidance is raised
+    assert GUIDANCE in str(e.value)
