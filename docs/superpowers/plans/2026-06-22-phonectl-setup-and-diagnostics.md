@@ -14,6 +14,8 @@ all`, each module reporting its required permission, current status, how to enab
 it unlocks, and its safety implications (strategy §9.1); and (b) a **redacted diagnostics bundle** —
 `phonectl doctor --json`/`doctor --bundle <zip>` (strategy §9.3).
 
+**Implementation status (2026-06-21):** ✅ Complete on this branch.
+
 **Goal:** A fully-testable interactive `phonectl setup` that walks a new user through build-step-zero
 (detect `adb`, guide Wireless Debugging, pair, connect, verify, persist), reports the status of every
 provider module, and emits a support bundle for diagnosis — with injectable `prompt`/`out`/`which`/

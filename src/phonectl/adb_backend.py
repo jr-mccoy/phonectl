@@ -62,6 +62,11 @@ class AdbBackend:
     def get_state(self) -> str:
         return self._adb("get-state").strip()
 
+    def adb_version(self) -> str:
+        return self._adb("version").strip()
+
+    def devices(self) -> str:
+        return self._adb("devices", "-l")
 
     def wake(self) -> None:
         self._adb("shell", "input", "keyevent", "WAKEUP")

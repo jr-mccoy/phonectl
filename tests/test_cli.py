@@ -232,3 +232,37 @@ def test_mcp_cli_reports_missing_sdk(tmp_path, monkeypatch, capsys):
     rc = cli.main(["mcp"])
     out = capsys.readouterr().out
     assert rc == 1 and "phonectl[mcp]" in out
+
+
+def test_setup_verb_wires_runtime_to_run_module(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    captured = {}
+    from phonectl import setup as setup_mod
+    monkeypatch.setattr(setup_mod, "run_module", lambda module, conn, **kw: captured.update(module=module, conn=conn) or 0)
+    rc = cli.main(["setup", "notifications"])
+    assert rc == 0
+    assert captured["module"] == "notifications"
+    assert captured["conn"].backend is fb
+
+
+def test_setup_verb_defaults_to_adb(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    seen = {}
+    from phonectl import setup as setup_mod
+    monkeypatch.setattr(setup_mod, "run_module", lambda module, conn, **kw: seen.update(m=module) or 0)
+    assert cli.main(["setup"]) == 0
+    assert seen["m"] == "adb"
+
+
+def test_doctor_bundle_writes_zip(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    out_zip = str(tmp_path / "diag.zip")
+    from phonectl import diagnostics
+    monkeypatch.setattr(diagnostics, "bundle", lambda path, backend, cfg: path)
+    rc = cli.main(["doctor", "--bundle", out_zip])
+    assert rc == 0
+    assert out_zip in capsys.readouterr().out

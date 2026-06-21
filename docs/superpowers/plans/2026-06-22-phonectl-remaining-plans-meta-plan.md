@@ -26,12 +26,12 @@ Use this table before reading commit history. "Written" means the plan document 
 | 1.1 Structured results/errors/capabilities | `2026-06-22-phonectl-structured-results-and-capabilities.md` | ✅ Complete | recorded by `0d994ff` |
 | 1.2 Selector + tree observation | `2026-06-22-phonectl-selector-and-tree-observation.md` | ✅ Complete | `20b82a9` |
 | 1.3 Resilience + connection recovery | `2026-06-22-phonectl-resilience-and-connection-recovery.md` | ✅ Complete | `d5f2125` |
-| 1.4 Setup wizard + diagnostics bundle | `2026-06-22-phonectl-setup-and-diagnostics.md` | 📝 Written, not implemented | — |
+| 1.4 Setup wizard + diagnostics bundle | `2026-06-22-phonectl-setup-and-diagnostics.md` | ✅ Complete | this branch |
 | 2.1 Action serialization + audit v2 | `2026-06-22-phonectl-action-serialization-and-audit-v2.md` | ✅ Complete | `f5415b4` → `b7328c4` |
 | 2.2 Risk classifier + risk ledger | `2026-06-22-phonectl-risk-classifier-and-ledger.md` | ✅ Complete | `162744d` → `69b57c8` |
 | 2.3 Structured-result MCP server | `2026-06-22-phonectl-structured-result-mcp-server.md` | ✅ Complete | `c0aa779` |
 
-**Next unimplemented written plan:** Plan 1.4 (`setup` + diagnostics). If intentionally skipping 1.4, the next roadmap-order plan to author/implement is Phase 3.1 provider/capability graph refactor.
+**Next unimplemented written plan:** None in Phase 1 or Phase 2. The next roadmap-order plan to author/implement is Phase 3.1 provider/capability graph refactor.
 
 ## 1. Authoring rules (apply to every plan written from this index)
 
