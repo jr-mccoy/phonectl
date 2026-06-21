@@ -1,6 +1,8 @@
 # phonectl Risk Classifier & Risk Ledger Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**Implementation status:** ✅ COMPLETE. Landed across `162744d` → `69b57c8` (`risk.py`, `policy.py`, `ratelimit.py`, runtime policy/rate gates, blocked-action audit, `phonectl policy explain`, and docs). Key shipped files: `src/phonectl/risk.py`, `src/phonectl/policy.py`, `src/phonectl/ratelimit.py`, `src/phonectl/runtime.py`, `src/phonectl/audit.py`, `src/phonectl/cli.py`, with coverage in `tests/test_risk.py`, `tests/test_policy.py`, `tests/test_ratelimit.py`, `tests/test_runtime.py`, `tests/test_config_audit.py`, and `tests/test_cli.py`.
 
 **Plan 2.2 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). Second plan of Phase
 2. Depends on **Plan 1.1** for the `errors` hierarchy (`GuardedActionError`/`RateLimitError`) and the
@@ -99,7 +101,7 @@ the only external runtime dependency.
   - floor `low`. Returns `{"level": <max>, "reasons": [{"signal","detail"}, ...]}` (reasons in detection
     order, deduped by signal).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_risk.py
@@ -151,12 +153,12 @@ def test_otp_like_content_is_medium():
     assert any(r["signal"] == "otp_like_content" for r in out["reasons"])
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_risk.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.risk'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/risk.py
@@ -225,12 +227,12 @@ def classify(snapshot, verb, target, *, guarded_packages=(), keywords=DEFAULT_KE
     return {"level": level, "reasons": reasons}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_risk.py -v`
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/risk.py tests/test_risk.py
@@ -254,7 +256,7 @@ git commit -m "feat: pure multi-signal risk classifier (level + explainable reas
   "recommended_action"}` where `recommended_action` is a human string (`"allowed"`, `"re-run with --yes to
   confirm"`, or `"blocked by policy; override risk_policy to permit"`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_policy.py
@@ -299,12 +301,12 @@ def test_explain_honors_config_guarded_and_policy():
     assert out["decision"] == "deny"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_policy.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.policy'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/policy.py
@@ -340,12 +342,12 @@ def explain(snapshot, verb, target, cfg) -> dict:
     }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_policy.py -v`
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/policy.py tests/test_policy.py
@@ -370,7 +372,7 @@ git commit -m "feat: pure risk policy decision map + agent-readable explain()"
 - `repeated_hash(history_hashes, threshold=3) -> bool` — `True` when the last `threshold` recorded screen
   hashes are identical (the "stop after repeated unchanged screen hashes" guard, strategy §8.2).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_ratelimit.py
@@ -413,12 +415,12 @@ def test_repeated_hash_detects_stuck_screen():
     assert ratelimit.repeated_hash(["a", "a"]) is False     # below threshold count
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_ratelimit.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.ratelimit'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/ratelimit.py
@@ -458,12 +460,12 @@ def repeated_hash(history_hashes, threshold=3) -> bool:
     return len(set(tail)) == 1
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_ratelimit.py -v`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ratelimit.py tests/test_ratelimit.py
@@ -492,7 +494,7 @@ freshly-observed snapshot, and `deny`/`confirm` accordingly through the existing
 - The mode-level `confirm` check (Plan 2.1) stays; risk-`confirm` is an *additional* gate that fires even in
   `auto` mode. `--yes` satisfies both.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_runtime.py  (append)
@@ -545,12 +547,12 @@ def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
     assert env["ok"] is True and env["risk_level"] == "low"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: FAIL (`run_action` does not classify risk; no `risk_level` on the envelope).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/runtime.py` add `from phonectl import policy` and, inside the lock after `observer.observe`,
 before the dry-run/act branch:
@@ -577,12 +579,12 @@ Keep the dry-run branch *after* the policy gate so a denied action is reported a
 agent learns the block without executing). The existing Plan-2.1 dry-run test used a benign snapshot, so it
 still returns `ok` (low risk).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: PASS (existing + 3 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py tests/test_runtime.py
@@ -610,7 +612,7 @@ window, and block over-limit actions with `errors.RateLimitError`.
   level)` with `ts=now` and `_save_rate`. `now` is injectable (`now=time.time`).
 - `DEFAULT_LIMITS` mirrors the `rate_limits` config default.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_runtime.py  (append)
@@ -654,12 +656,12 @@ def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
     assert later["ok"] is True
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: FAIL (`run_action` has no `now` rate gate; no `ratelimit.json`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/runtime.py` add `import json`, `import time`, `from phonectl import ratelimit`, the
 `config_dir` import, `DEFAULT_LIMITS`, the `now=time.time` param, the persistence helpers, and the gate:
@@ -706,12 +708,12 @@ In the act region (after the policy gate, before `fn`), with `level = risk["risk
 Add `now=time.time` to the `run_action` signature (and thread it into the extracted `_run` helper). Dry-run
 does not record against the rate buckets.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: PASS (existing + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py tests/test_runtime.py
@@ -739,7 +741,7 @@ Record policy/rate blocks in the audit log (so denials are traceable, strategy �
   `policy.explain(snap, verb, target, cfg)`; args `--verb` (default `tap`), `--text/--id/--selector/--index`
   reuse `_selector_from_args`. Returns `0`; supports `--json`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_runtime.py  (append)
@@ -770,12 +772,12 @@ def test_policy_explain_reports_decision(tmp_path, monkeypatch, capsys):
     assert out["risk_level"] == "critical" and out["decision"] == "deny"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_runtime.py tests/test_cli.py -v`
 Expected: FAIL (no `outcome` in audit; no `policy` subcommand).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Extend `audit.log_action` with `outcome="ok"` (additive kwarg) and write `rec["outcome"] = outcome`. In
 `run_action`, on each block path, audit before returning:
@@ -817,12 +819,12 @@ def _cmd_policy(args):
 
 Add `from phonectl import policy` to `cli.py` imports.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_runtime.py tests/test_cli.py -v`
 Expected: PASS (existing + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py src/phonectl/audit.py src/phonectl/cli.py tests/test_runtime.py tests/test_cli.py
@@ -840,7 +842,7 @@ git commit -m "feat: audit blocked actions (outcome) + phonectl policy explain v
 
 **Interfaces:** none (documentation).
 
-- [ ] **Step 1: Run the full suite, then document**
+- [x] **Step 1: Run the full suite, then document**
 
 Run: `pytest -v` (expect green across risk, policy, ratelimit, runtime, audit, cli, and all prior tests).
 
@@ -850,7 +852,7 @@ keys and defaults, the `guarded_action`/`rate_limited`/`confirmation_required` e
 **risk classification + per-level policy now generalizes the guarded-package denylist and the single
 rate-limit** (strategy §8, §24), and that all enforcement lives at the `run_action` choke-point.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

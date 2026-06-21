@@ -1,6 +1,8 @@
 # phonectl Structured-Result MCP Server Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**Implementation status:** ✅ COMPLETE. Landed in `c0aa779 feat: add structured-result MCP server`. Key shipped files: `src/phonectl/mcp_server.py`, `src/phonectl/cli.py`, `pyproject.toml`, `README.md`, `docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md`, with coverage in `tests/test_mcp_server.py` and `tests/test_cli.py`.
 
 **Plan 2.3 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). Third plan of Phase
 2. Depends on **Plan 1.1** (`results`/`errors`/`capabilities`), **Plan 1.2** (selectors + tree/relations),
@@ -88,7 +90,7 @@ dependency for actually driving a phone.
 - `capabilities(build) -> dict` — `results.ok(capability="capabilities", provider="adb",
   data={"capabilities": backend.capabilities(), "summary": capabilities.describe(backend.capabilities())})`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_mcp_server.py
@@ -153,12 +155,12 @@ def test_capabilities_tool_describes_backend():
     assert "observe_ui_tree" in env["data"]["summary"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.mcp_server'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/mcp_server.py
@@ -225,12 +227,12 @@ Note: `match_selector(elements, selector, relations)` is the Plan-1.2 signature 
 used in `cli._cmd_wait_for`. Relation lookups key by `str(i)` because Plan 1.2 emits relation maps with
 string keys.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/mcp_server.py tests/test_mcp_server.py
@@ -259,7 +261,7 @@ apply identically to MCP and CLI. They accept index/selector/`(x,y)`, `expected_
 - `type_text(... text, ...)`, `swipe(... x1,y1,x2,y2 ...)`, `key(... keycode ...)`, `launch(... package ...)`
   — analogous; each returns the `run_action` envelope verbatim (already structured).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_mcp_server.py  (append)
@@ -304,12 +306,12 @@ def test_type_text_routes_and_audits_redacted(tmp_path, monkeypatch):
 Note: `phone_type`'s `target` is the `<N chars>` surrogate (as the CLI builds), so the raw text never reaches
 the audit log; this mirrors `test_type_redacts_text_in_audit_log`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: FAIL (`mcp_server` has no `tap`/`type_text`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/mcp_server.py`:
 
@@ -371,12 +373,12 @@ def launch(build=_default_build, *, package, dry_run=False, confirm=False,
                               idempotency_key=idempotency_key)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: PASS (existing + 4 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/mcp_server.py tests/test_mcp_server.py
@@ -405,7 +407,7 @@ and trigger or clear the emergency stop.
 - `resume() -> dict` — removes the `STOP` sentinel if present, returns
   `results.ok(capability="control.resume", data={"stopped": False})`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_mcp_server.py  (append)
@@ -443,12 +445,12 @@ def test_stop_and_resume_toggle_kill_switch(tmp_path, monkeypatch):
     assert not (config_dir() / "STOP").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: FAIL (`mcp_server` has no `policy_explain`/`audit_query`/`stop`/`resume`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/mcp_server.py`:
 
@@ -492,12 +494,12 @@ def resume() -> dict:
     return results.ok(capability="control.resume", data={"stopped": False})
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: PASS (existing + 3 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/mcp_server.py tests/test_mcp_server.py
@@ -526,7 +528,7 @@ every name resolves to an envelope.
   `errors.PhonectlError` (defense in depth) → `results.err(e)`.
 - The registry distinguishes build vs build-less handlers via a per-entry `"needs_build": bool`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_mcp_server.py  (append)
@@ -559,12 +561,12 @@ def test_call_tool_unknown_name_errors():
     assert env["ok"] is False and env["error"]["code"] == "unknown_tool"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: FAIL (`mcp_server` has no `TOOLS`/`call_tool`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/mcp_server.py`:
 
@@ -636,12 +638,12 @@ def call_tool(name, args, build=_default_build) -> dict:
         return results.err(e, **getattr(e, "lock_state", {}))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: PASS (existing + 4 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/mcp_server.py tests/test_mcp_server.py
@@ -672,7 +674,7 @@ optional `mcp` extra. The transport adapter is tested with a fake registrar (no 
   `CapabilityUnavailableError`, print the `user_action` and return `1`.
 - `pyproject.toml`: `[project.optional-dependencies]` `mcp = ["mcp>=1.0"]`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_mcp_server.py  (append)
@@ -720,12 +722,12 @@ def test_mcp_cli_reports_missing_sdk(tmp_path, monkeypatch, capsys):
     assert rc == 1 and "phonectl[mcp]" in out
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_mcp_server.py tests/test_cli.py -v`
 Expected: FAIL (`mcp_server` has no `_register`/`serve`; CLI has no `mcp` verb).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/mcp_server.py`:
 
@@ -781,17 +783,17 @@ Note: the `_register` wrapper binds `_name=name` as a default so each registered
 tool (avoiding the late-binding loop-variable trap). The real FastMCP introspects `**kwargs`; the schema in
 `TOOLS` documents the accepted args for clients that read it.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_mcp_server.py tests/test_cli.py -v`
 Expected: PASS (existing + 2 mcp_server + 1 cli).
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pytest -v`
 Expected: PASS (mcp_server, cli, runtime, policy, and all prior tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/mcp_server.py src/phonectl/cli.py pyproject.toml tests/test_mcp_server.py tests/test_cli.py
@@ -809,7 +811,7 @@ git commit -m "feat: gated FastMCP transport, phonectl mcp verb, optional mcp ex
 
 **Interfaces:** none (documentation).
 
-- [ ] **Step 1: Document the catalog**
+- [x] **Step 1: Document the catalog**
 
 In `README.md`: how to launch (`pip install phonectl[mcp]`, then `phonectl mcp`), the full tool catalog with
 each tool's args and example envelopes (observe/find/capabilities/tap/type/policy_explain/audit_query/
@@ -819,7 +821,7 @@ note that **every tool returns the structured result envelope** (the agent reads
 server is a thin frontend over `run_action` + the observation seams** (no safety logic duplicated) — the same
 shape the Phase-5 daemon will expose.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

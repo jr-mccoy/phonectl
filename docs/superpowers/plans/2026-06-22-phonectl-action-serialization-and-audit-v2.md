@@ -1,6 +1,8 @@
 # phonectl Action Serialization, Request IDs & Audit v2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**Implementation status:** ✅ COMPLETE. Landed across `f5415b4` → `b7328c4` (`feat: additive single-writer error codes`, `runtime.run_action`, process-local busy/idempotency, redaction, audit v2, audit subcommands, CLI action funnel, and docs). Key shipped files: `src/phonectl/runtime.py`, `src/phonectl/redact.py`, `src/phonectl/audit.py`, `src/phonectl/errors.py`, `src/phonectl/cli.py`, `src/phonectl/config.py`, with coverage in `tests/test_runtime.py`, `tests/test_redact.py`, `tests/test_config_audit.py`, and `tests/test_cli.py`.
 
 **Plan 2.1 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). First plan of
 Phase 2 (single-writer runtime & safety policy). Depends on **Plan 1.1** for the `errors` hierarchy and the
@@ -90,7 +92,7 @@ codes (`0`/`1`/`2`/`3`). Everything stays behind injectable seams (`build`, `gen
 - `class ConfirmationRequiredError(PhonectlError)` — `code = "confirmation_required"`,
   `requires_user = True`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_errors.py  (append below existing tests)
@@ -106,12 +108,12 @@ def test_phase2_single_writer_codes_and_flags():
         assert issubclass(cls, errors.PhonectlError)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_errors.py -v`
 Expected: FAIL (`AttributeError: module 'phonectl.errors' has no attribute 'BusyError'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/errors.py` (below `RateLimitError`):
 
@@ -134,12 +136,12 @@ class ConfirmationRequiredError(PhonectlError):
     requires_user = True
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_errors.py -v`
 Expected: PASS (existing tests + 1 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/errors.py tests/test_errors.py
@@ -173,7 +175,7 @@ arrive in Tasks 3–4; this task establishes the envelope contract.
     as `results.err(e, **getattr(e, "lock_state", {}), verb=verb, target=target, request_id=request_id)`.
   - Every envelope carries `capability=f"ui.{verb}"`, `provider="adb"`, `verb`, `target`, `request_id`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_runtime.py
@@ -294,12 +296,12 @@ def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
 Note: tests monkeypatch `runtime.observer.observe` so no real device/`uiautomator` is touched; the funnel's
 own logic (modes, kill-switch, audit, error catch) is what is under test.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.runtime'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/runtime.py
@@ -359,12 +361,12 @@ canonical order is to land Task 5's signature first if you prefer strict green-a
 boundaries still hold. (The plan keeps them as separate commits; if you run Task 2's audit-asserting test
 before Task 5, accept the one expected signature error and proceed, or reorder locally.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: PASS (5 tests), assuming `audit.log_action` accepts `request_id`/`cfg` (Task 5).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py tests/test_runtime.py
@@ -389,7 +391,7 @@ caller gets a structured `busy` envelope instead of racing the first.
   **before** building/observing. The kill-switch and confirm checks run before the lock (cheap, no I/O). The
   lock is always released in a `finally`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_runtime.py  (append)
@@ -417,12 +419,12 @@ def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
     runtime._action_lock.release()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: FAIL (`AttributeError: module 'phonectl.runtime' has no attribute '_action_lock'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/runtime.py` add `import threading` and `_action_lock = threading.Lock()` at module scope,
 then wrap the act region:
@@ -449,12 +451,12 @@ then wrap the act region:
 Note: a non-blocking lock means a second writer fails fast with `busy` (`retryable=True`) rather than
 deadlocking; the daemon (Phase 5) replaces this with a real action queue but keeps the same `busy` contract.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: PASS (existing + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py tests/test_runtime.py
@@ -479,7 +481,7 @@ A caller that passes the same `idempotency_key` twice gets the first envelope ba
   copy with `idempotent_replay=True` (no kill-switch/lock/act). On a fresh successful or errored run with a
   key, store the resulting envelope before returning.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_runtime.py  (append)
@@ -505,12 +507,12 @@ def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
     assert second["request_id"] == "req1"           # original request id preserved
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: FAIL (`run_action()` has no `idempotency_key`; second call re-runs `fn`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/runtime.py` add `_idempotency_cache: dict = {}` at module scope, add the param, and bracket
 the body:
@@ -538,12 +540,12 @@ Extract the kill-switch/confirm/lock/act body into a private `_run(verb, fn, tar
 passed-in `base`/`cfg`). Keep `_action_lock`/`_idempotency_cache` module-level so they persist across calls
 in one process.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_runtime.py -v`
 Expected: PASS (existing + 1 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/runtime.py tests/test_runtime.py
@@ -569,7 +571,7 @@ codes, emails, phone numbers, card numbers, and URL tokens out of arbitrary audi
 - `redact_value(v)` — recurse: `dict` → redact each value; `list/tuple` → redact each item; `str` →
   `redact_text`; anything else returned unchanged (so `{"i": 7}` is untouched).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_redact.py
@@ -596,12 +598,12 @@ def test_redact_value_recurses_and_leaves_non_strings():
     assert out["xs"][0] == 1 and "[REDACTED]" in out["xs"][1]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_redact.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.redact'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/redact.py
@@ -639,12 +641,12 @@ def redact_value(v):
     return v
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_redact.py -v`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/redact.py tests/test_redact.py
@@ -674,7 +676,7 @@ stay green.
   - `full` → metadata + `"target": target` (raw).
   The `app`/`hash` defaulting (`""`) is unchanged from today.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_config_audit.py  (append below existing tests)
@@ -725,12 +727,12 @@ def test_log_action_full_level_keeps_raw_target(tmp_path, monkeypatch):
 The existing `test_log_action_appends_jsonl` (target `{"i": 7}`) stays green: default `redacted` leaves
 non-sensitive dicts unchanged.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_config_audit.py -v`
 Expected: FAIL (`log_action()` takes 3 positional args / no level handling / no `request_id`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/audit.py
@@ -770,12 +772,12 @@ def log_action(verb: str, target: dict, result: dict,
         f.write(json.dumps(rec) + "\n")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_config_audit.py tests/test_runtime.py -v`
 Expected: PASS (existing audit tests + 5 new; runtime success/idempotency tests now log cleanly).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/audit.py tests/test_config_audit.py
@@ -805,7 +807,7 @@ Adds the operator-facing audit commands (strategy §8.3). The read/purge/export 
   purge` removes the log and prints the count; `phonectl audit export <path> [--no-redact]` writes the
   bundle and prints the path.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_config_audit.py  (append)
@@ -854,12 +856,12 @@ def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
     assert rc == 0 and not (tmp_path / "actions.jsonl").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_config_audit.py tests/test_cli.py -v`
 Expected: FAIL (`audit` has no `read_entries`/`purge`/`export`; CLI has no `audit` subcommand).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/audit.py`:
 
@@ -926,12 +928,12 @@ def _cmd_audit(args):
     au.set_defaults(func=_cmd_audit)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_config_audit.py tests/test_cli.py -v`
 Expected: PASS (existing + 3 audit-module + 2 CLI tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/audit.py src/phonectl/cli.py tests/test_config_audit.py tests/test_cli.py
@@ -965,7 +967,7 @@ today's exit codes so every existing CLI test stays green while the funnel is no
   envelopes today; action verbs print the snapshot unless `--json`). Add `--json` to the action verbs so an
   agent can request the envelope.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_cli.py  (append)
@@ -997,12 +999,12 @@ The existing `test_tap_blocked_by_kill_switch` (rc 2), `test_tap_confirm_mode_re
 `test_type_redacts_text_in_audit_log`, and `test_tap_by_text_selector_resolves_and_logs` must all stay green
 through the envelope→exit-code mapping.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: FAIL (`tap` has no `--json`/`--request-id`; `_do_action` does not yet call `run_action`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/cli.py` import `runtime`, rewrite `_do_action`, delete `_guard_action`, and add the flags:
 
@@ -1046,17 +1048,17 @@ small helper keeps `build_parser` tidy:
 Apply `_action_flags(...)` to each action subparser (replacing the bare `--yes` adds), keeping the
 verb-specific positional/selector args unchanged.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (all existing CLI tests + 2 new; exit codes 0/1/2/3 preserved).
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pytest -v`
 Expected: PASS (errors, results, redact, runtime, audit, cli, and all prior tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/cli.py tests/test_cli.py
@@ -1074,7 +1076,7 @@ git commit -m "refactor: route cli action verbs through runtime.run_action singl
 
 **Interfaces:** none (documentation).
 
-- [ ] **Step 1: Document the contract**
+- [x] **Step 1: Document the contract**
 
 In `README.md`: the `run_action` funnel (single writer, `request_id`, `busy`/`stopped`/`confirmation_required`
 codes, `--idempotency-key`), the `audit_level` config key and the four levels, the redaction patterns, and
@@ -1083,7 +1085,7 @@ note that **all mutating actions now route through `runtime.run_action`** (one c
 modes/kill-switch/audit, the daemon's future single writer) and that **audit is level-aware with redaction by
 default**.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

@@ -220,3 +220,15 @@ def test_policy_explain_reports_decision(tmp_path, monkeypatch, capsys):
     out = _json.loads(capsys.readouterr().out)
     assert rc == 0
     assert out["risk_level"] == "critical" and out["decision"] == "deny"
+
+def test_mcp_cli_reports_missing_sdk(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import mcp_server, errors
+
+    def boom(build=None):
+        raise errors.CapabilityUnavailableError("MCP SDK not installed; pip install phonectl[mcp]")
+
+    monkeypatch.setattr(mcp_server, "serve", boom)
+    rc = cli.main(["mcp"])
+    out = capsys.readouterr().out
+    assert rc == 1 and "phonectl[mcp]" in out

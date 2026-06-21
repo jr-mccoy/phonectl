@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Android computer-use bridge over ADB (no root)"
 requires-python = ">=3.9"
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+
 [project.scripts]
 phonectl = "phonectl.cli:main"
 
