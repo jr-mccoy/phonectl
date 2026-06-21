@@ -1,11 +1,11 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 3 → 7 + cross-cutting evaluation suite (all of Phase 1 and Phase 2 now written)
+**Status:** Authoring index for Phases 3 → 7 + cross-cutting evaluation suite (all of Phase 1, Phase 2, and Phase 3 now written)
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
 This document is the **instruction set for writing the remaining implementation plans**. **All four
-Phase-1 plans and all three Phase-2 plans are now written in full.** Phase 1: 1.1
+Phase-1 plans, all three Phase-2 plans, and all five Phase-3 plans are now written in full.** Phase 1: 1.1
 (`2026-06-22-phonectl-structured-results-and-capabilities.md`), 1.2
 (`2026-06-22-phonectl-selector-and-tree-observation.md`), 1.3
 (`2026-06-22-phonectl-resilience-and-connection-recovery.md`), 1.4
@@ -30,8 +30,13 @@ Use this table before reading commit history. "Written" means the plan document 
 | 2.1 Action serialization + audit v2 | `2026-06-22-phonectl-action-serialization-and-audit-v2.md` | ✅ Complete | `f5415b4` → `b7328c4` |
 | 2.2 Risk classifier + risk ledger | `2026-06-22-phonectl-risk-classifier-and-ledger.md` | ✅ Complete | `162744d` → `69b57c8` |
 | 2.3 Structured-result MCP server | `2026-06-22-phonectl-structured-result-mcp-server.md` | ✅ Complete | `c0aa779` |
+| 3.1 Provider/capability graph refactor | `2026-06-21-phonectl-provider-capability-graph.md` | 📝 Written, not yet executed | — |
+| 3.2 Clipboard + intent/packages providers | `2026-06-21-phonectl-clipboard-intent-packages.md` | 📝 Written, not yet executed | — |
+| 3.3 Scroll-until + gestures | `2026-06-21-phonectl-scroll-and-gestures.md` | 📝 Written, not yet executed | — |
+| 3.4 Structured extraction APIs | `2026-06-21-phonectl-structured-extraction.md` | 📝 Written, not yet executed | — |
+| 3.5 Termux:API provider | `2026-06-21-phonectl-termux-api-provider.md` | 📝 Written, not yet executed | — |
 
-**Next unimplemented written plan:** None in Phase 1 or Phase 2. The next roadmap-order plan to author/implement is Phase 3.1 provider/capability graph refactor.
+**Next unimplemented written plan:** Phase 3.1 provider/capability graph refactor (`2026-06-21-phonectl-provider-capability-graph.md`).
 
 ## 1. Authoring rules (apply to every plan written from this index)
 
@@ -166,32 +171,51 @@ returns `results.ok/err`; add `phone.find(selector)` (with confidence), `phone.o
 
 ### Phase 3 (practical automation primitives — provider graph)
 
-**3.1 — Provider/capability graph refactor**
+**3.1 — Provider/capability graph refactor** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-21-phonectl-provider-capability-graph.md` (5 tasks: providers package +
+`ProviderRegistry` with union capabilities + `_require`/`_last_used` + Backend Protocol delegation +
+`__getattr__` ADB helper passthrough → `cli.build_runtime()` returns registry → `runtime.run_action` uses
+`last_used` instead of hardcoded `"adb"`). Original scope below, retained for traceability.
 *Goal:* move from one active backend to a **composite runtime** that selects the best provider per
 capability with graceful degradation, reporting the **provider path** that satisfied each call (strategy
 §4.3, §21).
 *Files:* create `providers/` (registry + per-capability resolution), `runtime` provider wiring; modify
 `backend.Backend` consumers. *Deps:* 1.1 (capabilities/results). *Strategy:* §4.3.
 
-**3.2 — Clipboard + intent/deep-link + app/package providers**
+**3.2 — Clipboard + intent/deep-link + app/package providers** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-21-phonectl-clipboard-intent-packages.md` (11 tasks: new capability keys →
+`adb_backend` clipboard/intent/packages methods → `HIGH_RISK_VERBS`/`CRITICAL_VERBS` in `risk.py` →
+`ClipboardProvider`/`IntentsProvider`/`PackagesProvider` → provider registration → CLI verbs → MCP tools →
+docs). Original scope below, retained for traceability.
 *Goal:* first-class `clipboard read/write/clear`, `intent start/broadcast` + deep links, and `packages
 list/resolve/launch/stop/clear` (strategy §6.4, §6.5) — risk-classified (2.2).
 *Files:* create `providers/clipboard.py`, `providers/intents.py`, `providers/packages.py`; CLI/MCP verbs.
 *Deps:* 2.2 (risk), 3.1 (graph). *Strategy:* §6.4, §6.5.
 
-**3.3 — Scroll-until + gestures** *(folds polish named-swipe)*
+**3.3 — Scroll-until + gestures** *(folds polish named-swipe)* — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-21-phonectl-scroll-and-gestures.md` (7 tasks: named swipe ADB primitives →
+long-press/double-tap/drag/fling ADB → actuator gesture functions → `scroll`/`scroll_until` actuator →
+CLI swipe/long-press/double-tap/drag/fling/scroll verbs → MCP tools → docs). Original scope below,
+retained for traceability.
 *Goal:* `scroll-until --text/--selector`, container-aware scroll (`--within i=`, uses the `scrollable`
 metadata from 1.2 Task 1), long-press/double-tap/drag/fling, and **named swipe directions
 (up/down/left/right) with density-aware scaling** (the old polish Task 9).
 *Files:* modify `actuator.py`, `adb_backend.py` (gesture primitives), `cli.py`. *Deps:* 1.2 (selectors/
 metadata). *Strategy:* §6.2, §6.3.
 
-**3.4 — Structured extraction APIs**
+**3.4 — Structured extraction APIs** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-21-phonectl-structured-extraction.md` (7 tasks: `extract_list` →
+`extract_form` with password redaction → `get_focused_field` → `find_by_text_regex` →
+`get_visible_text_in_region` → CLI verbs → MCP tools). Original scope below, retained for traceability.
 *Goal:* read structured data, not just tap — `extract list`, `extract form`, `get focused-field`,
 `find --text-regex`, read visible text by region (strategy §5.4).
 *Files:* `ui_parser` pure extractors + CLI/MCP. *Deps:* 1.2 (tree/relations). *Strategy:* §5.4.
 
-**3.5 — Termux:API provider (optional)**
+**3.5 — Termux:API provider (optional)** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-21-phonectl-termux-api-provider.md` (7 tasks: new capability keys →
+`TermuxApiProvider` with `is_available()`/`clipboard_read/write`/`battery_status`/`wifi_info`/`tts_speak` →
+`build_runtime()` prepends Termux:API if available → CLI `device battery/wifi`/`tts speak` verbs → MCP
+tools → docs). Original scope below, retained for traceability.
 *Goal:* optional provider for battery/clipboard/sensors/notifications/TTS/etc., **discovered at runtime**
 (strategy §13.2, §19), never a hard dependency.
 *Files:* `providers/termux.py` (capability-gated). *Deps:* 3.1. *Strategy:* §13.2, §19.
