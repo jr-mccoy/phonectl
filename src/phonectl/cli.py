@@ -191,6 +191,23 @@ def _cmd_doctor(args):
     return 0
 
 
+def _cmd_audit(args):
+    if args.audit_cmd == "tail":
+        for rec in audit.read_entries(limit=args.limit):
+            print(json.dumps(rec))
+        return 0
+    if args.audit_cmd == "purge":
+        n = audit.purge()
+        print(f"phonectl: purged {n} audit record(s)")
+        return 0
+    if args.audit_cmd == "export":
+        path = audit.export(args.path, redacted=not args.no_redact)
+        print(f"phonectl: exported audit log to {path}")
+        return 0
+    print("phonectl: audit requires tail|purge|export")
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="phonectl")
     p.add_argument("--version", action="version", version=__version__)
@@ -252,6 +269,16 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("doctor")
     d.add_argument("--json", action="store_true")
     d.set_defaults(func=_cmd_doctor)
+
+    au = sub.add_parser("audit")
+    ausub = au.add_subparsers(dest="audit_cmd")
+    at = ausub.add_parser("tail")
+    at.add_argument("--limit", type=int, default=20)
+    ausub.add_parser("purge")
+    ae = ausub.add_parser("export")
+    ae.add_argument("path")
+    ae.add_argument("--no-redact", action="store_true")
+    au.set_defaults(func=_cmd_audit)
     return p
 
 

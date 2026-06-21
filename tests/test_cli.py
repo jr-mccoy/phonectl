@@ -159,3 +159,22 @@ def test_tap_by_text_selector_resolves_and_logs(tmp_path, monkeypatch, capsys):
     assert rc == 0
     log = (tmp_path / "actions.jsonl").read_text()
     assert "selector" in log and "Wi-Fi" in log
+
+
+def test_audit_tail_prints_recent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import audit
+
+    audit.log_action("tap", {"i": 1}, {"app": {"package": "com.x"}, "hash": "h1"})
+    rc = cli.main(["audit", "tail", "--limit", "1"])
+    out = capsys.readouterr().out
+    assert rc == 0 and "h1" in out
+
+
+def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import audit
+
+    audit.log_action("tap", {"i": 1}, {"app": {}, "hash": "h"})
+    rc = cli.main(["audit", "purge"])
+    assert rc == 0 and not (tmp_path / "actions.jsonl").exists()

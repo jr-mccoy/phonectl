@@ -98,3 +98,31 @@ def test_log_action_full_level_keeps_raw_target(tmp_path, monkeypatch):
     rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
     assert rec["target"]["text"] == "code 482913"
 
+
+def test_read_entries_returns_last_n(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"audit_level": "metadata"})
+    for n in range(5):
+        audit.log_action(
+            "tap", {"i": n}, {"app": {"package": "com.x"}, "hash": f"h{n}"}
+        )
+    last2 = audit.read_entries(limit=2)
+    assert [e["hash"] for e in last2] == ["h3", "h4"]
+
+
+def test_purge_removes_log_and_counts(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    audit.log_action("tap", {"i": 0}, {"app": {}, "hash": "h"})
+    assert audit.purge() == 1
+    assert not (tmp_path / "actions.jsonl").exists()
+    assert audit.purge() == 0
+
+
+def test_export_redacts_targets(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"audit_level": "full"})
+    audit.log_action("type", {"text": "code 482913"}, {"app": {}, "hash": "h"})
+    out = tmp_path / "bundle.json"
+    audit.export(str(out), redacted=True)
+    assert "482913" not in out.read_text()
+
