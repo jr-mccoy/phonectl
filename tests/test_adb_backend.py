@@ -74,3 +74,32 @@ def test_input_text_shell_quotes_metacharacters():
     b.input_text("a b$c")
     expected_quoted = shlex.quote("a b$c")
     assert calls[0][0] == ["adb", "-s", "d", "shell", "input", "text", expected_quoted]
+
+
+def test_wake_sends_wakeup_keyevent():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls))
+    b.wake()
+    assert calls[0][0] == ["adb", "-s", "d", "shell", "input", "keyevent", "WAKEUP"]
+
+
+def test_keyguard_true_when_window_dump_shows_lockscreen():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="  mDreamingLockscreen=true\n"))
+    assert b.keyguard() is True
+    assert calls[0][0] == ["adb", "-s", "d", "shell", "dumpsys", "window"]
+
+
+def test_lock_state_reports_structured_state():
+    b = AdbBackend(serial="d", runner=make_runner([], stdout="KeyguardServiceDelegate{showing=true secure=true}"))
+    ls = b.lock_state()
+    assert ls["lock_state"] == "locked_secure"
+    assert ls["can_act"] is False
+
+
+def test_mdns_services_runs_adb_and_parses():
+    calls = []
+    out = "List of discovered mdns services\nadb-1\t_adb-tls-connect._tcp\t10.0.0.5:43210\n"
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=out))
+    assert b.mdns_services() == ["10.0.0.5:43210"]
+    assert calls[0][0] == ["adb", "-s", "d", "mdns", "services"]

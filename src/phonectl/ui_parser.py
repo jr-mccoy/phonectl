@@ -203,3 +203,64 @@ def match_selector(elements: list[dict], selector: dict, relations: dict | None 
         n = selector["nth_match"]
         return [ids[n]] if 0 <= n < len(ids) else []
     return ids
+
+
+_ROTATION_RE = re.compile(r"<hierarchy[^>]*\brotation=[\"'](\d+)[\"']")
+_KEYGUARD_PATTERNS = ("mDreamingLockscreen=true", "mShowingLockscreen=true")
+_HOSTPORT_RE = re.compile(r"(\d{1,3}(?:\.\d{1,3}){3}:\d+)")
+
+
+def is_error_dump(text: str) -> bool:
+    """True when uiautomator returned a status/error line instead of XML."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return True
+    if stripped.startswith("ERROR:"):
+        return True
+    return "<hierarchy" not in stripped
+
+
+def parse_rotation(xml: str) -> int:
+    """Read <hierarchy rotation="N">; 0 when absent/unparseable."""
+    m = _ROTATION_RE.search(xml or "")
+    if not m:
+        return 0
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return 0
+
+
+def parse_keyguard(window_dump: str) -> bool:
+    """True when `dumpsys window` reports the lock screen / keyguard is showing."""
+    text = window_dump or ""
+    for pat in _KEYGUARD_PATTERNS:
+        if pat in text:
+            return True
+    for line in text.splitlines():
+        if "KeyguardServiceDelegate" in line and "showing=true" in line:
+            return True
+    return False
+
+
+def parse_lock_state(window_dump: str) -> dict:
+    """Structured lock state. can_act is True only when unlocked."""
+    text = window_dump or ""
+    if not parse_keyguard(text):
+        return {"lock_state": "unlocked", "can_act": True, "recommended_user_action": None}
+    secure = ("secure=true" in text) or ("KeyguardSecure=true" in text)
+    if secure:
+        return {"lock_state": "locked_secure", "can_act": False,
+                "recommended_user_action": "Unlock the phone manually."}
+    return {"lock_state": "locked_swipe_only", "can_act": False,
+            "recommended_user_action": "Swipe up to dismiss the lock screen, then retry."}
+
+
+def parse_mdns_services(text: str) -> list[str]:
+    """Parse `adb mdns services` output into ip:port candidate strings."""
+    out: list[str] = []
+    for line in (text or "").splitlines():
+        m = _HOSTPORT_RE.search(line)
+        if m:
+            out.append(m.group(1))
+    return out

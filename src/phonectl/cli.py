@@ -5,7 +5,7 @@ import json
 from phonectl import __version__, config, audit, observer, actuator, results, errors, ui_parser
 from phonectl.adb_backend import AdbBackend
 from phonectl.session import Session
-from phonectl.connection import Connection
+from phonectl.connection import Connection, GUIDANCE
 
 
 def _make_backend(cfg) -> AdbBackend:
@@ -146,6 +146,25 @@ def _cmd_wait_for(args):
     return 0
 
 
+def _cmd_reconnect(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    try:
+        if args.port:
+            conn.connect(args.port)
+            if backend.get_state() != "device":
+                print(f"phonectl: {GUIDANCE}")
+                return 1
+            print(f"phonectl: reconnected to {args.port}")
+            return 0
+        addr = conn.rediscover()
+        print(f"phonectl: reconnected to {addr}")
+        return 0
+    except ConnectionError as e:
+        print(f"phonectl: {e}")
+        return 1
+
+
 def _cmd_doctor(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
@@ -226,6 +245,10 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--timeout", type=float, default=5.0)
     w.set_defaults(func=_cmd_wait_for)
 
+    rc = sub.add_parser("reconnect")
+    rc.add_argument("port", nargs="?", default=None)
+    rc.set_defaults(func=_cmd_reconnect)
+
     d = sub.add_parser("doctor")
     d.add_argument("--json", action="store_true")
     d.set_defaults(func=_cmd_doctor)
@@ -242,7 +265,7 @@ def main(argv=None) -> int:
         return args.func(args)
     except errors.PhonectlError as e:
         if getattr(args, "json", False):
-            print(json.dumps(results.err(e), indent=2))
+            print(json.dumps(results.err(e, **getattr(e, "lock_state", {})), indent=2))
         else:
             print(f"phonectl: {e}")
         return 1

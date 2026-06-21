@@ -1,7 +1,7 @@
 import shlex
 import subprocess
 
-from phonectl import capabilities
+from phonectl import capabilities, ui_parser
 
 class AdbBackend:
     def __init__(self, serial=None, runner=subprocess.run):
@@ -61,6 +61,19 @@ class AdbBackend:
 
     def get_state(self) -> str:
         return self._adb("get-state").strip()
+
+
+    def wake(self) -> None:
+        self._adb("shell", "input", "keyevent", "WAKEUP")
+
+    def keyguard(self) -> bool:
+        return ui_parser.parse_keyguard(self.window_dump())
+
+    def lock_state(self) -> dict:
+        return ui_parser.parse_lock_state(self.window_dump())
+
+    def mdns_services(self) -> list[str]:
+        return ui_parser.parse_mdns_services(self._adb("mdns", "services"))
 
 
     def capabilities(self) -> dict:

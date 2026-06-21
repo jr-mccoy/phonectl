@@ -145,3 +145,62 @@ def test_unknown_selector_key_raises():
     import pytest
     with pytest.raises(ValueError):
         ui_parser.match_selector(_els(), {"txt": "Wi-Fi"})
+
+
+def test_is_error_dump_detects_idle_state_error():
+    assert ui_parser.is_error_dump("ERROR: could not get idle state.") is True
+
+
+def test_is_error_dump_detects_non_xml_and_empty():
+    assert ui_parser.is_error_dump("null root node returned by UiTestAutomationBridge.") is True
+    assert ui_parser.is_error_dump("") is True
+
+
+def test_is_error_dump_false_for_real_hierarchy_even_with_trailing_status():
+    good = "<?xml version='1.0'?><hierarchy rotation='0'><node/></hierarchy>"
+    assert ui_parser.is_error_dump(good) is False
+    noisy = good + "\nUI hierchary dumped to: /dev/tty"
+    assert ui_parser.is_error_dump(noisy) is False
+
+
+def test_parse_rotation_reads_attribute_and_defaults_zero():
+    assert ui_parser.parse_rotation("<hierarchy rotation='1'><node/></hierarchy>") == 1
+    assert ui_parser.parse_rotation('<hierarchy rotation="3"></hierarchy>') == 3
+    assert ui_parser.parse_rotation("<hierarchy><node/></hierarchy>") == 0
+    assert ui_parser.parse_rotation("garbage") == 0
+
+
+def test_parse_keyguard_detects_showing_and_unlocked():
+    assert ui_parser.parse_keyguard("  mDreamingLockscreen=true\n") is True
+    assert ui_parser.parse_keyguard("KeyguardServiceDelegate{showing=true secure=true}") is True
+    assert ui_parser.parse_keyguard("  mDreamingLockscreen=false\n  mCurrentFocus=...") is False
+
+
+def test_parse_lock_state_locked_states_and_unlocked():
+    assert ui_parser.parse_lock_state("  mDreamingLockscreen=false\n") == {
+        "lock_state": "unlocked", "can_act": True, "recommended_user_action": None,
+    }
+    secure = ui_parser.parse_lock_state("KeyguardServiceDelegate{showing=true secure=true}")
+    assert secure["lock_state"] == "locked_secure"
+    assert secure["can_act"] is False
+    assert "nlock" in secure["recommended_user_action"]
+    swipe = ui_parser.parse_lock_state(
+        "  mDreamingLockscreen=true\n  KeyguardServiceDelegate{showing=true secure=false}"
+    )
+    assert swipe["lock_state"] == "locked_swipe_only"
+    assert swipe["can_act"] is False
+
+
+MDNS_OUT = """List of discovered mdns services
+adb-39FA-coo1\t_adb-tls-connect._tcp\t192.168.1.42:43210
+adb-7C2B-zz9q\t_adb-tls-pairing._tcp\t192.168.1.42:37115
+"""
+
+
+def test_parse_mdns_services_extracts_host_ports():
+    assert ui_parser.parse_mdns_services(MDNS_OUT) == ["192.168.1.42:43210", "192.168.1.42:37115"]
+
+
+def test_parse_mdns_services_empty_when_none_found():
+    assert ui_parser.parse_mdns_services("List of discovered mdns services\n") == []
+    assert ui_parser.parse_mdns_services("") == []
