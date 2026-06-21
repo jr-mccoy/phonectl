@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
+**Implementation status:** ✅ COMPLETE. Implementation landed before/with tracking in the early core commits and was recorded as complete by `0d994ff docs: mark structured-results capability plan complete`. Key shipped files: `src/phonectl/errors.py`, `src/phonectl/results.py`, `src/phonectl/capabilities.py`, `src/phonectl/backend.py`, with CLI JSON wiring and tests in `tests/test_errors.py`, `tests/test_results.py`, `tests/test_capabilities.py`, and `tests/test_backend.py`.
+
 **Plan 1.1 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). This is the first
 of the Phase-1 "seam" plans; it is a prerequisite for Plan 1.2 (selectors), 1.3 (resilience), and every
 later structured-result surface.

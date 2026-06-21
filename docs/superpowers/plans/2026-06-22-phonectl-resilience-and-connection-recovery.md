@@ -1,6 +1,8 @@
 # phonectl Resilience & Connection-Recovery Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+
+**Implementation status:** ✅ COMPLETE. Landed in `d5f2125 feat: resilience and connection recovery`. Key shipped files: retry/lock/rotation parser support in `src/phonectl/ui_parser.py`, backend wake/keyguard/mDNS seams in `src/phonectl/adb_backend.py`, observe retry + structured lock-state in `src/phonectl/observer.py`, connection recovery in `src/phonectl/connection.py`, `phonectl reconnect` wiring in `src/phonectl/cli.py`, and coverage in `tests/test_ui_parser.py`, `tests/test_adb_backend.py`, `tests/test_observer.py`, `tests/test_connection.py`, and `tests/test_cli.py`.
 
 **Plan 1.3 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). Depends on
 **Plan 1.1** for the `errors` hierarchy (`ObserveError`/`DeviceLockedError`) and the `results` envelope,
@@ -90,7 +92,7 @@ Re-homes the old resilience plan's Task 2 and **adds `parse_lock_state`** for st
   `KeyguardSecure=true`, else `locked_swipe_only`. Returns `{"lock_state", "can_act",
   "recommended_user_action"}`; `can_act` is `True` only for `unlocked`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_ui_parser.py  (append below existing tests)
@@ -135,12 +137,12 @@ def test_parse_lock_state_locked_swipe_only():
     assert ls["can_act"] is False
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: FAIL (`AttributeError: module 'phonectl.ui_parser' has no attribute 'is_error_dump'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `ui_parser` already imports `re`. Append:
 
@@ -198,12 +200,12 @@ def parse_lock_state(window_dump: str) -> dict:
 
 Keep these side-effect-free — no `print`, no file access, no `time`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: PASS (existing tests + new ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ui_parser.py tests/test_ui_parser.py
@@ -227,7 +229,7 @@ Re-homes the old resilience plan's Task 3 and adds the `lock_state()` compositio
 - `lock_state(self) -> dict` — `ui_parser.parse_lock_state(self.window_dump())`. (Decision logic stays
   pure in `ui_parser`; the backend only does the I/O.)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_adb_backend.py  (append below existing tests)
@@ -256,12 +258,12 @@ def test_lock_state_unlocked():
     assert b.lock_state()["can_act"] is True
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_adb_backend.py -v`
 Expected: FAIL (`AttributeError: 'AdbBackend' object has no attribute 'wake'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 `adb_backend.py` already imports `from phonectl import capabilities`; add `ui_parser` to that import.
 Append to the `AdbBackend` class:
@@ -278,12 +280,12 @@ Append to the `AdbBackend` class:
         return ui_parser.parse_lock_state(self.window_dump())
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_adb_backend.py -v`
 Expected: PASS (existing tests + 4 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/adb_backend.py tests/test_adb_backend.py
@@ -323,7 +325,7 @@ act loop is gated by one check (every action re-observes). `ensure()` (Task 5) a
 device first, so the common "asleep" case is fixed before `observe` ever runs; the lock is *reported*
 (not bypassed) because we cannot unlock without root (design non-goal).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_observer.py  (append below existing tests)
@@ -400,12 +402,12 @@ def test_observe_opt_in_tree_and_relations_still_work():
 Note: the existing `CannedBackend` in this file has no `lock_state`/`keyguard`; the `getattr` guard treats
 it as unlocked so the existing `test_observe_*` tests stay green.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_observer.py -v`
 Expected: FAIL (`observe()` has no `attempts`/`sleep` retry; no lock guard; no `lock_state` on snapshot).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Rewrite `observe` in `src/phonectl/observer.py` (keep the `import re`, `import time`, `from phonectl import
 ui_parser` already present; add `errors`):
@@ -480,12 +482,12 @@ Note: the `getattr` guards in `_lock_state` keep `CannedBackend` (no `lock_state
 extra `is_error_dump` check after the loop covers the `attempts == 0` edge and keeps `xml.etree` from ever
 seeing non-XML.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_observer.py -v`
 Expected: PASS (existing tests + new ones).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/observer.py tests/test_observer.py
@@ -510,7 +512,7 @@ Folds the old polish plan's monotonic-deadline item: replace the decrement count
   is `monotonic() + timeout` and the loop stops once `monotonic() >= deadline`. `monotonic` is injectable
   so tests drive elapsed time without wall-clock sleeps.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_actuator.py  (append below existing tests)
@@ -533,12 +535,12 @@ def test_wait_for_returns_snapshot_on_match():
 Note: `SelBackend` is the existing actuator-test double serving a single Wi-Fi node; `"Nope"` never
 matches, so the loop runs until the injected monotonic clock crosses the deadline.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_actuator.py -v`
 Expected: FAIL (`wait_for()` has no `monotonic` parameter).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def wait_for(backend, session, text=None, id=None, timeout: float = 5.0,
@@ -557,12 +559,12 @@ def wait_for(backend, session, text=None, id=None, timeout: float = 5.0,
         sleep(interval)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_actuator.py -v`
 Expected: PASS (existing tests + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/actuator.py tests/test_actuator.py
@@ -590,7 +592,7 @@ Re-homes the old resilience plan's Task 5 verbatim.
   itself run layered rediscovery — that is the explicit `reconnect` verb's job (Task 8 → Task 7),
   keeping `ensure` cheap on the per-op hot path.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_connection.py  (append below existing tests)
@@ -629,12 +631,12 @@ def test_connect_persists_last_port(tmp_path, monkeypatch):
 Note: the existing `StateBackend` has no `wake()`, so the four existing `ensure` tests stay green only if
 `ensure` calls `wake` through a `getattr` guard. The new tests use `WakeStateBackend`, which adds `wake()`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_connection.py -v`
 Expected: FAIL (`ensure` does not call `wake`; `connect` does not set `last_port`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Rewrite `connect` and `ensure` in `src/phonectl/connection.py` (keep `GUIDANCE` and `pair`):
 
@@ -662,12 +664,12 @@ Rewrite `connect` and `ensure` in `src/phonectl/connection.py` (keep `GUIDANCE` 
         raise ConnectionError(GUIDANCE)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_connection.py -v`
 Expected: PASS (existing 4 tests + 3 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/connection.py tests/test_connection.py
@@ -691,7 +693,7 @@ Re-homes the old resilience plan's Task 6 verbatim.
 - `AdbBackend.mdns_services(self) -> list[str]` — runs `adb mdns services` and returns
   `ui_parser.parse_mdns_services(out)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_ui_parser.py  (append)
@@ -719,12 +721,12 @@ def test_mdns_services_runs_adb_and_parses():
     assert calls[0][0] == ["adb", "-s", "d", "mdns", "services"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_ui_parser.py tests/test_adb_backend.py -v`
 Expected: FAIL (`parse_mdns_services` / `mdns_services` undefined).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/ui_parser.py`:
 
@@ -749,12 +751,12 @@ Append to the `AdbBackend` class:
         return ui_parser.parse_mdns_services(self._adb("mdns", "services"))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_ui_parser.py tests/test_adb_backend.py -v`
 Expected: PASS (existing + 3 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ui_parser.py src/phonectl/adb_backend.py tests/test_ui_parser.py tests/test_adb_backend.py
@@ -785,7 +787,7 @@ Re-homes the old resilience plan's Task 7 verbatim.
      that alternate runner and retry last-port/serial through it. Absent the seam, skip. (Structural +
      unit-tested via a fake seam; a real host-Termux round-trip needs a device — Task 9.)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_connection.py  (append)
@@ -833,12 +835,12 @@ def test_rediscover_raises_guidance_when_all_layers_fail(tmp_path, monkeypatch):
     assert GUIDANCE in str(e.value)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_connection.py -v`
 Expected: FAIL (`Connection` has no `rediscover`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add `import time` at the top of `src/phonectl/connection.py`, then add to `class Connection`:
 
@@ -894,12 +896,12 @@ interface unchanged (design §4.1). It is exercised in tests only through a fake
 production until that seam is implemented under its own follow-up. A real host-Termux round-trip is part
 of Task 9's manual smoke.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_connection.py -v`
 Expected: PASS (existing + 4 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/connection.py tests/test_connection.py
@@ -927,7 +929,7 @@ Re-homes the old resilience plan's Task 8 and **adds lock-state surfacing**. The
 - `main`'s `except errors.PhonectlError` catch: when `--json`, spread any `getattr(e, "lock_state", {})`
   into `results.err(e, **lock_state)` so the envelope carries the §7.2 fields; otherwise print one line.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_cli.py  (append below existing tests)
@@ -985,12 +987,12 @@ def test_reconnect_with_explicit_port(tmp_path, monkeypatch, capsys):
 Note: `FakeBackend` (defined earlier in `tests/test_cli.py`) lacks `lock_state`; the `observe` `getattr`
 guard treats it as unlocked, so the existing CLI tests stay green.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: FAIL (no `reconnect` subcommand; `--json` lock error lacks `lock_state` fields).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/cli.py`, import `GUIDANCE` (`from phonectl.connection import Connection, GUIDANCE`), add
 the handler, register the subparser, and enrich the `main` catch:
@@ -1044,17 +1046,17 @@ flat into the envelope; non-lock errors have no `lock_state` attribute, so `geta
 for them. `ConnectionError` is handled inside `_cmd_reconnect`; the `main` catch is the backstop for
 observe/action typed errors. No verb prints a traceback.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (existing tests + 3 new).
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pytest -v`
 Expected: PASS (ui_parser, adb_backend, observer, actuator, connection, cli, and all prior tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/cli.py tests/test_cli.py
@@ -1075,7 +1077,7 @@ Re-homes the old resilience plan's Task 9.
 **Interfaces:** none (documentation + manual procedure). Steps 2–3 require a real paired device; do not
 automate them in CI.
 
-- [ ] **Step 1: Document the new config keys, verb, and lock-state contract**
+- [x] **Step 1: Document the new config keys, verb, and lock-state contract**
 
 In `README.md`: `last_port` (last-known-good `ip:port`, retried first by `ensure`/`rediscover`) and
 `probe_ports` (candidate Wireless-Debugging ports for the PRoot port-probe fallback). Document `phonectl
@@ -1084,7 +1086,7 @@ fields (`lock_state`/`can_act`/`recommended_user_action`) now present on snapsho
 `device_locked` error envelope, and the one-line messages `Unlock the phone manually.` and
 `screen not idle — is it asleep or locked?`.
 
-- [ ] **Step 2: Verify auto-wake + observe robustness on-device**
+- [x] **Step 2: Verify auto-wake + observe robustness on-device**
 
 ```bash
 # put the screen to sleep (power button), then:
@@ -1094,7 +1096,7 @@ phonectl observe        # expect one line: "phonectl: Unlock the phone manually.
 phonectl observe --json # expect an envelope with error.code=device_locked + lock_state=locked_secure
 ```
 
-- [ ] **Step 3: Verify port recovery after a sleep/disconnect cycle**
+- [x] **Step 3: Verify port recovery after a sleep/disconnect cycle**
 
 ```bash
 # let the phone sleep long enough for the connect port to rotate, then:
@@ -1106,12 +1108,12 @@ phonectl observe        # expect a fresh snapshot
 If the in-PRoot `adb mdns services` returns empty (the known PRoot caveat), confirm the port-probe layer
 recovered the link and record the working `probe_ports` range in config.
 
-- [ ] **Step 4: Write the docs**
+- [x] **Step 4: Write the docs**
 
 Capture the above in `docs/integration-smoke.md` under a "Resilience" heading, including the host-Termux
 shim seam status (structural, needs a real device round-trip).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/integration-smoke.md

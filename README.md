@@ -130,6 +130,55 @@ phonectl doctor
 # phonectl: connected (serial=127.0.0.1:PORT, state=device)
 ```
 
+
+### `mcp`
+
+Launch the optional stdio MCP server so agents can call phonectl as native tools. The live transport needs the optional MCP SDK; handlers and tests remain stdlib-only.
+
+```bash
+pip install 'phonectl[mcp]'
+phonectl mcp
+```
+
+Every MCP tool returns the same structured result envelope used by `--json` CLI actions. Agents should branch on `ok`, `error.code`, `requires_user`, `risk_level`, and `reasons` instead of parsing human text.
+
+Tool catalog:
+
+| Tool | Purpose | Key args |
+|---|---|---|
+| `phone_observe_ui` | Return the foreground UI snapshot. | `tree`, `relations`, `screenshot` |
+| `phone_find` | Resolve a selector against a fresh observation. | `selector` |
+| `phone_capabilities` | Report backend capability flags and summary text. | none |
+| `phone_tap` | Tap by selector, index, or coordinates via `run_action`. | `selector`, `index`, `x`, `y`, `expected_hash`, `stale_ok`, `dry_run`, `confirm`, `reason`, `idempotency_key` |
+| `phone_type` | Type into the focused field via `run_action`. | `text`, `dry_run`, `confirm`, `reason`, `idempotency_key` |
+| `phone_swipe` | Swipe between points via `run_action`. | `x1`, `y1`, `x2`, `y2`, `dry_run`, `confirm` |
+| `phone_key` | Send a key event via `run_action`. | `keycode`, `dry_run`, `confirm` |
+| `phone_launch` | Launch a package via `run_action`. | `package`, `dry_run`, `confirm` |
+| `phone_policy_explain` | Explain risk and policy before acting. | `verb`, `selector`, `index`, `x`, `y` |
+| `phone_audit_query` | Read recent redacted audit entries. | `limit` |
+| `phone_stop` | Engage the emergency stop. | none |
+| `phone_resume` | Clear the emergency stop. | none |
+
+Example observe envelope:
+
+```json
+{"ok": true, "capability": "ui.observe", "provider": "adb", "data": {"elements": []}}
+```
+
+Example blocked action envelope:
+
+```json
+{
+  "ok": false,
+  "error": {"code": "confirmation_required", "requires_user": true},
+  "verb": "tap",
+  "risk_level": "high",
+  "reasons": ["password_field"]
+}
+```
+
+The action tools are thin frontends over `runtime.run_action`, so MCP and CLI use the same single-writer lock, kill switch, dry-run mode, confirmation policy, rate limits, re-observe-after-act behavior, and audit log.
+
 ### Global flag
 
 ```bash

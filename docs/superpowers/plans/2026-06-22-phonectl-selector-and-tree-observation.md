@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
+**Implementation status:** ✅ COMPLETE. Landed in `20b82a9 feat: add selector targeting and tree observation`. Key shipped files: selector/tree parsing in `src/phonectl/ui_parser.py`, observation/session/action wiring in `src/phonectl/observer.py`, `src/phonectl/session.py`, `src/phonectl/actuator.py`, CLI selector flags in `src/phonectl/cli.py`, and coverage in `tests/test_ui_parser.py`, `tests/test_observer.py`, `tests/test_session.py`, `tests/test_actuator.py`, and `tests/test_cli.py`.
+
 **Plan 1.2 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). Depends on
 **Plan 1.1** for `errors.StaleSnapshotError` and the `results` envelope.
 

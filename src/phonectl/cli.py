@@ -236,6 +236,17 @@ def _cmd_audit(args):
     return 2
 
 
+def _cmd_mcp(args):
+    from phonectl import mcp_server
+
+    try:
+        mcp_server.serve()
+        return 0
+    except errors.CapabilityUnavailableError as e:
+        print(f"phonectl: {e}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="phonectl")
     p.add_argument("--version", action="version", version=__version__)
@@ -326,6 +337,9 @@ def build_parser() -> argparse.ArgumentParser:
     ae.add_argument("path")
     ae.add_argument("--no-redact", action="store_true")
     au.set_defaults(func=_cmd_audit)
+
+    mcp = sub.add_parser("mcp")
+    mcp.set_defaults(func=_cmd_mcp)
     return p
 
 

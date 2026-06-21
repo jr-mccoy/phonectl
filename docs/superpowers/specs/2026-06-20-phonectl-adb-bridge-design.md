@@ -198,6 +198,10 @@ records include `outcome` so blocked policy decisions are traceable. The `phonec
 verb exposes the same classifier/decision result for agents and users before a mutating action is
 attempted.
 
+## 9.1 MCP structured-result frontend
+
+The Phase-2 MCP server is a thin frontend over the existing observation seams and `runtime.run_action`. Observation tools call `observer.observe`/selector matching and return `results.ok` envelopes. Mutating tools never duplicate policy, rate-limit, audit, dry-run, kill-switch, or single-writer logic; they build the same targets as the CLI and route through `run_action`. The MCP transport serializes structured result envelopes directly, preserving `ok`, `error.code`, `requires_user`, `risk_level`, `reasons`, `request_id`, and action data for agent clients. This is the same contract shape the Phase-5 daemon should expose behind JSON-RPC/socket frontends.
+
 ## 10. Testing strategy
 
 - **Unit (the bulk):** `ui_parser` against real captured `uiautomator` XML fixtures —
