@@ -1,16 +1,19 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 2 → 7 + cross-cutting evaluation suite (all of Phase 1 now written)
+**Status:** Authoring index for Phases 3 → 7 + cross-cutting evaluation suite (all of Phase 1 and Phase 2 now written)
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
 This document is the **instruction set for writing the remaining implementation plans**. **All four
-Phase-1 plans are now written in full:** Phase 1.1
-(`2026-06-22-phonectl-structured-results-and-capabilities.md`), Phase 1.2
-(`2026-06-22-phonectl-selector-and-tree-observation.md`), Phase 1.3
-(`2026-06-22-phonectl-resilience-and-connection-recovery.md`), and Phase 1.4
-(`2026-06-22-phonectl-setup-and-diagnostics.md`). Everything from Phase 2 onward is **scoped here** and
-turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order.
+Phase-1 plans and all three Phase-2 plans are now written in full.** Phase 1: 1.1
+(`2026-06-22-phonectl-structured-results-and-capabilities.md`), 1.2
+(`2026-06-22-phonectl-selector-and-tree-observation.md`), 1.3
+(`2026-06-22-phonectl-resilience-and-connection-recovery.md`), 1.4
+(`2026-06-22-phonectl-setup-and-diagnostics.md`). Phase 2: 2.1
+(`2026-06-22-phonectl-action-serialization-and-audit-v2.md`), 2.2
+(`2026-06-22-phonectl-risk-classifier-and-ledger.md`), 2.3
+(`2026-06-22-phonectl-structured-result-mcp-server.md`). Everything from Phase 3 onward is **scoped here**
+and turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order.
 
 ---
 
@@ -90,22 +93,32 @@ get-state, recent errors, mDNS result, host-shim status, **provider capability s
 *Deps:* 1.1 (capabilities, results); opportunistic on 1.3 (`reconnect`, gated via `hasattr`).
 *Strategy:* §9.
 
-### Phase 2 (single-writer runtime & safety policy)
+### Phase 2 (single-writer runtime & safety policy) — ✅ all written
 
-**2.1 — Action serialization + request IDs + audit v2**
+**2.1 — Action serialization + request IDs + audit v2** — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-22-phonectl-action-serialization-and-audit-v2.md` (9 tasks: additive
+single-writer error codes → `runtime.run_action` funnel → process-local lock/`busy` → idempotency keys →
+pure `redact` module → audit v2 levels → `audit tail|purge|export` → wire `cli._do_action` → docs). Original
+scope below, retained for traceability.
 *Goal:* one mutating action at a time, with request IDs, idempotency keys, a clear "busy" status, and an
 emergency stop — the single-writer seam the daemon (Phase 5) will own (strategy §7.4, §22). Plus audit v2:
 levels (`none|metadata|redacted|full`), broader redaction (OTP/email/phone/card/URL-token/clipboard), and
 `audit tail|purge|export --redacted` (§8.3).
 *Files:* create `runtime.py` (extract the `cli._do_action` funnel into `run_action(verb, fn, target, *,
-yes, cfg, build) -> results-envelope`; add a process-local action lock + `request_id`), `lock.py` or
-in-runtime serialization; modify `audit.py` (levels + redaction), `cli.py`, `config.py`.
+yes, cfg, build) -> results-envelope`; add a process-local action lock + `request_id`), `redact.py`; modify
+`audit.py` (levels + redaction), `cli.py`, `config.py`.
 *Key interfaces:* `run_action(...)` returns the **Phase-1 results envelope** (not a bare tuple); every
-action carries `request_id` + optional `idempotency_key`; `audit.log_action` honors `audit_level`.
+action carries `request_id` + optional `idempotency_key`; `audit.log_action` honors `audit_level`. Adds
+three additive `errors.py` codes (`busy`/`stopped`/`confirmation_required`) for the single-writer
+control-flow.
 *Deps:* 1.1 (results/errors). *Strategy:* §7.4, §8.3, §22. *Note:* `run_action` is designed so the daemon
 becomes a compatible evolution (single writer), not a rewrite.
 
-**2.2 — Risk classifier / risk ledger** *(supersedes safety-completeness)*
+**2.2 — Risk classifier / risk ledger** *(supersedes safety-completeness)* — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-22-phonectl-risk-classifier-and-ledger.md` (7 tasks: pure `risk` classifier
+→ pure `policy` decide/explain → pure `ratelimit` sliding-window + repeated-hash → `run_action` policy gate →
+`run_action` rate gate w/ persisted history → audit blocked + `policy explain` verb → docs). Original scope
+below, retained for traceability.
 *Goal:* replace the flat guarded-package denylist + single rate-limit with a **risk ledger** (strategy
 §24) that classifies each action `low|medium|high|critical` from multiple signals (foreground package,
 activity, screen text keywords like pay/send/transfer/install/uninstall/factory-reset, password fields,
@@ -119,7 +132,11 @@ sliding-window), `policy.py` (decision + explain); modify `runtime.run_action` t
 *Config keys:* `risk_policy`, `rate_limits`, `guarded_packages` (now one signal among many).
 *Deps:* 1.1 (errors/results), 2.1 (`run_action`). *Strategy:* §8, §24.
 
-**2.3 — Structured-result MCP server** *(supersedes mcp-server)*
+**2.3 — Structured-result MCP server** *(supersedes mcp-server)* — ✅ **WRITTEN** as
+`docs/superpowers/plans/2026-06-22-phonectl-structured-result-mcp-server.md` (6 tasks: observation handlers →
+`run_action`-routed action handlers → policy/audit/stop/resume meta tools → `TOOLS` registry + `call_tool` →
+gated FastMCP transport + `phonectl mcp` + optional extra → docs). Original scope below, retained for
+traceability.
 *Goal:* expose phonectl as native agent tools over stdio MCP, returning the **Phase-1 results envelope**
 (not CLI tuples), with selector-aware + dry-run + expected-hash tool args (strategy §10, §20, §21), and
 capability/policy tools.
