@@ -57,15 +57,16 @@ def _matches(el, text, id):
     return False
 
 def wait_for(backend, session, text=None, id=None, timeout: float = 5.0,
-             interval: float = 0.5, sleep=time.sleep):
+             interval: float = 0.5, sleep=time.sleep, monotonic=time.monotonic):
+    # `id` intentionally shadows the builtin to mirror the element field name `id`;
+    # it is only ever compared, never used as the builtin.
     if text is None and id is None:
         raise ValueError("wait_for requires text or id")
-    deadline = timeout
+    deadline = monotonic() + timeout
     while True:
         snap = observer.observe(backend, session)
         if any(_matches(e, text, id) for e in snap["elements"]):
             return snap
-        deadline -= max(interval, 0.0001)
-        if deadline <= 0:
+        if monotonic() >= deadline:
             return None
         sleep(interval)

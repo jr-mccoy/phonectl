@@ -329,3 +329,66 @@ phonectl observe --tree --relations
 ```
 
 Use `--expected-hash HASH` on actions to prevent acting when the observed screen has changed. If the current hash differs, `phonectl` re-observes once and raises the typed `stale_snapshot` error unless `--stale-ok` is supplied, in which case it proceeds against the fresh snapshot.
+
+## Resilience and connection recovery
+
+`phonectl` is designed to survive common unattended-use failures without exposing raw Python tracebacks.
+
+### Config keys
+
+The config file (`~/.config/phonectl/config.json`, or `$PHONECTL_HOME/config.json`) supports these connection recovery keys:
+
+| Key | Meaning |
+|---|---|
+| `serial` | Current ADB serial or Wireless Debugging `ip:port`. |
+| `last_port` | Last-known-good Wireless Debugging `ip:port`; `ensure()` and `reconnect` retry it first. |
+| `probe_ports` | Optional list of candidate Wireless Debugging ports for the bounded PRoot/Termux port-probe fallback. |
+
+Example:
+
+```json
+{
+  "serial": "127.0.0.1:5555",
+  "last_port": "127.0.0.1:5555",
+  "probe_ports": [40001, 40002, 40003]
+}
+```
+
+### `reconnect`
+
+Use `phonectl reconnect [port]` when Wireless Debugging rotated or dropped its connection:
+
+```bash
+phonectl reconnect 127.0.0.1:43210  # explicitly connect and persist this port
+phonectl reconnect                   # layered recovery: last_port/serial, mDNS, probe_ports, shim seam
+```
+
+Without an explicit port, recovery tries the last-known-good address first, then `adb mdns services`, then any configured `probe_ports` on the same device IP. If every layer fails, it prints the normal setup guidance and exits nonzero.
+
+### Lock-state and idle-state behavior
+
+Snapshots now include structured lock-state fields:
+
+```json
+{
+  "lock_state": "unlocked",
+  "can_act": true,
+  "recommended_user_action": null
+}
+```
+
+The recognized lock-state values are `unlocked`, `locked_swipe_only`, `locked_secure`, `biometric_prompt`, `work_profile_locked`, and `unknown`; current ADB detection classifies `unlocked`, `locked_secure`, and `locked_swipe_only`.
+
+If the device is locked, `observe --json` returns an error envelope with the same top-level fields, for example:
+
+```json
+{
+  "ok": false,
+  "error": { "code": "device_locked", "message": "Unlock the phone manually." },
+  "lock_state": "locked_secure",
+  "can_act": false,
+  "recommended_user_action": "Unlock the phone manually."
+}
+```
+
+Plain-text output stays one line, e.g. `phonectl: Unlock the phone manually.` If `uiautomator` reports the transient idle-state failure after retries, the typed observation error is `screen not idle — is it asleep or locked?` rather than an XML parse traceback.

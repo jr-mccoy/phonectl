@@ -165,3 +165,52 @@ The following steps are **not yet completed** and are deferred until a physical 
 - [ ] Run the observe → launch → wait-for → observe → tap → observe smoke scenario end-to-end and verify `hash` changes between pre- and post-tap snapshots.
 - [ ] Record the actual `serial`, port numbers, and any ROM-specific quirks encountered.
 - [ ] If the host-Termux fallback is needed, document whether the PRoot adb block is consistent or intermittent.
+
+---
+
+## Resilience smoke scenario
+
+These manual checks validate the unattended resilience path. They require a real paired Android device and are intentionally not CI automation.
+
+### Auto-wake and observe robustness
+
+1. Put the screen to sleep with the power button.
+2. Run:
+   ```bash
+   phonectl observe
+   ```
+   Expected: a JSON snapshot, not a traceback. `ensure()` sends `WAKEUP` before giving up, and `observe()` retries transient `uiautomator` idle-state dumps.
+3. Lock the phone with a PIN or password, then run:
+   ```bash
+   phonectl observe
+   ```
+   Expected: one line and exit code 1:
+   ```text
+   phonectl: Unlock the phone manually.
+   ```
+4. Confirm the structured JSON error path:
+   ```bash
+   phonectl observe --json
+   ```
+   Expected: an envelope with `ok=false`, `error.code=device_locked`, `lock_state=locked_secure`, `can_act=false`, and `recommended_user_action="Unlock the phone manually."`.
+
+### Port recovery after sleep/disconnect
+
+1. Let the phone sleep long enough for the Wireless Debugging connection port to rotate or disconnect.
+2. Run:
+   ```bash
+   phonectl doctor
+   ```
+   It may report a dropped link.
+3. Run:
+   ```bash
+   phonectl reconnect
+   ```
+   Expected: `phonectl: reconnected to 127.0.0.1:<newPort>` or another discovered `ip:port`.
+4. Run:
+   ```bash
+   phonectl observe
+   ```
+   Expected: a fresh snapshot.
+
+If in-PRoot `adb mdns services` is empty, confirm whether the bounded `probe_ports` layer recovered the link and record the working port range in `config.json`. The host-Termux shim layer currently exists as a structural Python seam for future runner injection; a real host-Termux round-trip still requires this manual smoke environment.
