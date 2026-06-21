@@ -1,6 +1,6 @@
 # phonectl Structured Results, Errors & Capability Discovery Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Plan 1.1 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). This is the first
 of the Phase-1 "seam" plans; it is a prerequisite for Plan 1.2 (selectors), 1.3 (resilience), and every
@@ -66,7 +66,7 @@ traceback.
   - `class GuardedActionError(PhonectlError)` — `code = "guarded_action"`, `requires_user = True`.
   - `class RateLimitError(PhonectlError)` — `code = "rate_limited"`, `retryable = True`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_errors.py
@@ -106,12 +106,12 @@ def test_raisable_with_message_and_caught_as_base():
     assert e.value.code == "device_locked"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_errors.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.errors'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/errors.py
@@ -162,12 +162,12 @@ class RateLimitError(PhonectlError):
     retryable = True
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_errors.py -v`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/errors.py tests/test_errors.py
@@ -193,7 +193,7 @@ git commit -m "feat: canonical typed-error hierarchy with stable codes and actio
     `capability`/`extra`. For a `PhonectlError`, `code`/`retryable`/`requires_user` come from the
     instance; for a `(code, message)` pair they default to `retryable=False, requires_user=False`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_results.py
@@ -234,12 +234,12 @@ def test_err_from_code_message_pair_defaults():
     assert out["capability"] == "notifications.reply"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_results.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.results'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/results.py
@@ -288,12 +288,12 @@ def err(error, *, capability=None, user_action=None, **extra) -> dict:
     return body
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_results.py -v`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/results.py tests/test_results.py
@@ -320,7 +320,7 @@ git commit -m "feat: structured result envelope builders (ok/err) per strategy �
   - `describe(caps: dict) -> str` — a short human/agent-readable summary listing which capabilities are
     available and which are not (used by `phonectl_capabilities` MCP tool later and by `--json` now).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_capabilities.py
@@ -354,12 +354,12 @@ def test_describe_mentions_available_and_unavailable():
     assert "read_notifications" in text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_capabilities.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.capabilities'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/capabilities.py
@@ -400,12 +400,12 @@ def describe(caps: dict) -> str:
     return f"available: {', '.join(have) or '(none)'}\nunavailable: {', '.join(miss) or '(none)'}"
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_capabilities.py -v`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/capabilities.py tests/test_capabilities.py
@@ -432,7 +432,7 @@ git commit -m "feat: capability schema (CAPABILITY_KEYS/make/describe) per strat
     = True, `requires_adb` = True, the event/notification/clipboard/secure-settings keys = False.
 - Consumes: `phonectl.capabilities` (Task 3).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_backend.py
@@ -457,12 +457,12 @@ def test_adb_capabilities_shape_and_values():
     assert caps["persistent_events"] is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_backend.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.backend'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/backend.py
@@ -505,12 +505,12 @@ Append to the `AdbBackend` class in `src/phonectl/adb_backend.py` (and add
         )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_backend.py tests/test_adb_backend.py -v`
 Expected: PASS (2 new backend tests + existing adb_backend tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/backend.py src/phonectl/adb_backend.py tests/test_backend.py
@@ -537,7 +537,7 @@ Plan 2.3). `observe --json` and `doctor --json` emit a `results.ok(...)` envelop
     `1` (no traceback). Non-`--json` paths keep today's plain-text behavior.
 - Consumes: `results` (Task 2), `errors` (Task 1), `backend.capabilities()` (Task 4).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli.py  (append below existing tests)
@@ -577,12 +577,12 @@ Note: `FakeBackend` is the existing test double in `tests/test_cli.py` (has `get
 `window_dump`/`wm_size`/`input_tap`). The error-mapping test patches `_cmd_observe` to raise, proving the
 `main`-level catch produces the envelope for ANY verb, independent of where the error originates.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: FAIL (`observe` has no `--json`; `main` does not catch `PhonectlError` into an envelope).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/cli.py`: add `from phonectl import results, errors` to the imports; add `--json` to the
 `observe` and `doctor` subparsers; branch `_cmd_observe`/`_cmd_doctor` on `args.json`; wrap `main`.
@@ -632,17 +632,17 @@ For `doctor --json`, return `results.ok(provider="adb", data={"connected": True,
 "capabilities": backend.capabilities()})` on success, or `results.err(("connection_failed", str(e)),
 user_action=GUIDANCE)` when `conn.ensure()` raises `ConnectionError`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (existing tests + 2 new).
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pytest -v`
 Expected: PASS (errors, results, capabilities, backend, adb_backend, cli, and all prior tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/cli.py tests/test_cli.py
@@ -659,7 +659,7 @@ git commit -m "feat: CLI --json result envelope and traceback-free typed-error s
 
 **Interfaces:** none (documentation).
 
-- [ ] **Step 1: Document the contract**
+- [x] **Step 1: Document the contract**
 
 In `README.md`: the result envelope shape (`ok`/`err`), the stable error-code table
 (`device_locked`/`stale_snapshot`/`capability_unavailable`/`guarded_action`/`rate_limited`/
@@ -668,7 +668,7 @@ In `README.md`: the result envelope shape (`ok`/`err`), the stable error-code ta
 section that **structured results are now an invariant** (roadmap §4) and that `errors.py`/`results.py`/
 `capabilities.py` are the canonical homes.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

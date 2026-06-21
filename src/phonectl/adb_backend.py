@@ -1,6 +1,8 @@
 import shlex
 import subprocess
 
+from phonectl import capabilities
+
 class AdbBackend:
     def __init__(self, serial=None, runner=subprocess.run):
         self.serial = serial
@@ -59,3 +61,12 @@ class AdbBackend:
 
     def get_state(self) -> str:
         return self._adb("get-state").strip()
+
+
+    def capabilities(self) -> dict:
+        # ADB provides shell/intent/UI powers but not companion-app powers.
+        return capabilities.make(
+            observe_ui_tree=True, observe_screenshot=True,
+            act_tap=True, act_type=True, act_key=True,
+            launch_app=True, send_intent=True, requires_adb=True,
+        )

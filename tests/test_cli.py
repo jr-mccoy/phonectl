@@ -1,6 +1,7 @@
 import json
+import json as _json
 import pytest
-from phonectl import cli, config
+from phonectl import cli, config, errors, capabilities
 
 
 def test_version_flag_prints_and_exits_zero(capsys):
@@ -23,6 +24,7 @@ class FakeBackend:
     def wm_size(self): return (1080, 2400)
     def input_tap(self, x, y): self.calls.append(("tap", x, y))
     def input_text(self, t): self.calls.append(("text", t))
+    def capabilities(self): return capabilities.make(observe_ui_tree=True, act_tap=True, requires_adb=True)
 
 def test_observe_prints_json(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
@@ -106,3 +108,44 @@ def test_type_redacts_text_in_audit_log(tmp_path, monkeypatch):
     assert "hunter2" not in log                       # but NOT in the audit log
     assert "<7 chars>" in log                         # redacted surrogate present
 
+
+
+def test_observe_json_emits_ok_envelope(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["observe", "--json"])
+    out = _json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert out["capability"] == "ui.observe"
+    assert out["provider"] == "adb"
+    assert out["data"]["elements"][0]["text"] == "Wi-Fi"
+
+
+def test_main_maps_phonectl_error_to_err_envelope(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    def boom(args):
+        raise errors.DeviceLockedError("device is locked, unlock it")
+
+    monkeypatch.setattr(cli, "_cmd_observe", boom)
+    rc = cli.main(["observe", "--json"])
+    captured = capsys.readouterr()
+    out = _json.loads(captured.out)
+    assert rc == 1
+    assert out["ok"] is False
+    assert out["error"]["code"] == "device_locked"
+    assert out["error"]["requires_user"] is True
+    assert "Traceback" not in captured.out
+
+
+def test_doctor_json_emits_capabilities(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["doctor", "--json"])
+    out = _json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert out["provider"] == "adb"
+    assert out["data"]["connected"] is True
+    assert out["data"]["capabilities"]["requires_adb"] is True
