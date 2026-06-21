@@ -1,4 +1,5 @@
 import hashlib
+import re
 import xml.etree.ElementTree as ET
 
 
@@ -33,24 +34,172 @@ def parse_elements(xml: str) -> list[dict]:
         if not _is_meaningful(text, desc, clickable):
             continue
         x1, y1, x2, y2 = parse_bounds(node.get("bounds", "[0,0][0,0]"))
-        elements.append(
-            {
-                "i": i,
-                "text": text,
-                "id": node.get("resource-id", "") or "",
-                "class": node.get("class", "") or "",
-                "content_desc": desc,
-                "clickable": clickable,
-                "bounds": [x1, y1, x2, y2],
-                "center": [(x1 + x2) // 2, (y1 + y2) // 2],
-            }
-        )
+
+        def _b(attr, default="false"):
+            return node.get(attr, default) == "true"
+
+        cls = node.get("class", "") or ""
+        el = {
+            "i": i,
+            "text": text,
+            "id": node.get("resource-id", "") or "",
+            "class": cls,
+            "content_desc": desc,
+            "clickable": clickable,
+            "enabled": _b("enabled", "true"),
+            "focused": _b("focused"),
+            "checkable": _b("checkable"),
+            "checked": _b("checked"),
+            "scrollable": _b("scrollable"),
+            "long_clickable": _b("long-clickable"),
+            "password": _b("password"),
+            "selected": _b("selected"),
+            "editable": _b("editable") or "EditText" in cls,
+            "package": node.get("package", "") or "",
+            "bounds": [x1, y1, x2, y2],
+            "center": [(x1 + x2) // 2, (y1 + y2) // 2],
+        }
+        if node.get("hint_text") is not None:
+            el["hint_text"] = node.get("hint_text") or ""
+        if node.get("error_text") is not None:
+            el["error_text"] = node.get("error_text") or ""
+        elements.append(el)
         i += 1
     return elements
-
 
 def screen_hash(elements: list[dict]) -> str:
     h = hashlib.sha1()
     for e in elements:
         h.update(f"{e['text']}|{e['id']}|{e['bounds']}".encode())
     return h.hexdigest()
+
+
+def _iter_tree(root):
+    counter = 0
+
+    def visit(node, parent):
+        nonlocal counter
+        text = node.get("text", "") or ""
+        desc = node.get("content-desc", "") or ""
+        clickable = node.get("clickable", "false") == "true"
+        meaningful = _is_meaningful(text, desc, clickable)
+        idx = counter if meaningful else None
+        if meaningful:
+            counter += 1
+        item = {"i": idx, "class": node.get("class", "") or "", "children": [], "_parent": parent}
+        for child in node.findall("node"):
+            item["children"].append(visit(child, idx if idx is not None else parent))
+        return item
+
+    nodes = [visit(child, None) for child in root.findall("node")]
+    if len(nodes) == 1:
+        return nodes[0]
+    return {"i": None, "class": root.get("class", "hierarchy") or "hierarchy", "children": nodes, "_parent": None}
+
+
+def build_tree(xml: str) -> dict:
+    """Build a hierarchy-preserving tree keyed to parse_elements indices."""
+    root = ET.fromstring(_extract_hierarchy(xml))
+    tree = _iter_tree(root)
+
+    def strip_private(node):
+        node.pop("_parent", None)
+        for child in node["children"]:
+            strip_private(child)
+        return node
+
+    return strip_private(tree)
+
+
+def parse_relations(xml: str) -> dict:
+    """Return parent/children/siblings/ancestors maps for meaningful elements."""
+    root = ET.fromstring(_extract_hierarchy(xml))
+    tree = _iter_tree(root)
+    parent = {}
+    children = {}
+    nodes = {}
+
+    def collect(node):
+        idx = node["i"]
+        if idx is not None:
+            nodes[idx] = node
+            parent[idx] = node.get("_parent")
+            children[idx] = []
+        for child in node["children"]:
+            collect(child)
+            if idx is not None and child["i"] is not None:
+                children[idx].append(child["i"])
+
+    collect(tree)
+    # include meaningful descendants under nearest meaningful parent
+    for idx in list(nodes):
+        p = parent[idx]
+        if p is not None and idx not in children.setdefault(p, []):
+            children[p].append(idx)
+    siblings = {idx: [] for idx in nodes}
+    for idx in nodes:
+        p = parent[idx]
+        siblings[idx] = [other for other, op in parent.items() if op == p and other != idx]
+    ancestors = {}
+    for idx in nodes:
+        chain = []
+        p = parent[idx]
+        while p is not None:
+            chain.append(p)
+            p = parent.get(p)
+        ancestors[idx] = chain
+    return {"parent": parent, "children": children, "siblings": siblings, "ancestors": ancestors}
+
+
+_SELECTOR_KEYS = {
+    "text", "text_regex", "content_desc", "resource_id", "id", "class", "ancestor_text",
+    "sibling_text", "bounds_near", "nth_match", "clickable", "enabled", "focused", "checkable",
+    "checked", "scrollable", "long_clickable", "password", "selected", "editable",
+}
+
+
+def match_selector(elements: list[dict], selector: dict, relations: dict | None = None) -> list[int]:
+    """Return ranked matching element indices; relation predicates need relations or do not match."""
+    unknown = set(selector) - _SELECTOR_KEYS
+    if unknown:
+        raise ValueError(f"unknown selector key(s): {', '.join(sorted(unknown))}")
+    by_i = {e["i"]: e for e in elements}
+
+    def text_matches(idx, value):
+        return by_i.get(idx, {}).get("text") == value
+
+    def ok(e):
+        for k, v in selector.items():
+            if k == "nth_match":
+                continue
+            if k == "text" and e.get("text") != v: return False
+            if k == "text_regex" and not re.search(v, e.get("text", "")): return False
+            if k == "content_desc" and e.get("content_desc") != v: return False
+            if k in ("resource_id", "id") and e.get("id") != v: return False
+            if k == "class" and e.get("class") != v: return False
+            if k in {"clickable","enabled","focused","checkable","checked","scrollable","long_clickable","password","selected","editable"} and e.get(k) is not v: return False
+            if k == "bounds_near":
+                x1,y1,x2,y2 = v; cx, cy = e.get("center", [0,0])
+                if not (x1 <= cx <= x2 and y1 <= cy <= y2): return False
+            if k == "sibling_text":
+                if relations is None: return False
+                if not any(text_matches(i, v) for i in relations.get("siblings", {}).get(e["i"], [])): return False
+            if k == "ancestor_text":
+                if relations is None: return False
+                if not any(text_matches(i, v) for i in relations.get("ancestors", {}).get(e["i"], [])): return False
+        return True
+
+    ranked = [e for e in elements if ok(e)]
+    def rank(e):
+        score = 0
+        if "text" in selector and e.get("text") == selector["text"]: score += 100
+        if "text_regex" in selector and re.search(selector["text_regex"], e.get("text", "")): score += 50
+        if "content_desc" in selector or "resource_id" in selector or "id" in selector: score += 25
+        if e.get("clickable"): score += 5
+        return (-score, e["i"])
+    ranked.sort(key=rank)
+    ids = [e["i"] for e in ranked]
+    if "nth_match" in selector:
+        n = selector["nth_match"]
+        return [ids[n]] if 0 <= n < len(ids) else []
+    return ids

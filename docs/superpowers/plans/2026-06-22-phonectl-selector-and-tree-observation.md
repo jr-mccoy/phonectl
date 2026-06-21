@@ -1,6 +1,6 @@
 # phonectl Selector + Tree Observation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Plan 1.2 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). Depends on
 **Plan 1.1** for `errors.StaleSnapshotError` and the `results` envelope.
@@ -63,7 +63,7 @@ and the `screen_hash` recipe unchanged.
   the `package` attr. Existing keys (`i`, `text`, `id`, `class`, `content_desc`, `clickable`, `bounds`,
   `center`) are unchanged. `screen_hash` is untouched.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_ui_parser.py  (append below existing tests)
@@ -104,12 +104,12 @@ def test_existing_fields_and_hash_unchanged():
     assert isinstance(h, str) and len(h) == 40
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: FAIL (`KeyError: 'enabled'` — metadata not yet captured).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `parse_elements`, read the extra attrs and add them to the element dict. Suggested helper inside the
 loop:
@@ -144,12 +144,12 @@ loop:
 Keep `screen_hash` exactly as-is (`text|id|bounds`). Only append optional `hint_text`/`error_text` keys
 when the corresponding attrs are present (avoid bloating every element).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: PASS (existing tests + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ui_parser.py tests/test_ui_parser.py
@@ -173,7 +173,7 @@ Add hierarchy views keyed to the same indices `parse_elements` produces (strateg
 - `parse_relations(xml: str) -> dict` — `{"parent": {i: pi}, "children": {i: [..]}, "siblings":
   {i: [..]}, "ancestors": {i: [..]}}`, keyed by the meaningful-element index `i` (ints as dict keys).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_ui_parser.py  (append)
@@ -208,24 +208,24 @@ def test_parse_relations_parent_children_siblings():
     assert rel["parent"][1] == rel["parent"][2]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: FAIL (`AttributeError: module 'phonectl.ui_parser' has no attribute 'build_tree'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Walk the parsed XML tree recursively, assigning each meaningful node the same sequential `i` that
 `parse_elements` assigns (reuse `_is_meaningful`). Build `build_tree` during the walk; derive
 `parse_relations` from the parent links. Keep both pure (operate on `ET.fromstring(_extract_hierarchy(
 xml))`). Siblings = co-children of the same parent excluding self; ancestors = parent chain to root.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: PASS (existing tests + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ui_parser.py tests/test_ui_parser.py
@@ -251,7 +251,7 @@ Pure, ranked selector matching (strategy §5.1).
   `bounds_near` (center within/near the given box). Unknown keys raise `ValueError` (typo guard). No match
   → `[]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_ui_parser.py  (append)
@@ -296,24 +296,24 @@ def test_unknown_selector_key_raises():
         ui_parser.match_selector(_els(), {"txt": "Wi-Fi"})
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: FAIL (`AttributeError: ... has no attribute 'match_selector'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Implement predicate-by-predicate filtering with a small ranking key, then apply `nth_match`. Keep it
 pure. Validate selector keys against a known set and raise `ValueError` on unknowns. Relation-dependent
 predicates (`ancestor_text`/`sibling_text`) are skipped (treated as non-matching) when `relations` is
 `None`, documented in the docstring.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_ui_parser.py -v`
 Expected: PASS (existing tests + 7 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/ui_parser.py tests/test_ui_parser.py
@@ -335,7 +335,7 @@ git commit -m "feat: pure match_selector (text/regex/flags/relations/nth) return
   `"relations": ui_parser.parse_relations(xml)`. The flat `elements` (now with richer metadata) and the
   `hash` are unchanged and remain the default payload (keeps it cheap, strategy §5.2 closing note).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_observer.py  (append below existing tests)
@@ -360,23 +360,23 @@ Note: `CannedBackend` / `XML` are the existing observer-test doubles. If `Canned
 single flat node, add a small nested fixture XML in the test module for the tree/relations assertions
 (mirroring `NESTED` from `test_ui_parser.py`).
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_observer.py -v`
 Expected: FAIL (`observe()` has no `tree`/`relations` params; no `observed_at`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add `import time` (observer already imports `re`, `ui_parser`). Capture `xml = backend.ui_dump()` once,
 reuse it for `parse_elements`, `build_tree`, `parse_relations`. Add `snap["observed_at"] = time.time()`;
 conditionally add `tree`/`relations`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_observer.py -v`
 Expected: PASS (existing tests + 2 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/observer.py tests/test_observer.py
@@ -399,7 +399,7 @@ git commit -m "feat: observe() optional tree/relations payload + observed_at tim
   `errors.StaleSnapshotError` (Plan 1.1) with a clear message when there are **zero** matches (the screen
   no longer contains the target), and uses `nth_match`/ranking via `find`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_session.py
@@ -442,24 +442,24 @@ def test_find_without_snapshot_raises():
         Session().find({"text": "x"})
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_session.py -v`
 Expected: FAIL (`AttributeError: 'Session' object has no attribute 'find'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add `from phonectl import ui_parser, errors` to `session.py` and the two methods. `resolve_selector`
 calls `find`; on empty result raises `errors.StaleSnapshotError(f"selector {selector} matched nothing in
 the current snapshot")`; otherwise returns the center of the first matched index by reusing the existing
 `resolve(i)`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_session.py -v`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/session.py tests/test_session.py
@@ -484,7 +484,7 @@ git commit -m "feat: Session.find/resolve_selector with stale-snapshot typed err
 - The same `selector`/`expected_hash`/`stale_ok` plumbing is documented for `type_text`/`swipe`/`key` but
   only `tap` needs target resolution; for the others `expected_hash`/`stale_ok` gate execution.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_actuator.py  (append below existing tests)
@@ -531,23 +531,23 @@ def test_tap_stale_ok_proceeds_against_fresh_snapshot():
     assert snap["hash"]                           # acted against the re-observed screen
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_actuator.py -v`
 Expected: FAIL (`tap()` has no `selector`/`expected_hash`/`stale_ok`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add the params to `tap`; implement the stale check (re-`observer.observe` once on mismatch, then compare
 again); resolve target by precedence; raise `errors.StaleSnapshotError` on unresolved stale; act + return
 `observer.observe(...)`. Import `errors`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_actuator.py -v`
 Expected: PASS (existing tests + 3 new).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/actuator.py tests/test_actuator.py
@@ -571,7 +571,7 @@ git commit -m "feat: actuator selector targeting + stale-snapshot protection (ex
 - Audit `target` records the selector (e.g. `{"selector": {...}}`) so the action log shows how the target
   was chosen (strategy §20.2 "always records how the target resolved").
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli.py  (append)
@@ -591,29 +591,29 @@ tap-by-index tests). `_cmd_tap` builds the runtime, observes to populate the ses
 selector — mirror the existing `_cmd_tap` structure and route through `_do_action` so mode/kill-switch
 gating is unchanged.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: FAIL (`tap` has no `--text`/`--selector`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add the args to the `tap` subparser group and `--nth`/`--expected-hash`/`--stale-ok`. In `_cmd_tap`, when
 a selector form is given, build the selector dict, and pass it through `_do_action` with a `fn` that calls
 `actuator.tap(b, s, selector=sel, ...)` and a `target` of `{"selector": sel}`. Add `--selector` to
 `wait-for` and branch `_cmd_wait_for` to selector matching.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (existing tests + 1 new).
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `pytest -v`
 Expected: PASS (ui_parser, observer, session, actuator, cli, and all prior tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/cli.py tests/test_cli.py
@@ -630,7 +630,7 @@ git commit -m "feat: CLI selector flags (--selector/--text/--id/--nth, --expecte
 
 **Interfaces:** none (documentation).
 
-- [ ] **Step 1: Document**
+- [x] **Step 1: Document**
 
 `README.md`: the selector grammar (all keys + `nth_match`), `tap --selector/--text/--id`,
 `observe --tree/--relations`, and stale-snapshot semantics (`--expected-hash`/`--stale-ok`, the
@@ -638,7 +638,7 @@ git commit -m "feat: CLI selector flags (--selector/--text/--id/--nth, --expecte
 `tree`/`relations` snapshot fields to the element/contract example; note selectors are the durable target
 and index `i` remains valid within one snapshot.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

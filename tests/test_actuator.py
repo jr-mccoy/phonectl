@@ -1,6 +1,6 @@
 import pytest
 from phonectl.session import Session
-from phonectl import actuator
+from phonectl import actuator, observer
 
 XML_A = """<?xml version='1.0'?><hierarchy rotation="0">
 <node index="0" text="Wi-Fi" resource-id="android:id/title" class="TextView"
@@ -68,3 +68,43 @@ def test_wait_for_requires_text_or_id():
     b = ScriptBackend()
     with pytest.raises(ValueError):
         actuator.wait_for(b, s)
+
+import pytest
+from phonectl import errors
+
+SEL_XML = (
+    "<?xml version='1.0'?><hierarchy rotation=\"0\">"
+    "<node text=\"Wi-Fi\" class=\"T\" clickable=\"true\" bounds=\"[0,100][500,200]\"/>"
+    "</hierarchy>")
+
+
+class SelBackend:
+    def __init__(self): self.taps = []
+    def ui_dump(self): return SEL_XML
+    def window_dump(self): return "mCurrentFocus=Window{a b com.x/.A}"
+    def wm_size(self): return (1080, 2400)
+    def input_tap(self, x, y): self.taps.append((x, y))
+
+
+def test_tap_by_selector_resolves_and_acts():
+    b = SelBackend(); s = Session()
+    observer.observe(b, s)
+    snap = actuator.tap(b, s, selector={"text": "Wi-Fi"})
+    assert (250, 150) in b.taps
+    assert snap["elements"][0]["text"] == "Wi-Fi"
+
+
+def test_tap_stale_hash_raises_when_screen_changed():
+    b = SelBackend(); s = Session()
+    observer.observe(b, s)
+    with pytest.raises(errors.StaleSnapshotError):
+        actuator.tap(b, s, selector={"text": "Wi-Fi"}, expected_hash="not-the-current-hash")
+    assert b.taps == []
+
+
+def test_tap_stale_ok_proceeds_against_fresh_snapshot():
+    b = SelBackend(); s = Session()
+    observer.observe(b, s)
+    snap = actuator.tap(b, s, selector={"text": "Wi-Fi"}, expected_hash="stale", stale_ok=True)
+    assert (250, 150) in b.taps
+    assert snap["hash"]

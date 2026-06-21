@@ -314,3 +314,18 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 The observe-act-observe core (library + CLI) is implemented and unit-tested. The real-device connectivity proof (build-step-zero: pairing `adb` inside PRoot against `adbd` over the loopback) and the end-to-end smoke run are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure.
 
 Features deferred to follow-on work: mDNS auto-discovery for silent reconnect after reboot, `phonectl setup` interactive wizard, guarded-package denylist, MCP server wrapper, and AccessibilityService APK backend.
+
+## Selector targeting and tree observation
+
+`phonectl` supports durable selector-based targeting in addition to snapshot-local element indices and raw coordinates. Selectors are JSON objects whose present keys all match: `text`, `text_regex`, `content_desc`, `resource_id`, `class`, boolean element flags such as `clickable`, `enabled`, `checked`, `editable`, relation predicates `ancestor_text` and `sibling_text`, `bounds_near` (`[x1,y1,x2,y2]` center-in-box), and `nth_match` (zero-based pick after ranking).
+
+Examples:
+
+```bash
+phonectl tap --text "Wi-Fi"
+phonectl tap --id android:id/title --nth 1
+phonectl tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
+phonectl observe --tree --relations
+```
+
+Use `--expected-hash HASH` on actions to prevent acting when the observed screen has changed. If the current hash differs, `phonectl` re-observes once and raises the typed `stale_snapshot` error unless `--stale-ok` is supplied, in which case it proceeds against the fresh snapshot.

@@ -52,3 +52,17 @@ def test_session_resolve_unknown_index_raises():
     observer.observe(CannedBackend(XML, WINDOW), s)
     with pytest.raises(KeyError):
         s.resolve(99)
+
+
+def test_observe_default_omits_tree_and_relations(tmp_path):
+    s = Session()
+    snap = observer.observe(CannedBackend(XML, WINDOW), s)
+    assert "tree" not in snap and "relations" not in snap
+    assert "observed_at" in snap
+
+
+def test_observe_opt_in_tree_and_relations():
+    s = Session()
+    snap = observer.observe(CannedBackend(XML, WINDOW), s, tree=True, relations=True)
+    assert snap["tree"]["class"]
+    assert "siblings" in snap["relations"]

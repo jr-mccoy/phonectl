@@ -149,3 +149,13 @@ def test_doctor_json_emits_capabilities(tmp_path, monkeypatch, capsys):
     assert out["provider"] == "adb"
     assert out["data"]["connected"] is True
     assert out["data"]["capabilities"]["requires_adb"] is True
+
+
+def test_tap_by_text_selector_resolves_and_logs(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: b)
+    rc = cli.main(["tap", "--text", "Wi-Fi", "--yes"])
+    assert rc == 0
+    log = (tmp_path / "actions.jsonl").read_text()
+    assert "selector" in log and "Wi-Fi" in log
