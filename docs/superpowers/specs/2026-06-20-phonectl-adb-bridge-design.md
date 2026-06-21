@@ -208,3 +208,25 @@ be explained before an agent attempts them.
 - adb running inside PRoot may hit ptrace/permission quirks → host-Termux shim fallback.
 - Per-device screen-size and density variation → element-index targeting mitigates, but
   swipe distances and some coordinate math need density-awareness.
+
+## Selector and hierarchy observation contract
+
+Snapshot elements keep the stable per-snapshot `i` index and now include richer UI metadata such as `enabled`, `focused`, `checkable`, `checked`, `scrollable`, `long_clickable`, `password`, `selected`, `editable`, `package`, and optional hint/error text when exposed by the device dump. The `screen_hash` remains derived from `text|id|bounds` only.
+
+Selectors are the durable target form across UI reordering, while index `i` remains valid within a single snapshot and raw `(x,y)` remains the escape hatch. A selector is a JSON object with AND semantics over keys such as `text`, `text_regex`, `content_desc`, `resource_id`, `class`, boolean flags, `ancestor_text`, `sibling_text`, `bounds_near`, and zero-based `nth_match`.
+
+`observe(tree=true, relations=true)` may include:
+
+```json
+{
+  "tree": {"i": null, "class": "android.widget.FrameLayout", "children": []},
+  "relations": {
+    "parent": {"1": null},
+    "children": {"1": []},
+    "siblings": {"1": [2]},
+    "ancestors": {"1": []}
+  }
+}
+```
+
+Actions can carry `expected_hash` and `stale_ok`. On hash mismatch, the actuator re-observes once and emits/raises the typed `stale_snapshot` failure unless stale execution is explicitly allowed.

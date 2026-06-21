@@ -1,5 +1,5 @@
 import time
-from phonectl import observer
+from phonectl import observer, errors
 
 KEYMAP = {
     "back": "KEYCODE_BACK",
@@ -8,23 +8,40 @@ KEYMAP = {
     "enter": "KEYCODE_ENTER",
 }
 
-def tap(backend, session, i=None, x=None, y=None) -> dict:
-    if i is not None:
+def _check_stale(backend, session, expected_hash=None, stale_ok=False) -> None:
+    if expected_hash is None:
+        return
+    if session.last is None or session.last.get("hash") != expected_hash:
+        observer.observe(backend, session)
+    if not stale_ok and session.last.get("hash") != expected_hash:
+        raise errors.StaleSnapshotError("snapshot hash differs from expected_hash")
+
+
+def tap(backend, session, i=None, x=None, y=None, selector=None, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    if x is not None and y is not None:
+        pass
+    elif i is not None:
         x, y = session.resolve(i)
-    if x is None or y is None:
-        raise ValueError("tap requires either i or both x and y")
+    elif selector is not None:
+        x, y = session.resolve_selector(selector)
+    else:
+        raise ValueError("tap requires x/y, i, or selector")
     backend.input_tap(x, y)
     return observer.observe(backend, session)
 
-def type_text(backend, session, text: str) -> dict:
+def type_text(backend, session, text: str, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
     backend.input_text(text)
     return observer.observe(backend, session)
 
-def swipe(backend, session, x1, y1, x2, y2, ms: int = 200) -> dict:
+def swipe(backend, session, x1, y1, x2, y2, ms: int = 200, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
     backend.input_swipe(x1, y1, x2, y2, ms)
     return observer.observe(backend, session)
 
-def key(backend, session, keycode: str) -> dict:
+def key(backend, session, keycode: str, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
     backend.input_key(KEYMAP.get(keycode, keycode))
     return observer.observe(backend, session)
 

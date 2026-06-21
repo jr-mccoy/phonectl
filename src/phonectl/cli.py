@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from phonectl import __version__, config, audit, observer, actuator, results, errors
+from phonectl import __version__, config, audit, observer, actuator, results, errors, ui_parser
 from phonectl.adb_backend import AdbBackend
 from phonectl.session import Session
 from phonectl.connection import Connection
@@ -35,7 +35,8 @@ def _cmd_observe(args):
     backend, session, conn = build_runtime(cfg)
     conn.ensure()
     snap = observer.observe(backend, session, screenshot=args.screenshot,
-                            snap_path=args.screenshot_path)
+                            snap_path=args.screenshot_path, tree=args.tree,
+                            relations=args.relations)
     if getattr(args, "json", False):
         print(json.dumps(results.ok(capability="ui.observe", provider="adb", data=snap),
                          indent=2))
@@ -55,8 +56,8 @@ def _do_action(args, verb, fn, target):
         return 3
     backend, session, conn = build_runtime(cfg)
     conn.ensure()
+    observer.observe(backend, session)
     if mode == "dry-run":
-        observer.observe(backend, session)
         print(f"phonectl: dry-run {verb} {target} (not executed)")
         return 0
     snap = fn(backend, session)
@@ -65,12 +66,33 @@ def _do_action(args, verb, fn, target):
     return 0
 
 
+def _selector_from_args(args):
+    sel = None
+    if getattr(args, "selector", None):
+        sel = json.loads(args.selector)
+    elif getattr(args, "text", None) is not None:
+        sel = {"text": args.text}
+    elif getattr(args, "id", None) is not None:
+        sel = {"resource_id": args.id}
+    if sel is not None and getattr(args, "nth", None) is not None:
+        sel = dict(sel)
+        sel["nth_match"] = args.nth
+    return sel
+
+
 def _cmd_tap(args):
+    sel = _selector_from_args(args)
+    if sel is not None:
+        return _do_action(
+            args, "tap",
+            lambda b, s: actuator.tap(b, s, selector=sel, expected_hash=args.expected_hash, stale_ok=args.stale_ok),
+            {"selector": sel},
+        )
     if args.index is not None:
-        return _do_action(args, "tap", lambda b, s: actuator.tap(b, s, i=args.index),
+        return _do_action(args, "tap", lambda b, s: actuator.tap(b, s, i=args.index, expected_hash=args.expected_hash, stale_ok=args.stale_ok),
                           {"i": args.index})
     x, y = args.xy
-    return _do_action(args, "tap", lambda b, s: actuator.tap(b, s, x=x, y=y),
+    return _do_action(args, "tap", lambda b, s: actuator.tap(b, s, x=x, y=y, expected_hash=args.expected_hash, stale_ok=args.stale_ok),
                       {"x": x, "y": y})
 
 
@@ -96,14 +118,27 @@ def _cmd_launch(args):
 
 
 def _cmd_wait_for(args):
-    if args.text is None and args.id is None:
-        print("phonectl: wait-for requires --text or --id")
+    sel = _selector_from_args(args)
+    if sel is None:
+        print("phonectl: wait-for requires --text, --id, or --selector")
         return 2
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
     conn.ensure()
-    snap = actuator.wait_for(backend, session, text=args.text, id=args.id,
-                             timeout=args.timeout)
+    if getattr(args, "selector", None) is not None or getattr(args, "nth", None) is not None:
+        deadline = args.timeout
+        snap = None
+        while True:
+            cur = observer.observe(backend, session, relations=True)
+            if ui_parser.match_selector(cur["elements"], sel, cur.get("relations")):
+                snap = cur
+                break
+            deadline -= 0.5
+            if deadline <= 0:
+                break
+    else:
+        snap = actuator.wait_for(backend, session, text=args.text, id=args.id,
+                                 timeout=args.timeout)
     if snap is None:
         print("phonectl: wait-for timed out")
         return 1
@@ -146,13 +181,21 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--screenshot", action="store_true")
     o.add_argument("--screenshot-path", default=None)
     o.add_argument("--json", action="store_true")
+    o.add_argument("--tree", action="store_true")
+    o.add_argument("--relations", action="store_true")
     o.set_defaults(func=_cmd_observe)
 
     t = sub.add_parser("tap")
     g = t.add_mutually_exclusive_group(required=True)
     g.add_argument("--index", type=int)
     g.add_argument("--xy", nargs=2, type=int, metavar=("X", "Y"))
+    g.add_argument("--selector")
+    g.add_argument("--text")
+    g.add_argument("--id")
     t.add_argument("--yes", action="store_true")
+    t.add_argument("--nth", type=int)
+    t.add_argument("--expected-hash")
+    t.add_argument("--stale-ok", action="store_true")
     t.set_defaults(func=_cmd_tap)
 
     ty = sub.add_parser("type")
@@ -178,6 +221,8 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("wait-for")
     w.add_argument("--text", default=None)
     w.add_argument("--id", default=None)
+    w.add_argument("--selector", default=None)
+    w.add_argument("--nth", type=int)
     w.add_argument("--timeout", type=float, default=5.0)
     w.set_defaults(func=_cmd_wait_for)
 
