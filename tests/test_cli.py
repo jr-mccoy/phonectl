@@ -1,6 +1,6 @@
 import json
 import pytest
-from phonectl import cli
+from phonectl import cli, config
 
 
 def test_version_flag_prints_and_exits_zero(capsys):
@@ -55,3 +55,41 @@ def test_wait_for_requires_text_or_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     rc = cli.main(["wait-for"])
     assert rc == 2
+
+def test_tap_confirm_mode_refuses_without_yes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "confirm"})
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["tap", "--xy", "1", "2"])
+    assert rc == 3
+    assert fb.calls == []  # confirm mode without --yes must NOT inject
+
+def test_tap_confirm_mode_acts_with_yes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "confirm"})
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["tap", "--xy", "1", "2", "--yes"])
+    assert rc == 0
+    assert ("tap", 1, 2) in fb.calls
+
+def test_tap_dry_run_observes_but_does_not_inject(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "dry-run"})
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["tap", "--xy", "1", "2"])
+    assert rc == 0
+    assert fb.calls == []  # dry-run must NOT inject
+    assert not (tmp_path / "actions.jsonl").exists()  # dry-run must NOT audit-log
+
+def test_doctor_reports_connected(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["doctor"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "connected" in out
+
