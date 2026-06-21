@@ -176,3 +176,43 @@ def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
     )
     assert runtime._action_lock.acquire(blocking=False) is True
     runtime._action_lock.release()
+
+
+def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    runtime._idempotency_cache.clear()
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h"}),
+    )
+    runs = []
+
+    def fn(b, s):
+        runs.append(1)
+        return {"hash": f"after{len(runs)}"}
+
+    build = lambda cfg: (backend, sess, FakeConn())
+    first = runtime.run_action(
+        "tap",
+        fn,
+        {"x": 1},
+        build=build,
+        idempotency_key="k1",
+        gen_id=lambda: "req1",
+    )
+    second = runtime.run_action(
+        "tap",
+        fn,
+        {"x": 1},
+        build=build,
+        idempotency_key="k1",
+        gen_id=lambda: "req2",
+    )
+    assert runs == [1]
+    assert first["data"]["hash"] == "after1"
+    assert second["data"]["hash"] == "after1"
+    assert second["idempotent_replay"] is True
+    assert second["request_id"] == "req1"
