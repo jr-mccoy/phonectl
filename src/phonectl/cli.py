@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from phonectl import __version__, config, audit, observer, actuator
+from phonectl import __version__, config, audit, observer, actuator, results, errors
 from phonectl.adb_backend import AdbBackend
 from phonectl.session import Session
 from phonectl.connection import Connection
@@ -34,8 +34,13 @@ def _cmd_observe(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
     conn.ensure()
-    _emit(observer.observe(backend, session, screenshot=args.screenshot,
-                           snap_path=args.screenshot_path))
+    snap = observer.observe(backend, session, screenshot=args.screenshot,
+                            snap_path=args.screenshot_path)
+    if getattr(args, "json", False):
+        print(json.dumps(results.ok(capability="ui.observe", provider="adb", data=snap),
+                         indent=2))
+    else:
+        _emit(snap)
     return 0
 
 
@@ -112,9 +117,23 @@ def _cmd_doctor(args):
     try:
         conn.ensure()
     except ConnectionError as e:
-        print(str(e))
+        if getattr(args, "json", False):
+            print(json.dumps(results.err(("connection_failed", str(e)),
+                                         user_action="Start adb, connect a device, and authorize USB debugging."),
+                             indent=2))
+        else:
+            print(str(e))
         return 1
-    print(f"phonectl: connected (serial={backend.serial}, state={backend.get_state()})")
+    data = {
+        "connected": True,
+        "serial": backend.serial,
+        "state": backend.get_state(),
+        "capabilities": backend.capabilities(),
+    }
+    if getattr(args, "json", False):
+        print(json.dumps(results.ok(provider="adb", data=data), indent=2))
+    else:
+        print(f"phonectl: connected (serial={backend.serial}, state={data['state']})")
     return 0
 
 
@@ -126,6 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     o = sub.add_parser("observe")
     o.add_argument("--screenshot", action="store_true")
     o.add_argument("--screenshot-path", default=None)
+    o.add_argument("--json", action="store_true")
     o.set_defaults(func=_cmd_observe)
 
     t = sub.add_parser("tap")
@@ -162,6 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     w.set_defaults(func=_cmd_wait_for)
 
     d = sub.add_parser("doctor")
+    d.add_argument("--json", action="store_true")
     d.set_defaults(func=_cmd_doctor)
     return p
 
@@ -172,4 +193,11 @@ def main(argv=None) -> int:
     if getattr(args, "func", None) is None:
         parser.print_help()
         return 0
-    return args.func(args)
+    try:
+        return args.func(args)
+    except errors.PhonectlError as e:
+        if getattr(args, "json", False):
+            print(json.dumps(results.err(e), indent=2))
+        else:
+            print(f"phonectl: {e}")
+        return 1

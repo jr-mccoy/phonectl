@@ -155,6 +155,17 @@ The agent can tap anything, so v1 ships with:
 - **Kill switch** — a sentinel file that hard-disables all action injection instantly.
 - **Rate limiting** — cap actions/min to bound runaway loops.
 
+
+
+### 9.1 Structured result invariant
+
+All new agent-facing JSON surfaces return structured result envelopes rather than
+bare tuples or raw tracebacks. The canonical homes are `phonectl.errors` for stable
+error codes and retry/user-action flags, `phonectl.results` for `ok`/`err`
+envelope builders, and `phonectl.capabilities` for provider capability discovery.
+Providers expose capabilities through the backend seam so unavailable features can
+be explained before an agent attempts them.
+
 ## 10. Testing strategy
 
 - **Unit (the bulk):** `ui_parser` against real captured `uiautomator` XML fixtures —

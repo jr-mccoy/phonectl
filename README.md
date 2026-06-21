@@ -190,6 +190,111 @@ phonectl: action refused (kill switch STOP present)
 | `2` | Kill switch active, or `wait-for` called without `--text`/`--id` |
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
 
+
+## Structured results & capabilities
+
+`phonectl` now has a stable structured-result contract for JSON-capable surfaces. `phonectl observe --json` and `phonectl doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
+
+Successful envelope shape:
+
+```json
+{
+  "ok": true,
+  "capability": "ui.observe",
+  "provider": "adb",
+  "data": { "elements": [] }
+}
+```
+
+Error envelope shape:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "device_locked",
+    "message": "device is locked, unlock it",
+    "retryable": false,
+    "requires_user": true,
+    "user_action": "Unlock the phone manually."
+  }
+}
+```
+
+Stable error codes:
+
+| Code | Retryable | Requires user | Meaning |
+|---|---:|---:|---|
+| `observe_failed` | true | false | Screen observation failed but may succeed later. |
+| `device_locked` | false | true | The device is locked and needs manual unlock. |
+| `stale_snapshot` | true | false | A stored UI snapshot no longer matches the screen. |
+| `capability_unavailable` | false | true | The active provider cannot perform the requested capability. |
+| `guarded_action` | false | true | Policy or a guardrail blocked the action. |
+| `rate_limited` | true | false | Action rate limiting blocked the request temporarily. |
+
+Capability keys exposed by providers:
+
+- `observe_ui_tree`
+- `observe_screenshot`
+- `act_tap`
+- `act_type`
+- `act_key`
+- `launch_app`
+- `send_intent`
+- `read_notifications`
+- `reply_notifications`
+- `read_clipboard`
+- `write_clipboard`
+- `write_secure_settings`
+- `persistent_events`
+- `requires_adb`
+- `requires_accessibility`
+- `requires_notification_listener`
+
+Examples:
+
+```bash
+phonectl observe --json
+```
+
+```json
+{
+  "ok": true,
+  "capability": "ui.observe",
+  "provider": "adb",
+  "data": {
+    "app": {"package": "com.android.settings", "activity": ".Settings"},
+    "elements": []
+  }
+}
+```
+
+```bash
+phonectl doctor --json
+```
+
+```json
+{
+  "ok": true,
+  "provider": "adb",
+  "data": {
+    "connected": true,
+    "serial": "127.0.0.1:PORT",
+    "state": "device",
+    "capabilities": {
+      "observe_ui_tree": true,
+      "observe_screenshot": true,
+      "act_tap": true,
+      "act_type": true,
+      "act_key": true,
+      "launch_app": true,
+      "send_intent": true,
+      "requires_adb": true
+    }
+  }
+}
+```
+
 ---
 
 ## Configuration
