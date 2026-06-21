@@ -1,17 +1,41 @@
 """Single-writer action funnel for mutating UI operations."""
 from __future__ import annotations
 
+import json
 import threading
+import time
 import uuid
 
-from phonectl import audit, config, errors, observer, policy, results
+from phonectl import audit, config, errors, observer, policy, ratelimit, results
 
 _action_lock = threading.Lock()
 _idempotency_cache: dict = {}
+DEFAULT_LIMITS = {
+    "tap": 120,
+    "type": 30,
+    "swipe": 120,
+    "key": 120,
+    "launch": 20,
+    "high_risk": 1,
+    "global": 180,
+}
 
 
 def _new_request_id() -> str:
     return uuid.uuid4().hex
+
+
+def _rate_path():
+    return config.config_dir() / "ratelimit.json"
+
+
+def _load_rate():
+    path = _rate_path()
+    return json.loads(path.read_text()) if path.exists() else []
+
+
+def _save_rate(history) -> None:
+    _rate_path().write_text(json.dumps(history))
 
 
 def run_action(
@@ -27,6 +51,7 @@ def run_action(
     gen_id=_new_request_id,
     kill_switch=audit.kill_switch_active,
     log=audit.log_action,
+    now=time.time,
 ) -> dict:
     if idempotency_key is not None and idempotency_key in _idempotency_cache:
         replay = dict(_idempotency_cache[idempotency_key])
@@ -38,7 +63,16 @@ def run_action(
     base = {"verb": verb, "target": target, "request_id": rid}
 
     env = _run_action_body(
-        verb, fn, target, build, yes, cfg, base, kill_switch=kill_switch, log=log
+        verb,
+        fn,
+        target,
+        build,
+        yes,
+        cfg,
+        base,
+        kill_switch=kill_switch,
+        log=log,
+        now=now,
     )
     if idempotency_key is not None:
         _idempotency_cache[idempotency_key] = dict(env)
@@ -46,7 +80,7 @@ def run_action(
 
 
 def _run_action_body(
-    verb, fn, target, build, yes, cfg, base, *, kill_switch, log
+    verb, fn, target, build, yes, cfg, base, *, kill_switch, log, now
 ) -> dict:
     rid = base["request_id"]
 
@@ -95,6 +129,18 @@ def _run_action_body(
                     **risk,
                     **base,
                 )
+            ts = now()
+            history = ratelimit.prune(_load_rate(), ts)
+            allowed, bucket = ratelimit.check(
+                history, verb, risk["risk_level"], cfg.get("rate_limits", DEFAULT_LIMITS), ts
+            )
+            if not allowed:
+                return results.err(
+                    errors.RateLimitError(f"rate limit exceeded for {bucket}"),
+                    bucket=bucket,
+                    **risk,
+                    **base,
+                )
             if mode == "dry-run":
                 return results.ok(
                     capability=f"ui.{verb}",
@@ -105,6 +151,9 @@ def _run_action_body(
                     **base,
                 )
             snap = fn(backend, session)
+            for bucket in ratelimit.buckets_for(verb, risk["risk_level"]):
+                history.append({"bucket": bucket, "ts": ts})
+            _save_rate(history)
             log(verb, target, snap, request_id=rid, cfg=cfg)
             return results.ok(
                 capability=f"ui.{verb}", provider="adb", data=snap, **risk, **base

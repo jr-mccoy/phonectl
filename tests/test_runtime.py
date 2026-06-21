@@ -307,3 +307,79 @@ def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
         build=lambda cfg: (backend, sess, FakeConn()),
     )
     assert env["ok"] is True and env["risk_level"] == "low"
+
+
+def test_run_action_rate_limits_after_bucket_fills(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"rate_limits": {"tap": 1, "global": 100}})
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot(
+            {
+                "hash": "h",
+                "app": {"package": "com.x"},
+                "elements": [{"text": "Wi-Fi"}],
+            }
+        ),
+    )
+    build = lambda cfg: (backend, sess, FakeConn())
+    clock = [1000.0]
+    first = runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"i": 0},
+        build=build,
+        now=lambda: clock[0],
+    )
+    assert first["ok"] is True
+    second = runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"i": 0},
+        build=build,
+        now=lambda: clock[0],
+    )
+    assert second["ok"] is False
+    assert second["error"]["code"] == "rate_limited"
+    assert second["bucket"] == "tap"
+
+
+def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
+    import json as _json
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"rate_limits": {"tap": 1, "global": 100}})
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot(
+            {
+                "hash": "h",
+                "app": {"package": "com.x"},
+                "elements": [{"text": "Wi-Fi"}],
+            }
+        ),
+    )
+    build = lambda cfg: (backend, sess, FakeConn())
+    runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"i": 0},
+        build=build,
+        now=lambda: 1000.0,
+    )
+    hist = _json.loads((tmp_path / "ratelimit.json").read_text())
+    assert any(record["bucket"] == "tap" for record in hist)
+    later = runtime.run_action(
+        "tap",
+        lambda b, s: {"hash": "x"},
+        {"i": 0},
+        build=build,
+        now=lambda: 1120.0,
+    )
+    assert later["ok"] is True
