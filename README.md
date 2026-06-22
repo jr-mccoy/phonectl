@@ -160,6 +160,53 @@ phonectl launch com.android.settings
 phonectl launch com.android.chrome
 ```
 
+### `clipboard`
+
+Read, write, or clear the system clipboard.
+
+```bash
+phonectl clipboard read               # requires Termux:API (Plan 3.5)
+phonectl clipboard write "hello"      # via ADB service call (Android 10+)
+phonectl clipboard write "hello" --yes
+phonectl clipboard clear --yes
+```
+
+**Note:** `clipboard read` is not available via plain ADB because the parcel-based read is ROM-specific and unreliable. It returns a `capability_unavailable` error with install instructions until Termux:API is configured (`phonectl setup termux-api`).
+
+`clipboard write` and `clipboard clear` are mutating operations that route through `runtime.run_action` (audit log, risk policy, kill switch, mode gates all apply).
+
+### `intent`
+
+Start activities or send broadcasts via `am start` / `am broadcast`.
+
+```bash
+phonectl intent start --action android.intent.action.VIEW --data "geo:37.422,-122.084"
+phonectl intent start --component com.android.settings/.wifi.WifiSettings --yes
+phonectl intent broadcast com.example.MY_ACTION --yes
+phonectl intent broadcast com.example.MY_ACTION --extra key=value --yes
+```
+
+Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies `intent_broadcast` as `high_risk_verb`. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
+
+### `packages`
+
+List, inspect, launch, stop, or clear packages.
+
+```bash
+phonectl packages list                          # user-installed packages only
+phonectl packages list --all                    # include system packages
+phonectl packages resolve com.android.settings  # version, launch activity
+phonectl packages launch com.android.settings   # same as `launch` verb
+phonectl packages stop com.example.app --yes    # force-stop (high risk)
+phonectl packages clear com.example.app --yes   # clear data (critical risk)
+```
+
+Risk levels:
+- `packages list` / `packages resolve` — read-only; no risk gate.
+- `packages launch` — same risk classification as the `launch` verb.
+- `packages stop` — **high risk** (`high_risk_verb` signal); requires `--yes` or a `high: allow` policy override.
+- `packages clear` — **critical risk** (`critical_verb` signal); requires `--yes` and is **denied by default policy** — override `risk_policy.critical` to `confirm` first.
+
 ### `wait-for`
 
 Re-observe on a short poll until a UI element matching `--text` or `--id` appears, or until `--timeout` seconds elapse. Requires exactly one of `--text` or `--id`.
@@ -210,6 +257,16 @@ Tool catalog:
 | `phone_audit_query` | Read recent redacted audit entries. | `limit` |
 | `phone_stop` | Engage the emergency stop. | none |
 | `phone_resume` | Clear the emergency stop. | none |
+| `phone_clipboard_read` | Read clipboard text (requires Termux:API). | none |
+| `phone_clipboard_write` | Write text to the clipboard. | `text`, `dry_run`, `confirm` |
+| `phone_clipboard_clear` | Clear the clipboard. | `dry_run`, `confirm` |
+| `phone_intent_start` | Start an activity via `am start`. | `action`, `data`, `component`, `extras`, `dry_run`, `confirm` |
+| `phone_intent_broadcast` | Send a broadcast via `am broadcast`. | `action`, `extras`, `dry_run`, `confirm` |
+| `phone_packages_list` | List installed packages. | `include_system` |
+| `phone_packages_resolve` | Resolve package metadata (version, launch activity). | `package` |
+| `phone_packages_launch` | Launch a package. | `package`, `dry_run`, `confirm` |
+| `phone_packages_stop` | Force-stop a package (high risk). | `package`, `dry_run`, `confirm` |
+| `phone_packages_clear` | Clear package data (critical risk; set `confirm=true`). | `package`, `confirm`, `dry_run` |
 
 Example observe envelope:
 
@@ -299,7 +356,8 @@ Before any mutating action executes, `runtime.run_action` observes the current s
 | `destructive_keyword` | `critical` | Screen text contains factory reset, wipe, delete account, or uninstall wording. |
 | `install_keyword` | `high` | Screen text contains install, allow, grant, subscribe, or send. |
 | `otp_like_content` | `medium` | Visible element text contains a 4-8 digit code. |
-| `high_risk_verb` | `high` | Reserved seam for future high-risk provider verbs. |
+| `high_risk_verb` | `high` | Verb is `packages_stop` or `intent_broadcast`. |
+| `critical_verb` | `critical` | Verb is `packages_clear`. |
 
 Effective default policy:
 
@@ -503,13 +561,18 @@ Capability keys exposed by providers:
 - `send_intent`
 - `read_notifications`
 - `reply_notifications`
-- `read_clipboard`
-- `write_clipboard`
+- `read_clipboard` — ADB: `false`; set to `true` by Termux:API provider (Plan 3.5)
+- `write_clipboard` — ADB: `true`
 - `write_secure_settings`
 - `persistent_events`
 - `requires_adb`
 - `requires_accessibility`
 - `requires_notification_listener`
+- `packages_list` — ADB: `true`
+- `packages_stop` — ADB: `true`
+- `packages_clear` — ADB: `true`
+- `intent_start` — ADB: `true`
+- `intent_broadcast` — ADB: `true`
 
 Examples:
 
