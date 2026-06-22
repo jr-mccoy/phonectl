@@ -34,6 +34,11 @@ CAPABILITY_KEYS = (
     "act_set_text_native",
     "act_gesture_native",
     "act_semantic_action",
+    # Phase 4.2 additions (NotificationListenerService companion)
+    "observe_notifications",
+    "notifications_wait",
+    "notifications_reply",
+    "notifications_dismiss",
 )
 
 
