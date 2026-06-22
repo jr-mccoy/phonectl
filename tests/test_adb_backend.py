@@ -142,3 +142,27 @@ def test_clipboard_read_calls_service_call():
     calls = []
     AdbBackend(serial=None, runner=make_runner(calls)).clipboard_read()
     assert any("service" in str(c[0]) and "clipboard" in str(c[0]) for c in calls)
+
+
+def test_intent_start_builds_correct_command():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_start(
+        action="android.intent.action.VIEW",
+        data="geo:0,0",
+        extras={"q": "coffee"},
+    )
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "am" in cmd and "start" in cmd
+    assert "android.intent.action.VIEW" in cmd
+    assert "geo:0,0" in cmd
+    assert "--es" in cmd and "q" in cmd and "coffee" in cmd
+
+
+def test_intent_broadcast_builds_correct_command():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_broadcast(
+        "com.example.ACTION", extras={"key": "val"}
+    )
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "broadcast" in cmd and "com.example.ACTION" in cmd
+    assert "--es" in cmd and "val" in cmd

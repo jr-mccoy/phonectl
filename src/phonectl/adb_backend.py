@@ -65,6 +65,27 @@ class AdbBackend:
     def clipboard_read(self) -> str:
         return self._adb("shell", "service", "call", "clipboard", "1")
 
+    def intent_start(self, *, action=None, data=None, component=None,
+                     extras=None, flags=None) -> None:
+        cmd = ["shell", "am", "start"]
+        if action:
+            cmd += ["-a", action]
+        if data:
+            cmd += ["-d", data]
+        if component:
+            cmd += ["-n", component]
+        if flags is not None:
+            cmd += ["-f", str(flags)]
+        for key, val in (extras or {}).items():
+            cmd += ["--es", key, str(val)]
+        self._adb(*cmd)
+
+    def intent_broadcast(self, action: str, *, extras=None) -> None:
+        cmd = ["shell", "am", "broadcast", "-a", action]
+        for key, val in (extras or {}).items():
+            cmd += ["--es", key, str(val)]
+        self._adb(*cmd)
+
     def get_state(self) -> str:
         return self._adb("get-state").strip()
 
