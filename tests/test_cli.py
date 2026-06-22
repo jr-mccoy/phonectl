@@ -404,3 +404,74 @@ def test_get_focused_field_returns_ok(tmp_path, monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert rc == 0
     assert out["ok"] is True
+
+
+# Task 5: build_runtime wires TermuxApiProvider
+
+def test_build_runtime_includes_termux_when_available(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.providers.termux import TermuxApiProvider
+
+    fake_termux = TermuxApiProvider(
+        which=lambda name: "/usr/bin/" + name  # always found
+    )
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: fake_termux)
+
+    cfg = config.load()
+    registry, session, conn = cli.build_runtime(cfg)
+    assert registry.for_capability("read_clipboard") is fake_termux
+
+
+def test_build_runtime_excludes_termux_when_not_available(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    cfg = config.load()
+    registry, session, conn = cli.build_runtime(cfg)
+    assert registry.for_capability("read_clipboard") is None
+
+
+# Task 6: device battery|wifi and tts speak CLI verbs
+
+def test_device_battery_unavailable_without_termux(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    rc = cli.main(["device", "battery", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc != 0
+    assert out["ok"] is False
+    assert out["error"]["code"] == "capability_unavailable"
+
+
+def test_tts_speak_unavailable_without_termux(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    rc = cli.main(["tts", "speak", "hello", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc != 0
+    assert out["ok"] is False
+
+
+def test_device_battery_ok_with_termux(tmp_path, monkeypatch, capsys):
+    from phonectl.providers.termux import TermuxApiProvider
+
+    battery_data = {"percentage": 42, "status": "DISCHARGING", "health": "GOOD",
+                    "plugged": "UNPLUGGED", "temperature": 27.0}
+
+    class FakeTermux(TermuxApiProvider):
+        def is_available(self): return True
+        def capabilities(self):
+            return capabilities.make(device_battery=True, device_wifi_info=True,
+                                     tts_speak=True, read_clipboard=True,
+                                     write_clipboard=True)
+        def battery_status(self): return battery_data
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: FakeTermux())
+    rc = cli.main(["device", "battery", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert out["data"]["percentage"] == 42

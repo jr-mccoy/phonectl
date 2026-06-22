@@ -223,6 +223,32 @@ phonectl clipboard clear --yes
 
 `clipboard write` and `clipboard clear` are mutating operations that route through `runtime.run_action` (audit log, risk policy, kill switch, mode gates all apply).
 
+### `device`
+
+Read device state via the Termux:API provider (requires `phonectl setup termux-api`).
+
+```bash
+phonectl device battery          # Battery percentage, status, health, temperature
+phonectl device battery --json   # Structured result envelope
+phonectl device wifi             # WiFi SSID, IP, BSSID, RSSI
+phonectl device wifi --json
+```
+
+Returns `capability_unavailable` with install instructions if Termux:API is not configured.
+
+### `tts`
+
+Speak text via Android's TTS engine (requires `phonectl setup termux-api`).
+
+```bash
+phonectl tts speak "Hello, world"
+phonectl tts speak "Bonjour" --language fr
+phonectl tts speak "Fast" --rate 1.5
+phonectl tts speak "Hello" --json   # Structured result envelope
+```
+
+TTS is fire-and-forget: the command returns as soon as the TTS engine accepts the request. The speech plays asynchronously. Returns `capability_unavailable` if Termux:API is not configured.
+
 ### `intent`
 
 Start activities or send broadcasts via `am start` / `am broadcast`.
@@ -502,6 +528,42 @@ phonectl: action refused (kill switch STOP present)
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
 
 
+## Termux:API provider (optional)
+
+The `TermuxApiProvider` is an optional second provider that activates automatically when `termux-battery-status` is found on `PATH`. No configuration is required — phonectl detects it at startup.
+
+### Install
+
+```bash
+# 1. Install the Termux:API companion app from F-Droid or the Termux add-ons page
+# 2. In Termux, install the CLI tools:
+pkg install termux-api
+# 3. On Android, grant Termux:API the permissions it requests (battery, clipboard, WiFi, etc.)
+phonectl setup termux-api   # verify detection and show capability status
+```
+
+### What it enables
+
+Once installed, the provider registers itself with the following capabilities:
+
+| Capability | Termux:API | ADB |
+|---|:---:|:---:|
+| `read_clipboard` | ✓ | ✗ (unreliable) |
+| `write_clipboard` | ✓ | ✓ |
+| `device_battery` | ✓ | ✗ |
+| `device_wifi_info` | ✓ | ✗ |
+| `tts_speak` | ✓ | ✗ |
+
+**Clipboard read upgrade:** `phonectl clipboard read` returns `capability_unavailable` without Termux:API because ADB clipboard reading is ROM-specific and unreliable on Android 10+. Once Termux:API is installed, `clipboard read` upgrades automatically — no configuration change needed.
+
+**New verbs:** `phonectl device battery`, `phonectl device wifi`, and `phonectl tts speak TEXT` are only available when Termux:API is present. All three return structured result envelopes with `--json`.
+
+### Provider priority
+
+`TermuxApiProvider` is prepended to the provider registry ahead of `AdbBackend`, so it takes priority for any capability it supports. `AdbBackend` handles everything else (UI observation, tap, swipe, launch, etc.).
+
+---
+
 ## Provider graph
 
 `build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. In Phase 3.1 the registry holds a single `AdbBackend`; future phases will add `TermuxApiProvider` (Phase 3.5) and `AccessibilityServiceProvider` (Phase 4.1) by prepending them to the list.
@@ -628,6 +690,9 @@ Capability keys exposed by providers:
 - `packages_clear` — ADB: `true`
 - `intent_start` — ADB: `true`
 - `intent_broadcast` — ADB: `true`
+- `device_battery` — ADB: `false`; Termux:API: `true`
+- `device_wifi_info` — ADB: `false`; Termux:API: `true`
+- `tts_speak` — ADB: `false`; Termux:API: `true`
 
 Examples:
 

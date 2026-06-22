@@ -53,6 +53,35 @@ If the device is offline but a previous serial is configured and the connection 
     safety: Optional, never a hard dependency; discovered at runtime.
 ```
 
+## `termux-api` setup module
+
+`phonectl setup termux-api` checks whether Termux:API is installed and reports what it enables.
+
+### Detection
+
+The provider calls `shutil.which("termux-battery-status")`. If the binary is found, the module reports the full list of capabilities unlocked. If not, it prints installation instructions.
+
+### Install steps (shown by the module when not available)
+
+```text
+[termux-api] not available — Termux:API app + termux-api package
+    enable: Install the Termux:API companion app (F-Droid / Termux add-ons page), then:
+            pkg install termux-api
+            Grant Termux:API app permissions on Android (battery, clipboard, WiFi).
+    unlocks: clipboard read, phonectl device battery, phonectl device wifi, phonectl tts speak.
+    safety: Optional, never a hard dependency; discovered at runtime.
+```
+
+### When available
+
+```text
+[termux-api] available — termux-battery-status found on PATH
+    capabilities: read_clipboard, write_clipboard, device_battery, device_wifi_info, tts_speak
+    note: TermuxApiProvider is prepended to the registry; it takes priority over ADB for clipboard.
+```
+
+No configuration is written — discovery is fully automatic on every startup.
+
 ## Recovery note
 
 Wireless Debugging connect ports are volatile across sleep, reboot, or toggling Wireless Debugging. The wizard stores `last_port` so the resilience reconnect path can retry it first. Manual recovery is simply re-running:
