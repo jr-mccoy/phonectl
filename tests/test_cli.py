@@ -543,3 +543,30 @@ def test_notifications_list_ok(tmp_path, monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["ok"] is True
     assert out["data"][0]["can_reply"] is True
+
+
+# --- Plan 4.3: trust status CLI ---
+
+def test_trust_status_reports_unreachable_without_companion(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: None)
+    rc = cli.main(["trust", "status", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+    assert out["data"]["reachable"] is False
+
+
+def test_trust_status_reports_toggles(tmp_path, monkeypatch, capsys):
+    from phonectl.providers.transport import LoopbackTransport
+    t = LoopbackTransport({"handshake": lambda p: {
+        "version": 3, "capabilities": {"act_gesture_native": True, "act_set_text_native": False},
+        "stopped": False}})
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
+    rc = cli.main(["trust", "status", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["data"]["version"] == 3
+    assert out["data"]["capabilities"]["act_set_text_native"] is False

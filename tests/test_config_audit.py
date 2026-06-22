@@ -4,7 +4,9 @@ from phonectl import config, audit
 
 def test_config_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    assert config.load() == {}
+    # no file: returns defaults only
+    assert config.load().get("serial") is None
+    assert config.get_mode(config.load()) == "auto"
     config.save({"serial": "127.0.0.1:5555", "mode": "confirm"})
     cfg = config.load()
     assert cfg["serial"] == "127.0.0.1:5555"
