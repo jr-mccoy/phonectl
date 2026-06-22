@@ -108,3 +108,177 @@ def test_tap_stale_ok_proceeds_against_fresh_snapshot():
     snap = actuator.tap(b, s, selector={"text": "Wi-Fi"}, expected_hash="stale", stale_ok=True)
     assert (250, 150) in b.taps
     assert snap["hash"]
+
+
+# --- Fixtures for gesture tests ---
+
+GESTURE_XML = (
+    "<?xml version='1.0'?><hierarchy rotation=\"0\">"
+    "<node index=\"0\" text=\"\" resource-id=\"\" class=\"T\" "
+    "content-desc=\"\" clickable=\"true\" scrollable=\"true\" bounds=\"[0,0][100,50]\"/>"
+    "</hierarchy>"
+)
+GESTURE_WINDOW = "mCurrentFocus=Window{a b com.x/.A}"
+
+
+class FakeGestureBackend:
+    def __init__(self):
+        self.serial = "d"
+        self.tap_count = 0
+        self.long_press_called = False
+        self.named_swipe_called = False
+        self.last_swipe_ms = None
+        self.last_swipe_within_bounds = False
+
+    def ui_dump(self): return GESTURE_XML
+    def window_dump(self): return GESTURE_WINDOW
+    def wm_size(self): return (1080, 2400)
+    def lock_state(self): return {"lock_state": "unlocked", "can_act": True, "recommended_user_action": None}
+
+    def input_tap(self, x, y):
+        self.tap_count += 1
+
+    def input_swipe(self, x1, y1, x2, y2, ms=200):
+        self.last_swipe_ms = ms
+        self.last_swipe_within_bounds = True
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        self.long_press_called = True
+
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        self.named_swipe_called = True
+
+    def input_fling(self, direction, velocity=2000):
+        self.named_swipe_called = True
+
+
+@pytest.fixture
+def fake_backend():
+    return FakeGestureBackend()
+
+
+@pytest.fixture
+def fake_session():
+    s = Session()
+    s.last = {
+        "elements": [{
+            "i": 0, "text": "", "id": "", "class": "T", "content_desc": "",
+            "clickable": True, "enabled": True, "focused": False, "checkable": False,
+            "checked": False, "scrollable": True, "long_clickable": False,
+            "password": False, "selected": False, "editable": False,
+            "package": "", "bounds": [0, 0, 100, 50], "center": [50, 25],
+        }],
+        "hash": "abc",
+        "app": {},
+    }
+    return s
+
+
+# --- Task 1: named_swipe ---
+
+def test_named_swipe_returns_snapshot(fake_backend, fake_session):
+    snap = actuator.named_swipe(fake_backend, fake_session, "down")
+    assert "elements" in snap
+    assert fake_backend.named_swipe_called
+
+
+def test_named_swipe_unknown_direction_raises(fake_backend, fake_session):
+    with pytest.raises(ValueError):
+        actuator.named_swipe(fake_backend, fake_session, "diagonal")
+
+
+# --- Task 2: long_press + double_tap ---
+
+def test_long_press_by_index_returns_snapshot(fake_backend, fake_session):
+    snap = actuator.long_press(fake_backend, fake_session, i=0)
+    assert "elements" in snap
+    assert fake_backend.long_press_called
+
+
+def test_double_tap_calls_input_tap_twice(fake_backend, fake_session):
+    slept = []
+    actuator.double_tap(fake_backend, fake_session, i=0, sleep=slept.append)
+    assert fake_backend.tap_count == 2
+    assert len(slept) == 1
+
+
+def test_double_tap_requires_target():
+    with pytest.raises(ValueError):
+        actuator.double_tap(None, None)
+
+
+# --- Task 3: drag + fling ---
+
+def test_drag_calls_swipe_with_long_duration(fake_backend, fake_session):
+    actuator.drag(fake_backend, fake_session, 100, 200, 300, 400)
+    assert fake_backend.last_swipe_ms >= 500
+
+
+def test_fling_returns_snapshot(fake_backend, fake_session):
+    snap = actuator.fling(fake_backend, fake_session, "down")
+    assert "elements" in snap
+
+
+# --- Task 4: scroll ---
+
+def test_scroll_full_screen_delegates_to_named_swipe(fake_backend, fake_session):
+    snap = actuator.scroll(fake_backend, fake_session, "up")
+    assert "elements" in snap
+    assert fake_backend.named_swipe_called
+
+
+def test_scroll_within_container_uses_element_bounds(fake_backend, fake_session):
+    snap = actuator.scroll(fake_backend, fake_session, "down", within_i=0)
+    assert "elements" in snap
+    assert fake_backend.last_swipe_within_bounds
+
+
+def test_scroll_within_missing_index_raises(fake_backend, fake_session):
+    with pytest.raises(ValueError, match="no element"):
+        actuator.scroll(fake_backend, fake_session, "up", within_i=999)
+
+
+# --- Task 5: scroll_until ---
+
+def test_scroll_until_finds_text_on_second_scroll(fake_backend, fake_session):
+    call_count = [0]
+    found_elements = [
+        [],
+        [{"i": 0, "text": "Target", "id": "", "class": "", "content_desc": "",
+          "clickable": False, "enabled": True, "focused": False, "checkable": False,
+          "checked": False, "scrollable": False, "long_clickable": False,
+          "password": False, "selected": False, "editable": False,
+          "package": "", "bounds": [0, 0, 100, 50], "center": [50, 25]}],
+    ]
+
+    def fake_observe(b, s):
+        snap = {"elements": found_elements[min(call_count[0], 1)],
+                "app": {}, "hash": "h"}
+        call_count[0] += 1
+        s.last = snap
+        return snap
+
+    import phonectl.observer as obs
+    original_observe = obs.observe
+    obs.observe = fake_observe
+    try:
+        snap = actuator.scroll_until(
+            fake_backend, fake_session, "down", text="Target",
+            sleep=lambda _: None,
+        )
+        assert any(e["text"] == "Target" for e in snap.get("elements", []))
+    finally:
+        obs.observe = original_observe
+
+
+def test_scroll_until_returns_last_snapshot_when_not_found(fake_backend, fake_session):
+    snap = actuator.scroll_until(
+        fake_backend, fake_session, "up", text="NotPresent",
+        max_scrolls=2, sleep=lambda _: None,
+    )
+    assert isinstance(snap, dict)
+
+
+def test_scroll_until_requires_text_or_selector(fake_backend, fake_session):
+    with pytest.raises(ValueError):
+        actuator.scroll_until(fake_backend, fake_session, "down")

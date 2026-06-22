@@ -52,6 +52,30 @@ class AdbBackend:
     def input_swipe(self, x1, y1, x2, y2, ms: int = 200) -> None:
         self._adb("shell", "input", "swipe", str(x1), str(y1), str(x2), str(y2), str(ms))
 
+    def input_named_swipe(self, direction: str,
+                          distance_pct: float = 0.5, ms: int = 400) -> None:
+        if direction not in {"up", "down", "left", "right"}:
+            raise ValueError(f"unknown swipe direction: {direction!r}")
+        w, h = self.wm_size()
+        cx, cy = w // 2, h // 2
+        half_x = int(w * distance_pct / 2)
+        half_y = int(h * distance_pct / 2)
+        if direction == "up":
+            self.input_swipe(cx, cy + half_y, cx, cy - half_y, ms)
+        elif direction == "down":
+            self.input_swipe(cx, cy - half_y, cx, cy + half_y, ms)
+        elif direction == "left":
+            self.input_swipe(cx + half_x, cy, cx - half_x, cy, ms)
+        else:
+            self.input_swipe(cx - half_x, cy, cx + half_x, cy, ms)
+
+    def input_long_press(self, x: int, y: int, duration_ms: int = 1000) -> None:
+        self.input_swipe(x, y, x, y, duration_ms)
+
+    def input_fling(self, direction: str, velocity: int = 2000) -> None:
+        ms = max(50, min(400, 2_000_000 // velocity))
+        self.input_named_swipe(direction, distance_pct=0.6, ms=ms)
+
     def input_key(self, keycode: str) -> None:
         self._adb("shell", "input", "keyevent", keycode)
 
