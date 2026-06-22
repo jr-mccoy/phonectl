@@ -348,6 +348,10 @@ Tool catalog:
 | `phone_fling` | Fling in a direction with velocity-scaled speed. | `direction`, `dry_run`, `confirm` |
 | `phone_scroll` | Scroll in a direction, optionally within a scrollable container. | `direction`, `within_index`, `distance_pct`, `dry_run`, `confirm` |
 | `phone_scroll_until` | Scroll until text or selector appears or max_scrolls is exhausted. | `direction`, `text`, `selector`, `max_scrolls`, `within_index` |
+| `phone_notifications_list` | List current notifications; each item includes `can_reply`/`can_dismiss` flags. | `package` |
+| `phone_notifications_wait` | Poll until a matching notification appears or timeout elapses. | `package`, `title_contains`, `text_contains`, `timeout` |
+| `phone_notifications_reply` | Reply to a notification via RemoteInput (**high-risk**; companion required). | `key`, `text`, `confirm`, `dry_run` |
+| `phone_notifications_dismiss` | Dismiss a notification (companion required). | `key`, `confirm`, `dry_run` |
 
 Example observe envelope:
 
@@ -437,7 +441,7 @@ Before any mutating action executes, `runtime.run_action` observes the current s
 | `destructive_keyword` | `critical` | Screen text contains factory reset, wipe, delete account, or uninstall wording. |
 | `install_keyword` | `high` | Screen text contains install, allow, grant, subscribe, or send. |
 | `otp_like_content` | `medium` | Visible element text contains a 4-8 digit code. |
-| `high_risk_verb` | `high` | Verb is `packages_stop` or `intent_broadcast`. |
+| `high_risk_verb` | `high` | Verb is `packages_stop`, `intent_broadcast`, or `notifications_reply`. |
 | `critical_verb` | `critical` | Verb is `packages_clear`. |
 
 Effective default policy:
@@ -614,6 +618,72 @@ surface, message contract, permissions, and error codes.
 
 ---
 
+## Notifications
+
+phonectl treats notifications as a **first-class provider**, not UI-scraping. The `NotificationsProvider` exposes four capabilities with per-notification `can_reply`/`can_dismiss` flags derived from each notification's actions and `RemoteInput`.
+
+### Source precedence
+
+| Source | `list` | `wait` | `reply` | `dismiss` |
+|---|:---:|:---:|:---:|:---:|
+| Companion APK (`NotificationListenerService`) | ✓ | ✓ | ✓ | ✓ |
+| Termux:API (`termux-notification-list`) | ✓ | ✓ (poll) | ✗ | ✗ |
+| Neither | ✗ | ✗ | ✗ | ✗ |
+
+When neither source is present, all notification verbs return a `capability_unavailable` envelope with setup instructions.
+
+### Notification shape
+
+Each notification item in the `list` result has:
+
+```json
+{
+  "key": "0|com.msg|42|tag|10123",
+  "package": "com.msg",
+  "title": "Alice",
+  "text": "see you at 6?",
+  "category": "msg",
+  "post_time": 1718900000000,
+  "actions": ["Reply", "Mark read"],
+  "can_reply": true,
+  "can_dismiss": true
+}
+```
+
+`can_reply` is `true` only when a companion action has a `RemoteInput` (i.e. the notification exposes a direct-reply field). The Termux:API path always reports `can_reply=false, can_dismiss=false`.
+
+### CLI verbs
+
+```bash
+phonectl notifications list                          # list all current notifications
+phonectl notifications list --package com.msg        # filter by package
+phonectl notifications list --json                   # structured result envelope
+
+phonectl notifications wait --package com.msg --timeout 30  # poll until match
+phonectl notifications wait --title-contains "Alice" --json
+
+phonectl notifications reply KEY "on my way" --yes  # send RemoteInput reply (high-risk)
+phonectl notifications reply KEY "ok" --json --yes
+
+phonectl notifications dismiss KEY --yes             # dismiss one notification
+phonectl notifications dismiss KEY --json --yes
+```
+
+`KEY` is the opaque `key` field from a `notifications list` item.
+
+### Risk policy
+
+| Verb | Risk level | Reason |
+|---|---|---|
+| `notifications_list` | read-only; not gated | |
+| `notifications_wait` | read-only; not gated | |
+| `notifications_reply` | **high** | Sends visible content into arbitrary apps |
+| `notifications_dismiss` | low (default) | Removes a notification |
+
+`notifications_reply` is a `high_risk_verb` — it requires `--yes` in confirm mode or a `high: allow` policy override. In the default policy it triggers confirmation. Use `phonectl policy explain --verb notifications_reply` to inspect before acting.
+
+---
+
 ## Provider graph
 
 `build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. In Phase 3.1 the registry holds a single `AdbBackend`; future phases will add `TermuxApiProvider` (Phase 3.5) and `AccessibilityServiceProvider` (Phase 4.1) by prepending them to the list.
@@ -743,6 +813,10 @@ Capability keys exposed by providers:
 - `device_battery` — ADB: `false`; Termux:API: `true`
 - `device_wifi_info` — ADB: `false`; Termux:API: `true`
 - `tts_speak` — ADB: `false`; Termux:API: `true`
+- `observe_notifications` — companion: `true`; Termux:API: `true` (list-only); ADB: `false`
+- `notifications_wait` — companion: `true`; Termux:API: `true` (poll-only); ADB: `false`
+- `notifications_reply` — companion: `true`; Termux:API: `false`; ADB: `false`
+- `notifications_dismiss` — companion: `true`; Termux:API: `false`; ADB: `false`
 
 Examples:
 
