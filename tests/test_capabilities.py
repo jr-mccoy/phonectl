@@ -33,3 +33,9 @@ def test_new_capability_keys_exist():
     for key in ("packages_list", "packages_stop", "packages_clear",
                 "intent_start", "intent_broadcast"):
         assert key in capabilities.CAPABILITY_KEYS
+
+
+def test_new_device_capability_keys_exist():
+    from phonectl import capabilities
+    for key in ("device_battery", "device_wifi_info", "tts_speak"):
+        assert key in capabilities.CAPABILITY_KEYS, f"missing key: {key}"

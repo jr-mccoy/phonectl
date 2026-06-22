@@ -24,6 +24,10 @@ CAPABILITY_KEYS = (
     "packages_clear",
     "intent_start",
     "intent_broadcast",
+    # Phase 3.5 additions
+    "device_battery",
+    "device_wifi_info",
+    "tts_speak",
 )
 
 
