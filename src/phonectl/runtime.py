@@ -171,21 +171,23 @@ def _run_action_body(
                     **base,
                 )
             if mode == "dry-run":
+                provider = getattr(backend, "last_used", None) or "adb"
                 return results.ok(
                     capability=f"ui.{verb}",
-                    provider="adb",
+                    provider=provider,
                     data=session.last,
                     dry_run=True,
                     **risk,
                     **base,
                 )
             snap = fn(backend, session)
+            provider = getattr(backend, "last_used", None) or "adb"
             for bucket in ratelimit.buckets_for(verb, risk["risk_level"]):
                 history.append({"bucket": bucket, "ts": ts})
             _save_rate(history)
             log(verb, target, snap, request_id=rid, cfg=cfg)
             return results.ok(
-                capability=f"ui.{verb}", provider="adb", data=snap, **risk, **base
+                capability=f"ui.{verb}", provider=provider, data=snap, **risk, **base
             )
         except errors.PhonectlError as e:
             return results.err(e, **getattr(e, "lock_state", {}), **base)

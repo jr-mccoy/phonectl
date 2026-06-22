@@ -1,5 +1,11 @@
 # phonectl Provider/Capability Graph Refactor Implementation Plan
 
+> **Status: COMPLETE** — implemented 2026-06-22. All 5 tasks shipped; 193 tests green.
+> New files: `src/phonectl/providers/__init__.py`, `src/phonectl/providers/registry.py`,
+> `tests/test_providers_registry.py`. Modified: `src/phonectl/cli.py`,
+> `src/phonectl/runtime.py`, `README.md`,
+> `docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Plan 3.1 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). First plan of
@@ -67,7 +73,7 @@ in the result envelope. `cli.build_runtime()` is updated to wrap `AdbBackend` in
 - `ProviderRegistry.capabilities_by_provider() -> list[dict]` — per-provider view for diagnostics;
   each entry is `{"provider": ClassName, "caps": dict}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_providers_registry.py
@@ -126,12 +132,12 @@ def test_empty_registry_has_all_false_capabilities():
     assert all(v is False for v in r.capabilities().values())
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_providers_registry.py -v`
 Expected: FAIL (`ModuleNotFoundError: No module named 'phonectl.providers'`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/providers/__init__.py
@@ -176,12 +182,12 @@ class ProviderRegistry:
         ]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_providers_registry.py -v`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/providers/__init__.py src/phonectl/providers/registry.py \
@@ -209,7 +215,7 @@ git commit -m "feat: ProviderRegistry — composite capability resolution with p
   `wake`, `keyguard`, `lock_state`, `mdns_services`, `adb_version`, `devices` and any future ADB helper
   added to `AdbBackend` without a Protocol entry.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # Append to tests/test_providers_registry.py
@@ -294,12 +300,12 @@ def test_getattr_raises_when_no_adb_provider():
         r.wake()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_providers_registry.py -v`
 Expected: FAIL (new tests fail — delegation methods not yet on `ProviderRegistry`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Append to `src/phonectl/providers/registry.py`:
 
@@ -366,12 +372,12 @@ class ProviderRegistry:
         return getattr(p, name)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_providers_registry.py -v`
 Expected: PASS (all tests, including the 5 new delegation tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/providers/registry.py tests/test_providers_registry.py
@@ -393,7 +399,7 @@ git commit -m "feat: ProviderRegistry Backend delegation with _require, serial, 
 - When `backend` is passed explicitly (e.g. by tests), it is wrapped in `ProviderRegistry([backend])`
   unless it is already a `ProviderRegistry`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # Append to tests/test_cli.py
@@ -419,12 +425,12 @@ def test_build_runtime_wraps_explicit_backend(tmp_path, monkeypatch):
     assert backend.for_capability("act_tap") is fake
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli.py::test_build_runtime_returns_registry -v`
 Expected: FAIL (`isinstance(backend, ProviderRegistry)` is False — still returns `AdbBackend`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/cli.py — update build_runtime
@@ -439,12 +445,12 @@ def build_runtime(cfg, backend=None):
     return registry, session, conn
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli.py -v`
 Expected: PASS (new tests + all existing CLI tests — `ProviderRegistry` is transparent).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/cli.py tests/test_cli.py
@@ -470,7 +476,7 @@ git commit -m "feat: build_runtime returns ProviderRegistry wrapping AdbBackend"
 - `fallbacks_considered` is omitted in Phase 3.1 (single-provider registry); it will be populated
   in later phases when multiple providers compete for the same capability.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # Append to tests/test_runtime.py
@@ -502,13 +508,13 @@ def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
     assert env["provider"] in ("FakeBackend", "adb")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_runtime.py -v -k test_run_action_reports_provider_from_registry`
 Expected: FAIL or partial pass — the test will show that `env["provider"]` equals `"adb"` even when
 a registry is used (because the provider field is still hardcoded).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/phonectl/runtime.py`, in `_run_action_body`, replace the two occurrences of
 `provider="adb"` with dynamic lookup:
@@ -538,17 +544,17 @@ if getattr(args, "json", False):
     print(json.dumps(results.ok(capability="ui.observe", provider=provider, data=snap), indent=2))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_runtime.py tests/test_cli.py -v`
 Expected: PASS (new test + all existing runtime and CLI tests).
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 Run: `pytest -v`
 Expected: PASS (all tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/phonectl/runtime.py src/phonectl/cli.py \
@@ -566,7 +572,7 @@ git commit -m "feat: result envelopes report provider name from ProviderRegistry
 
 **Interfaces:** none (documentation only).
 
-- [ ] **Step 1: Document the contract**
+- [x] **Step 1: Document the contract**
 
 In `README.md`, under "Architecture", add a **Provider graph** section:
 - Explain that `build_runtime()` now returns a `ProviderRegistry` wrapping `AdbBackend`.
@@ -580,7 +586,7 @@ In the design spec, add a note in the backend-isolation invariant: "the `Backend
 `ProviderRegistry` that selects the best-available provider per capability; `AdbBackend` is the sole
 provider in Phase 3.1 but the registry is extensible."
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-06-20-phonectl-adb-bridge-design.md

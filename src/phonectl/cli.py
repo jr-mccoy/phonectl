@@ -17,6 +17,7 @@ from phonectl import (
     ui_parser,
 )
 from phonectl.adb_backend import AdbBackend
+from phonectl.providers.registry import ProviderRegistry
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
 
@@ -26,10 +27,11 @@ def _make_backend(cfg) -> AdbBackend:
 
 
 def build_runtime(cfg, backend=None):
-    backend = backend or _make_backend(cfg)
+    raw = backend or _make_backend(cfg)
+    registry = raw if isinstance(raw, ProviderRegistry) else ProviderRegistry([raw])
     session = Session()
-    conn = Connection(backend, cfg)
-    return backend, session, conn
+    conn = Connection(registry, cfg)
+    return registry, session, conn
 
 
 def _emit(snap) -> None:
@@ -44,7 +46,8 @@ def _cmd_observe(args):
                             snap_path=args.screenshot_path, tree=args.tree,
                             relations=args.relations)
     if getattr(args, "json", False):
-        print(json.dumps(results.ok(capability="ui.observe", provider="adb", data=snap),
+        provider = getattr(backend, "last_used", None) or "adb"
+        print(json.dumps(results.ok(capability="ui.observe", provider=provider, data=snap),
                          indent=2))
     else:
         _emit(snap)
