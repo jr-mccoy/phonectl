@@ -19,6 +19,7 @@ from phonectl import (
 from phonectl.adb_backend import AdbBackend
 from phonectl.providers.registry import ProviderRegistry
 from phonectl.providers.termux import TermuxApiProvider
+from phonectl.providers.accessibility import AccessibilityProvider  # noqa: F401
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
 
@@ -32,13 +33,19 @@ def _make_termux_provider():
     return p if p.is_available() else None
 
 
+def _make_accessibility_provider():
+    # Plan 4.1: no default transport yet — Plan 4.3 supplies SocketTransport.
+    # Returns None so default builds are ADB-first; tests patch this to inject a provider.
+    return None
+
+
 def build_runtime(cfg, backend=None):
     adb = backend or _make_backend(cfg)
     if isinstance(adb, ProviderRegistry):
         registry = adb
     else:
-        termux = _make_termux_provider()
-        providers = [p for p in [termux, adb] if p is not None]
+        providers = [p for p in [_make_accessibility_provider(), _make_termux_provider(), adb]
+                     if p is not None]
         registry = ProviderRegistry(providers)
     session = Session()
     conn = Connection(registry, cfg)

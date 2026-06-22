@@ -564,6 +564,56 @@ Once installed, the provider registers itself with the following capabilities:
 
 ---
 
+## AccessibilityService provider (companion APK)
+
+`AccessibilityProvider` is an optional third provider that talks to a companion Android
+AccessibilityService APK over a local transport. When the companion is connected, it wins over ADB
+for `observe_ui_tree` and all `act_*` capabilities, providing a richer, lower-latency surface.
+
+**What it unlocks:**
+
+| Capability | AccessibilityProvider | Termux:API | ADB |
+|---|:---:|:---:|:---:|
+| `observe_ui_tree` | ✓ (native JSON) | ✗ | ✓ (uiautomator XML) |
+| `observe_ui_native` | ✓ | ✗ | ✗ |
+| `observe_ui_events` | ✓ | ✗ | ✗ |
+| `act_tap` | ✓ (GestureDescription) | ✗ | ✓ (input tap) |
+| `act_type` | ✓ (ACTION_SET_TEXT) | ✗ | ✓ (input text) |
+| `act_key` | ✓ | ✗ | ✓ |
+| `act_set_text_native` | ✓ | ✗ | ✗ |
+| `act_gesture_native` | ✓ | ✗ | ✗ |
+| `act_semantic_action` | ✓ | ✗ | ✗ |
+| `launch_app` | ✓ | ✗ | ✓ |
+
+**Compatibility mode:** `ui_dump()` still returns uiautomator-compatible XML (converted by
+`native_tree.to_compat_xml`), so element index `i` and all selectors work identically across
+providers. Existing code that uses index-based targeting is unaffected.
+
+**Optional:** absent the companion APK, phonectl is ADB-first and completely unchanged.
+`_make_accessibility_provider()` returns `None` by default until Plan 4.3 supplies a
+`SocketTransport`; at that point the provider activates automatically when the companion is
+reachable.
+
+**Semantic node actions** let the agent click, long-click, scroll, expand, collapse, or dismiss UI
+elements by accessibility node ID — bypassing coordinate-based tapping entirely:
+
+```python
+provider.semantic_action("node_id", "scroll_forward")
+provider.set_text_native("node_id", "search query")  # ACTION_SET_TEXT, IME-independent
+```
+
+**UI event stream** (cursor-based polling):
+
+```python
+out = provider.poll_events(since=0)    # {"events": [...], "cursor": 5}
+out = provider.poll_events(since=5)    # only events after cursor 5
+```
+
+**Design spec:** `android/accessibility-companion/SPEC.md` describes the companion APK's service
+surface, message contract, permissions, and error codes.
+
+---
+
 ## Provider graph
 
 `build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. In Phase 3.1 the registry holds a single `AdbBackend`; future phases will add `TermuxApiProvider` (Phase 3.5) and `AccessibilityServiceProvider` (Phase 4.1) by prepending them to the list.
