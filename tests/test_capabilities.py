@@ -26,3 +26,10 @@ def test_describe_mentions_available_and_unavailable():
     text = capabilities.describe(caps)
     assert "observe_ui_tree" in text
     assert "read_notifications" in text
+
+
+def test_new_capability_keys_exist():
+    from phonectl import capabilities
+    for key in ("packages_list", "packages_stop", "packages_clear",
+                "intent_start", "intent_broadcast"):
+        assert key in capabilities.CAPABILITY_KEYS

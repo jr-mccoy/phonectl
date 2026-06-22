@@ -118,3 +118,15 @@ def test_devices_runs_devices_l():
     out = b.devices()
     assert "127.0.0.1:41000" in out
     assert calls[0][0] == ["adb", "-s", "d", "devices", "-l"]
+
+
+def test_adb_capabilities_include_new_keys():
+    calls = []
+    caps = AdbBackend(serial="d", runner=make_runner(calls)).capabilities()
+    assert caps["write_clipboard"] is True
+    assert caps["packages_list"] is True
+    assert caps["packages_stop"] is True
+    assert caps["packages_clear"] is True
+    assert caps["intent_start"] is True
+    assert caps["intent_broadcast"] is True
+    assert caps["read_clipboard"] is False

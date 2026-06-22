@@ -82,9 +82,11 @@ class AdbBackend:
 
 
     def capabilities(self) -> dict:
-        # ADB provides shell/intent/UI powers but not companion-app powers.
         return capabilities.make(
             observe_ui_tree=True, observe_screenshot=True,
             act_tap=True, act_type=True, act_key=True,
             launch_app=True, send_intent=True, requires_adb=True,
+            write_clipboard=True,
+            packages_list=True, packages_stop=True, packages_clear=True,
+            intent_start=True, intent_broadcast=True,
         )
