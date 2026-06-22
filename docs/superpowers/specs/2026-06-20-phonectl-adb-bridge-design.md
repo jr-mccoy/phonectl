@@ -56,6 +56,14 @@ All adb knowledge is confined to one module (`adb_backend`). Everything above it
 backend-agnostic interface, so a future **AccessibilityService APK backend** is a drop-in
 swap with no changes to `observer`, `actuator`, or the CLI.
 
+**Provider graph (Phase 3.1):** The `Backend` seam is now a `ProviderRegistry`
+(`src/phonectl/providers/registry.py`) that selects the best-available provider per
+capability. `AdbBackend` is the sole provider in Phase 3.1, but the registry is
+extensible: adding `TermuxApiProvider` (Phase 3.5) or `AccessibilityServiceProvider`
+(Phase 4.1) means prepending it to the list in `cli.build_runtime()` with no other
+changes required. Every result envelope includes a `provider` field (the class name of
+the provider that handled the last call) so callers can observe which path was used.
+
 **Power rationale (why ADB, not the a11y APK, is the first backend):** ADB runs as the
 `shell` user (uid 2000) and is system-wide — a superset of the AccessibilityService's
 abilities. It can drive the UI (`uiautomator` + `input`) **and** reach beneath it

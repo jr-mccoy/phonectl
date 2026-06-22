@@ -389,6 +389,65 @@ phonectl: action refused (kill switch STOP present)
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
 
 
+## Provider graph
+
+`build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. In Phase 3.1 the registry holds a single `AdbBackend`; future phases will add `TermuxApiProvider` (Phase 3.5) and `AccessibilityServiceProvider` (Phase 4.1) by prepending them to the list.
+
+### How the registry works
+
+The registry satisfies the `Backend` Protocol via explicit delegation methods. Each method calls `_require(cap_key)`, which finds the first provider with that capability set to `True`, records its class name in `_last_used`, and delegates. If no provider has the capability, `CapabilityUnavailableError` is raised.
+
+```python
+# Query which provider handles a capability
+registry.for_capability("act_tap")         # → AdbBackend instance (or None)
+registry.capabilities()                    # → merged bool dict
+registry.capabilities_by_provider()        # → [{"provider": "AdbBackend", "caps": {...}}, ...]
+```
+
+`capabilities_by_provider()` shape:
+
+```json
+[
+  {
+    "provider": "AdbBackend",
+    "caps": {
+      "observe_ui_tree": true,
+      "observe_screenshot": true,
+      "act_tap": true,
+      "act_type": true,
+      "act_key": true,
+      "launch_app": true,
+      "send_intent": true,
+      "requires_adb": true,
+      "read_notifications": false,
+      "read_clipboard": false
+    }
+  }
+]
+```
+
+### Provider priority
+
+Priority order is positional: the first provider in the list wins for each capability. Adding a higher-priority provider means prepending it to the list in `build_runtime()` with no other changes required:
+
+```python
+# Phase 4.1 example (not yet shipped):
+registry = ProviderRegistry([AccessibilityServiceProvider(), AdbBackend(...)])
+# AccessibilityService wins for observe_ui_tree; ADB handles everything else.
+```
+
+### `provider` field in result envelopes
+
+Every result envelope from `run_action` and `observe --json` includes a `provider` field reflecting the class name of the provider that handled the last delegation call:
+
+```json
+{"ok": true, "capability": "ui.tap", "provider": "AdbBackend", "data": {...}}
+```
+
+When the backend is a bare `AdbBackend` (not wrapped in a registry), `provider` falls back to `"adb"`.
+
+---
+
 ## Structured results & capabilities
 
 `phonectl` now has a stable structured-result contract for JSON-capable surfaces. `phonectl observe --json` and `phonectl doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
