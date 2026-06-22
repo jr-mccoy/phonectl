@@ -107,6 +107,97 @@ def launch(build=_default_build, *, package, dry_run=False, confirm=False, reaso
     return runtime.run_action("launch", lambda b, s: actuator.launch(b, s, package), target, build=build, yes=confirm, cfg=_action_cfg(dry_run), idempotency_key=idempotency_key)
 
 
+def _as_registry(backend):
+    from phonectl.providers.registry import ProviderRegistry
+    return backend if isinstance(backend, ProviderRegistry) else ProviderRegistry([backend])
+
+
+def clipboard_read(build=_default_build) -> dict:
+    from phonectl.providers.clipboard import ClipboardProvider
+    try:
+        backend, _session, conn = build(config.load())
+        conn.ensure()
+        return ClipboardProvider(_as_registry(backend)).read()
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def clipboard_write(build=_default_build, *, text, dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.clipboard import ClipboardProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return ClipboardProvider(_as_registry(backend)).write(text, build=build, yes=confirm, cfg=cfg)
+
+
+def clipboard_clear(build=_default_build, *, dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.clipboard import ClipboardProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return ClipboardProvider(_as_registry(backend)).clear(build=build, yes=confirm, cfg=cfg)
+
+
+def intent_start(build=_default_build, *, action=None, data=None, component=None,
+                 extras=None, dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.intents import IntentProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return IntentProvider(_as_registry(backend)).start(
+        action=action, data=data, component=component, extras=extras,
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def intent_broadcast(build=_default_build, *, action, extras=None,
+                     dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.intents import IntentProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return IntentProvider(_as_registry(backend)).broadcast(
+        action, extras=extras, build=build, yes=confirm, cfg=cfg
+    )
+
+
+def packages_list(build=_default_build, *, include_system=False) -> dict:
+    from phonectl.providers.packages import PackageProvider
+    try:
+        backend, _session, conn = build(config.load())
+        conn.ensure()
+        return PackageProvider(_as_registry(backend)).list_packages(include_system=include_system)
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def packages_resolve(build=_default_build, *, package) -> dict:
+    from phonectl.providers.packages import PackageProvider
+    try:
+        backend, _session, conn = build(config.load())
+        conn.ensure()
+        return PackageProvider(_as_registry(backend)).resolve(package)
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def packages_launch(build=_default_build, *, package, dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.packages import PackageProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return PackageProvider(_as_registry(backend)).launch(package, build=build, yes=confirm, cfg=cfg)
+
+
+def packages_stop(build=_default_build, *, package, dry_run=False, confirm=False) -> dict:
+    from phonectl.providers.packages import PackageProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return PackageProvider(_as_registry(backend)).stop(package, build=build, yes=confirm, cfg=cfg)
+
+
+def packages_clear(build=_default_build, *, package, confirm=False, dry_run=False) -> dict:
+    from phonectl.providers.packages import PackageProvider
+    cfg = _action_cfg(dry_run)
+    backend, _session, _conn = build(config.load())
+    return PackageProvider(_as_registry(backend)).clear(package, build=build, yes=confirm, cfg=cfg)
+
+
 def policy_explain(build=_default_build, *, verb="tap", index=None, selector=None, x=None, y=None) -> dict:
     try:
         backend, session, conn = build(config.load())
@@ -172,6 +263,17 @@ TOOLS = {
     "phone_audit_query": {"description": "Read recent redacted audit entries.", "schema": _schema(limit={"type": "integer"}), "handler": audit_query, "needs_build": False},
     "phone_stop": {"description": "Engage the emergency stop.", "schema": _OBJ, "handler": stop, "needs_build": False},
     "phone_resume": {"description": "Clear the emergency stop.", "schema": _OBJ, "handler": resume, "needs_build": False},
+    # Phase 3.2: clipboard, intent, packages
+    "phone_clipboard_read": {"description": "Read clipboard text (requires Termux:API).", "schema": _OBJ, "handler": clipboard_read, "needs_build": True},
+    "phone_clipboard_write": {"description": "Write text to the clipboard.", "schema": _schema(text={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": clipboard_write, "needs_build": True},
+    "phone_clipboard_clear": {"description": "Clear the clipboard.", "schema": _schema(dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": clipboard_clear, "needs_build": True},
+    "phone_intent_start": {"description": "Start an activity via am start.", "schema": _schema(action={"type": "string"}, data={"type": "string"}, component={"type": "string"}, extras={"type": "object"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": intent_start, "needs_build": True},
+    "phone_intent_broadcast": {"description": "Send an intent broadcast via am broadcast.", "schema": _schema(action={"type": "string"}, extras={"type": "object"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": intent_broadcast, "needs_build": True},
+    "phone_packages_list": {"description": "List installed packages.", "schema": _schema(include_system={"type": "boolean"}), "handler": packages_list, "needs_build": True},
+    "phone_packages_resolve": {"description": "Resolve package metadata.", "schema": _schema(package={"type": "string"}), "handler": packages_resolve, "needs_build": True},
+    "phone_packages_launch": {"description": "Launch an app by package name.", "schema": _schema(package={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": packages_launch, "needs_build": True},
+    "phone_packages_stop": {"description": "Force-stop a package (high risk).", "schema": _schema(package={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": packages_stop, "needs_build": True},
+    "phone_packages_clear": {"description": "Clear package data (critical risk; confirm=true required).", "schema": _schema(package={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": packages_clear, "needs_build": True},
 }
 
 
