@@ -1,3 +1,4 @@
+import pytest
 from phonectl.adb_backend import AdbBackend
 
 class FakeCompleted:
@@ -193,3 +194,65 @@ def test_packages_clear_calls_pm_clear():
     AdbBackend(serial=None, runner=make_runner(calls)).packages_clear("com.foo")
     cmd = " ".join(str(a) for a in calls[-1][0])
     assert "pm" in cmd and "clear" in cmd and "com.foo" in cmd
+
+
+# --- Task 1: Named swipe directions ---
+
+@pytest.fixture
+def calls():
+    class CallsRecorder:
+        def __init__(self):
+            self.recorded = []
+        def __call__(self, cmd, **kwargs):
+            self.recorded.append(cmd)
+            return FakeCompleted()
+    return CallsRecorder()
+
+
+@pytest.fixture
+def wm_size_runner():
+    def make(w, h, calls_recorder):
+        size_out = f"Physical size: {w}x{h}\n"
+        first = [True]
+        def runner(cmd, **kwargs):
+            if first[0]:
+                first[0] = False
+                return FakeCompleted(stdout=size_out)
+            calls_recorder.recorded.append(cmd)
+            return FakeCompleted()
+        return runner
+    return make
+
+
+def test_input_named_swipe_up_calls_swipe_with_correct_direction(calls, wm_size_runner):
+    AdbBackend(serial=None, runner=wm_size_runner(1080, 2400, calls)).input_named_swipe("up")
+    cmd = " ".join(str(a) for a in calls.recorded[-1])
+    assert "input" in cmd and "swipe" in cmd
+
+
+def test_input_named_swipe_unknown_direction_raises():
+    with pytest.raises(ValueError, match="unknown swipe direction"):
+        AdbBackend(serial=None).input_named_swipe("diagonal")
+
+
+# --- Task 2: Long-press ---
+
+def test_input_long_press_issues_zero_distance_swipe(calls):
+    AdbBackend(serial=None, runner=calls).input_long_press(300, 500, 1500)
+    cmd = " ".join(str(a) for a in calls.recorded[-1])
+    assert "swipe" in cmd
+    assert cmd.count("300") >= 2 and cmd.count("500") >= 2
+    assert "1500" in cmd
+
+
+# --- Task 3: Fling ---
+
+def test_input_fling_issues_fast_swipe(calls, wm_size_runner):
+    AdbBackend(serial=None, runner=wm_size_runner(1080, 2400, calls)).input_fling("up")
+    cmd = " ".join(str(a) for a in calls.recorded[-1])
+    assert "swipe" in cmd
+
+
+def test_input_fling_unknown_direction_raises():
+    with pytest.raises(ValueError):
+        AdbBackend(serial=None).input_fling("sideways")

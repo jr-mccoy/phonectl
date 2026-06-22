@@ -115,10 +115,112 @@ def _cmd_type(args):
                       {"text": f"<{len(args.text)} chars>"})
 
 
+_DIRECTIONS = {"up", "down", "left", "right"}
+
+
+def _parse_within(within_str):
+    if within_str is None:
+        return None
+    return int(within_str.split("=")[-1])
+
+
 def _cmd_swipe(args):
-    x1, y1, x2, y2 = args.coords
-    return _do_action(args, "swipe", lambda b, s: actuator.swipe(b, s, x1, y1, x2, y2),
-                      {"coords": args.coords})
+    swipe_args = args.swipe_args
+    if len(swipe_args) == 1 and swipe_args[0] in _DIRECTIONS:
+        direction = swipe_args[0]
+        within_i = _parse_within(getattr(args, "within", None))
+        distance_pct = getattr(args, "distance_pct", 0.5)
+        return _do_action(
+            args, "named_swipe",
+            lambda b, s: actuator.named_swipe(b, s, direction,
+                                               distance_pct=distance_pct,
+                                               within_i=within_i),
+            {"direction": direction},
+        )
+    if len(swipe_args) == 4:
+        try:
+            x1, y1, x2, y2 = [int(a) for a in swipe_args]
+        except ValueError:
+            print("phonectl: swipe coords must be integers")
+            return 2
+        return _do_action(args, "swipe",
+                          lambda b, s: actuator.swipe(b, s, x1, y1, x2, y2),
+                          {"coords": [x1, y1, x2, y2]})
+    print("phonectl: swipe requires a direction (up/down/left/right) or x1 y1 x2 y2")
+    return 2
+
+
+def _cmd_long_press(args):
+    sel = _selector_from_args(args)
+    i = getattr(args, "i", None)
+    x = getattr(args, "x", None)
+    y = getattr(args, "y", None)
+    target = f"i={i}" if i is not None else f"({x},{y})"
+    return _do_action(
+        args, "long_press",
+        lambda b, s: actuator.long_press(b, s, i=i, x=x, y=y, selector=sel,
+                                          duration_ms=args.duration_ms),
+        target,
+    )
+
+
+def _cmd_double_tap(args):
+    sel = _selector_from_args(args)
+    i = getattr(args, "i", None)
+    x = getattr(args, "x", None)
+    y = getattr(args, "y", None)
+    target = f"i={i}" if i is not None else f"({x},{y})"
+    return _do_action(
+        args, "double_tap",
+        lambda b, s: actuator.double_tap(b, s, i=i, x=x, y=y, selector=sel,
+                                          interval_ms=args.interval_ms),
+        target,
+    )
+
+
+def _cmd_drag(args):
+    x1, y1, x2, y2 = args.x1, args.y1, args.x2, args.y2
+    return _do_action(
+        args, "drag",
+        lambda b, s: actuator.drag(b, s, x1, y1, x2, y2, args.duration_ms),
+        {"coords": [x1, y1, x2, y2]},
+    )
+
+
+def _cmd_fling(args):
+    return _do_action(
+        args, "fling",
+        lambda b, s: actuator.fling(b, s, args.direction),
+        {"direction": args.direction},
+    )
+
+
+def _cmd_scroll(args):
+    within_i = _parse_within(getattr(args, "within", None))
+    return _do_action(
+        args, "scroll",
+        lambda b, s: actuator.scroll(b, s, args.direction, within_i=within_i),
+        {"direction": args.direction},
+    )
+
+
+def _cmd_scroll_until(args):
+    within_i = _parse_within(getattr(args, "within", None))
+    direction = getattr(args, "direction", "down")
+    text = getattr(args, "text", None)
+    sel = _selector_from_args(args)
+    max_scrolls = getattr(args, "max", 10)
+    if text is None and sel is None:
+        print("phonectl: scroll-until requires --text or --selector")
+        return 2
+    return _do_action(
+        args, "scroll_until",
+        lambda b, s: actuator.scroll_until(b, s, direction,
+                                            text=text, selector=sel,
+                                            max_scrolls=max_scrolls,
+                                            within_i=within_i),
+        {"direction": direction, "text": text},
+    )
 
 
 def _cmd_key(args):
@@ -463,9 +565,62 @@ def build_parser() -> argparse.ArgumentParser:
     ty.set_defaults(func=_cmd_type)
 
     sw = sub.add_parser("swipe")
-    sw.add_argument("coords", nargs=4, type=int, metavar=("X1", "Y1", "X2", "Y2"))
+    sw.add_argument("swipe_args", nargs="+", metavar="DIRECTION_OR_COORDS",
+                    help="up|down|left|right  or  x1 y1 x2 y2")
+    sw.add_argument("--within", default=None, metavar="i=N")
+    sw.add_argument("--distance-pct", dest="distance_pct", type=float, default=0.5)
     _action_flags(sw)
     sw.set_defaults(func=_cmd_swipe)
+
+    lp = sub.add_parser("long-press")
+    lp.add_argument("--i", type=int, dest="i", default=None)
+    lp.add_argument("--selector", default=None)
+    lp.add_argument("--text", default=None)
+    lp.add_argument("--x", type=int, default=None)
+    lp.add_argument("--y", type=int, default=None)
+    lp.add_argument("--duration-ms", dest="duration_ms", type=int, default=1000)
+    _action_flags(lp)
+    lp.set_defaults(func=_cmd_long_press)
+
+    dt = sub.add_parser("double-tap")
+    dt.add_argument("--i", type=int, dest="i", default=None)
+    dt.add_argument("--selector", default=None)
+    dt.add_argument("--text", default=None)
+    dt.add_argument("--x", type=int, default=None)
+    dt.add_argument("--y", type=int, default=None)
+    dt.add_argument("--interval-ms", dest="interval_ms", type=int, default=100)
+    _action_flags(dt)
+    dt.set_defaults(func=_cmd_double_tap)
+
+    dr = sub.add_parser("drag")
+    dr.add_argument("--x1", type=int, required=True)
+    dr.add_argument("--y1", type=int, required=True)
+    dr.add_argument("--x2", type=int, required=True)
+    dr.add_argument("--y2", type=int, required=True)
+    dr.add_argument("--duration-ms", dest="duration_ms", type=int, default=500)
+    _action_flags(dr)
+    dr.set_defaults(func=_cmd_drag)
+
+    fl = sub.add_parser("fling")
+    fl.add_argument("direction", choices=["up", "down", "left", "right"])
+    _action_flags(fl)
+    fl.set_defaults(func=_cmd_fling)
+
+    sc = sub.add_parser("scroll")
+    sc.add_argument("direction", choices=["up", "down", "left", "right"])
+    sc.add_argument("--within", default=None, metavar="i=N")
+    _action_flags(sc)
+    sc.set_defaults(func=_cmd_scroll)
+
+    su2 = sub.add_parser("scroll-until")
+    su2.add_argument("--text", default=None)
+    su2.add_argument("--selector", default=None)
+    su2.add_argument("--direction", default="down",
+                     choices=["up", "down", "left", "right"])
+    su2.add_argument("--within", default=None, metavar="i=N")
+    su2.add_argument("--max", type=int, default=10)
+    _action_flags(su2)
+    su2.set_defaults(func=_cmd_scroll_until)
 
     k = sub.add_parser("key")
     k.add_argument("keycode")

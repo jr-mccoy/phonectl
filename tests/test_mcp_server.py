@@ -44,6 +44,12 @@ class FakeBackend:
     def input_swipe(self, x1, y1, x2, y2, ms):
         self.taps.append(("swipe", x1, y1, x2, y2, ms))
 
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        self.taps.append(("named_swipe", direction))
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        self.taps.append(("long_press", x, y))
+
     def input_key(self, keycode):
         self.taps.append(("key", keycode))
 
@@ -298,3 +304,24 @@ def test_unknown_tool_still_returns_err(tmp_path, monkeypatch):
     build, _ = make_build()
     env = mcp_server.call_tool("phone_clipboard_read_UNKNOWN", {}, build)
     assert env["ok"] is False
+
+
+# --- Task 6: new gesture MCP tools ---
+
+@pytest.fixture
+def build(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b, _ = make_build()
+    return b
+
+
+def test_phone_long_press_returns_ok(build):
+    env = mcp_server.call_tool("phone_long_press", {"x": 100, "y": 200}, build)
+    assert env["ok"] is True
+
+
+def test_phone_scroll_until_returns_ok(build):
+    env = mcp_server.call_tool("phone_scroll_until",
+                               {"direction": "down", "text": "x", "max_scrolls": 1},
+                               build)
+    assert env["ok"] is True

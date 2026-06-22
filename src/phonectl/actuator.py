@@ -56,6 +56,127 @@ def _matches(el, text, id):
         return True
     return False
 
+_DIRECTIONS = {"up", "down", "left", "right"}
+
+
+def named_swipe(backend, session, direction: str, *,
+                distance_pct: float = 0.5, ms: int = 400,
+                within_i=None, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    if direction not in _DIRECTIONS:
+        raise ValueError(f"unknown swipe direction: {direction!r}")
+    if within_i is not None:
+        elements = (session.last or {}).get("elements", [])
+        el = next((e for e in elements if e["i"] == within_i), None)
+        if el is not None:
+            x1b, y1b, x2b, y2b = el["bounds"]
+            cx, cy = (x1b + x2b) // 2, (y1b + y2b) // 2
+            half_x = int((x2b - x1b) * distance_pct / 2)
+            half_y = int((y2b - y1b) * distance_pct / 2)
+            if direction == "up":
+                backend.input_swipe(cx, cy + half_y, cx, cy - half_y, ms)
+            elif direction == "down":
+                backend.input_swipe(cx, cy - half_y, cx, cy + half_y, ms)
+            elif direction == "left":
+                backend.input_swipe(cx + half_x, cy, cx - half_x, cy, ms)
+            else:
+                backend.input_swipe(cx - half_x, cy, cx + half_x, cy, ms)
+            return observer.observe(backend, session)
+    backend.input_named_swipe(direction, distance_pct, ms)
+    return observer.observe(backend, session)
+
+
+def long_press(backend, session, *, i=None, x=None, y=None, selector=None,
+               duration_ms: int = 1000, expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    if x is None or y is None:
+        if i is not None:
+            x, y = session.resolve(i)
+        elif selector is not None:
+            x, y = session.resolve_selector(selector)
+        else:
+            raise ValueError("long_press requires x/y, i, or selector")
+    backend.input_long_press(x, y, duration_ms)
+    return observer.observe(backend, session)
+
+
+def double_tap(backend, session, *, i=None, x=None, y=None, selector=None,
+               interval_ms: int = 100, sleep=time.sleep,
+               expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    if x is None or y is None:
+        if i is not None:
+            x, y = session.resolve(i)
+        elif selector is not None:
+            x, y = session.resolve_selector(selector)
+        else:
+            raise ValueError("double_tap requires x/y, i, or selector")
+    backend.input_tap(x, y)
+    sleep(interval_ms / 1000)
+    backend.input_tap(x, y)
+    return observer.observe(backend, session)
+
+
+def drag(backend, session, x1, y1, x2, y2, duration_ms: int = 500,
+         expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    backend.input_swipe(x1, y1, x2, y2, duration_ms)
+    return observer.observe(backend, session)
+
+
+def fling(backend, session, direction: str,
+          expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    backend.input_fling(direction)
+    return observer.observe(backend, session)
+
+
+def scroll(backend, session, direction: str, *,
+           within_i=None, distance_pct: float = 0.5, ms: int = 400,
+           expected_hash=None, stale_ok=False) -> dict:
+    _check_stale(backend, session, expected_hash, stale_ok)
+    if within_i is not None:
+        elements = (session.last or {}).get("elements", [])
+        el = next((e for e in elements if e["i"] == within_i), None)
+        if el is None:
+            raise ValueError(f"no element with index {within_i} in current snapshot")
+        x1b, y1b, x2b, y2b = el["bounds"]
+        cx, cy = (x1b + x2b) // 2, (y1b + y2b) // 2
+        half_x = int((x2b - x1b) * distance_pct / 2)
+        half_y = int((y2b - y1b) * distance_pct / 2)
+        if direction == "up":
+            backend.input_swipe(cx, cy + half_y, cx, cy - half_y, ms)
+        elif direction == "down":
+            backend.input_swipe(cx, cy - half_y, cx, cy + half_y, ms)
+        elif direction == "left":
+            backend.input_swipe(cx + half_x, cy, cx - half_x, cy, ms)
+        elif direction == "right":
+            backend.input_swipe(cx - half_x, cy, cx + half_x, cy, ms)
+        else:
+            raise ValueError(f"unknown scroll direction: {direction!r}")
+    else:
+        backend.input_named_swipe(direction, distance_pct, ms)
+    return observer.observe(backend, session)
+
+
+def scroll_until(backend, session, direction: str, *,
+                 text=None, selector=None, max_scrolls: int = 10,
+                 within_i=None, sleep=time.sleep) -> dict:
+    if text is None and selector is None:
+        raise ValueError("scroll_until requires text or selector")
+    from phonectl import ui_parser
+    for _ in range(max_scrolls):
+        snap = observer.observe(backend, session)
+        elements = snap.get("elements", [])
+        if text is not None and any(e.get("text") == text for e in elements):
+            return snap
+        if selector is not None and ui_parser.match_selector(elements, selector):
+            return snap
+        scroll(backend, session, direction, within_i=within_i)
+        sleep(0.3)
+    return observer.observe(backend, session)
+
+
 def wait_for(backend, session, text=None, id=None, timeout: float = 5.0,
              interval: float = 0.5, sleep=time.sleep, monotonic=time.monotonic):
     # `id` intentionally shadows the builtin to mirror the element field name `id`;
