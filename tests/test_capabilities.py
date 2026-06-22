@@ -39,3 +39,10 @@ def test_new_device_capability_keys_exist():
     from phonectl import capabilities
     for key in ("device_battery", "device_wifi_info", "tts_speak"):
         assert key in capabilities.CAPABILITY_KEYS, f"missing key: {key}"
+
+
+def test_accessibility_capability_keys_exist():
+    from phonectl import capabilities
+    for key in ("observe_ui_native", "observe_ui_events", "act_set_text_native",
+                "act_gesture_native", "act_semantic_action"):
+        assert key in capabilities.CAPABILITY_KEYS, f"missing key: {key}"

@@ -28,6 +28,12 @@ CAPABILITY_KEYS = (
     "device_battery",
     "device_wifi_info",
     "tts_speak",
+    # Phase 4.1 additions (AccessibilityService companion)
+    "observe_ui_native",
+    "observe_ui_events",
+    "act_set_text_native",
+    "act_gesture_native",
+    "act_semantic_action",
 )
 
 
