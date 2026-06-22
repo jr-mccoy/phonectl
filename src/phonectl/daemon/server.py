@@ -104,6 +104,11 @@ class DaemonServer:
             entries = audit.read_entries(limit=params.get("limit"))
             return results.ok(capability="audit.query", data=entries)
 
+        @self.registry.register("shutdown")
+        def _shutdown(params, ctx):
+            self._running = False
+            return results.ok(capability="daemon.shutdown", data={"stopping": True})
+
         @self.registry.register("stop")
         def _stop(params, ctx):
             (config.config_dir() / "STOP").write_text("stopped via daemon\n")
@@ -358,6 +363,7 @@ class DaemonServer:
     def serve_forever(self):
         import selectors
         self._running = True
+        self.jobs.start()
         sel = selectors.DefaultSelector()
         sel.register(self._sock, selectors.EVENT_READ)
         try:
@@ -367,6 +373,7 @@ class DaemonServer:
                     self._serve_conn(conn)
         finally:
             sel.close()
+            self.shutdown()
 
     def _serve_conn(self, conn):
         f = conn.makefile("rw", encoding="utf-8", newline="\n")
@@ -383,8 +390,11 @@ class DaemonServer:
 
     def shutdown(self):
         from phonectl.daemon import discovery
-        self._publish_lifecycle("stopped")
+        if not getattr(self, "_shutdown_done", False):
+            self._publish_lifecycle("stopped")
+        self._shutdown_done = True
         self._running = False
+        self.jobs.stop()
         if self._sock is not None:
             self._sock.close()
             self._sock = None

@@ -401,3 +401,30 @@ def test_act_is_not_in_handle_line_mutating_set():
     from phonectl.daemon import rpc as rpc_mod
     assert "act" not in rpc_mod.MUTATING
     assert "stop" in rpc_mod.MUTATING and "resume" in rpc_mod.MUTATING
+
+
+# ── Task 6: shutdown RPC + worker lifecycle ───────────────────────────────
+
+def test_shutdown_rpc_flags_not_running_and_returns_ok(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    srv._running = True
+    resp = json.loads(srv.handle_line(_req("shutdown")))
+    assert resp["ok"] is True
+    assert resp["data"]["stopping"] is True
+    assert srv._running is False
+
+
+def test_shutdown_method_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    srv.shutdown()
+    srv.shutdown()  # must not raise
+
+
+def test_shutdown_in_methods_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("status")))
+    assert "shutdown" in resp["data"]["methods"]
+    assert "job_poll" in resp["data"]["methods"]
