@@ -435,3 +435,18 @@ def test_phone_notifications_unavailable_returns_err(tmp_path, monkeypatch):
     env = mcp_server.call_tool("phone_notifications_list", {}, build)
     assert env["ok"] is False
     assert env["error"]["code"] == "capability_unavailable"
+
+
+# --- Plan 4.4: OCR MCP tool ---
+
+def test_phone_ocr_screen_tool_registered():
+    from phonectl import mcp_server
+    assert "phone_ocr_screen" in mcp_server.TOOLS
+
+
+def test_phone_ocr_screen_unavailable_returns_err(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_ocr_screen", {}, build)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "capability_unavailable"

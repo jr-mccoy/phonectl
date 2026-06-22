@@ -352,6 +352,7 @@ Tool catalog:
 | `phone_notifications_wait` | Poll until a matching notification appears or timeout elapses. | `package`, `title_contains`, `text_contains`, `timeout` |
 | `phone_notifications_reply` | Reply to a notification via RemoteInput (**high-risk**; companion required). | `key`, `text`, `confirm`, `dry_run` |
 | `phone_notifications_dismiss` | Dismiss a notification (companion required). | `key`, `confirm`, `dry_run` |
+| `phone_ocr_screen` | OCR the current screen and return text regions with bounds and confidence. **Use only as a fallback** when `phone_observe_ui`/`phone_find` return nothing (canvas/WebView/game surfaces). Requires `tesseract` on PATH or the companion ML-Kit OCR provider. | `min_confidence` |
 
 Example observe envelope:
 
@@ -908,6 +909,7 @@ Capability keys exposed by providers:
 - `notifications_wait` — companion: `true`; Termux:API: `true` (poll-only); ADB: `false`
 - `notifications_reply` — companion: `true`; Termux:API: `false`; ADB: `false`
 - `notifications_dismiss` — companion: `true`; Termux:API: `false`; ADB: `false`
+- `observe_ocr` — OcrProvider (Tesseract on PATH): `true`; OcrProvider (companion ML-Kit): `true`; all others: `false`
 
 Examples:
 
@@ -1067,8 +1069,11 @@ phonectl extract list --container-i 3 --json
 # Extract form fields with associated labels
 phonectl extract form --json
 
-# Find elements whose text matches a regex
+# Find elements whose text matches a regex (UI tree)
 phonectl find --text-regex "Total|Balance" --json
+
+# Find text by OCR when the UI tree returns nothing (canvas/game/WebView surfaces)
+phonectl find --ocr-text "Balance" --json
 
 # Get the currently focused text field
 phonectl get focused-field --json
@@ -1080,3 +1085,74 @@ phonectl get text-in-region --bounds 0 0 1080 400 --json
 `extract form` automatically requests the UI relations graph to resolve label–field associations via sibling proximity; if no relations are available it falls back to Y-coordinate overlap. Password fields have their value replaced with `[redacted]` in all outputs.
 
 `find --text-regex` searches element text only (uses `re.search`, so no anchoring needed). For `content-desc` matching use `--selector '{"content_desc": "..."}'` with `observe` or `tap`.
+
+`find --ocr-text REGEX` is the escape hatch for surfaces the UI tree can't see: it OCR-scans the screen and filters regions whose text matches the regex. Requires the OCR provider (see below).
+
+---
+
+## OCR provider (optional)
+
+The `OcrProvider` reads text from screenshots when the structured UI tree is empty or
+unavailable — custom-drawn surfaces, canvas/game UIs, WebViews that don't expose nodes,
+or image content. It is **discovered at runtime and never a hard dependency**: it activates
+when a local `tesseract` binary is on `PATH`, or when the companion APK advertises an ML-Kit
+OCR capability.
+
+### Install
+
+```bash
+# In Termux (host):
+pkg install tesseract
+
+# In a PRoot-Distro Debian/Ubuntu distro:
+apt-get install -y tesseract-ocr
+```
+
+Once installed, the provider registers itself automatically — no configuration required.
+`phonectl doctor --json` will show `observe_ocr: true` in the capabilities map.
+
+### What it enables
+
+Once Tesseract is present (or the companion ML-Kit OCR is active), the following become available:
+
+| Capability | OcrProvider (Tesseract) | OcrProvider (ML-Kit) | ADB / other |
+|---|:---:|:---:|:---:|
+| `observe_ocr` | ✓ | ✓ | ✗ |
+
+### OCR region shape
+
+Each region returned by `ocr screen` has:
+
+```json
+{
+  "text": "Wi-Fi",
+  "bounds": [44, 380, 164, 420],
+  "confidence": 0.965
+}
+```
+
+`bounds` uses the same `[left, top, right, bottom]` convention as UI elements; `confidence` is
+`0.0–1.0` (normalized from Tesseract's 0–100 `conf` column).
+
+### CLI verbs
+
+```bash
+# OCR the current screen and print all detected text regions
+phonectl ocr screen
+
+# Structured result envelope
+phonectl ocr screen --json
+
+# Filter by minimum confidence
+phonectl ocr screen --min-confidence 0.5 --json
+
+# Find text by OCR when the UI tree returns nothing
+phonectl find --ocr-text "Balance" --json
+phonectl find --ocr-text "Total.*Due" --json
+```
+
+### Priority
+
+`OcrProvider` is **appended last** in the provider registry, so it is the lowest-priority
+provider. It satisfies only `observe_ocr` and never shadows `observe_ui_tree` — the structured
+UI tree always takes precedence. OCR is strictly a **fallback** for surfaces the tree can't see.

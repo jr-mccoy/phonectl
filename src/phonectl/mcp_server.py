@@ -438,6 +438,23 @@ def notifications_dismiss(build=_default_build, *, key, confirm=False, dry_run=F
         return results.err(e)
 
 
+def ocr_screen(build=_default_build, *, min_confidence=0.0) -> dict:
+    try:
+        backend, _session, _conn = build(config.load())
+        registry = _as_registry(backend)
+        p = registry.for_capability("observe_ocr")
+        if p is None:
+            return results.err(
+                errors.CapabilityUnavailableError("observe_ocr not available"),
+                capability="ocr.screen",
+                user_action="Install 'tesseract' (pkg install tesseract) or the companion ML-Kit OCR provider.",
+            )
+        data = p.ocr_screen(registry, min_confidence=float(min_confidence))
+        return results.ok(capability="ocr.screen", provider=type(p).__name__, data=data)
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
 def _schema(**props):
     return {"type": "object", "properties": props}
 
@@ -493,6 +510,17 @@ TOOLS = {
     "phone_notifications_wait": {"description": "Poll until a matching notification appears or timeout elapses.", "schema": _schema(package={"type": "string"}, title_contains={"type": "string"}, text_contains={"type": "string"}, timeout={"type": "integer"}), "handler": notifications_wait, "needs_build": True},
     "phone_notifications_reply": {"description": "Reply to a notification via RemoteInput (high-risk; companion required).", "schema": _schema(key={"type": "string"}, text={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": notifications_reply, "needs_build": True},
     "phone_notifications_dismiss": {"description": "Dismiss a notification (companion required).", "schema": _schema(key={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": notifications_dismiss, "needs_build": True},
+    # Phase 4.4: optional OCR fallback (use only when phone_observe_ui / phone_find return nothing — canvas/WebView/game surfaces)
+    "phone_ocr_screen": {
+        "description": (
+            "OCR the current screen and return text regions with bounds and confidence. "
+            "Use ONLY as a fallback when phone_observe_ui or phone_find return no elements "
+            "(custom-drawn/canvas/WebView surfaces). Requires tesseract on PATH or the companion ML-Kit OCR provider."
+        ),
+        "schema": _schema(min_confidence={"type": "number"}),
+        "handler": ocr_screen,
+        "needs_build": True,
+    },
     # Phase 3.4: structured extraction
     "phone_extract_list": {"description": "Extract rows from a scrollable list container.", "schema": _schema(container_index={"type": "integer"}), "handler": extract_list, "needs_build": True},
     "phone_extract_form": {"description": "Extract form fields with associated labels.", "schema": _OBJ, "handler": extract_form, "needs_build": True},

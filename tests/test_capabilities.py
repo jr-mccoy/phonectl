@@ -53,3 +53,8 @@ def test_notification_capability_keys_exist():
     for key in ("observe_notifications", "notifications_wait",
                 "notifications_reply", "notifications_dismiss"):
         assert key in capabilities.CAPABILITY_KEYS
+
+
+def test_observe_ocr_capability_key_exists():
+    from phonectl import capabilities
+    assert "observe_ocr" in capabilities.CAPABILITY_KEYS

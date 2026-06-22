@@ -22,6 +22,7 @@ from phonectl.providers.termux import TermuxApiProvider
 from phonectl.providers.accessibility import AccessibilityProvider  # noqa: F401
 from phonectl.providers.notifications import NotificationsProvider
 from phonectl.providers.transport import SocketTransport
+from phonectl.providers.ocr import OcrProvider
 from phonectl import trust
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
@@ -59,6 +60,12 @@ def _make_notifications_provider():
     return p if p.is_available() else None
 
 
+def _make_ocr_provider():
+    cfg = config.load()
+    p = OcrProvider(transport=_make_companion_transport(cfg))
+    return p if p.is_available() else None
+
+
 def build_runtime(cfg, backend=None):
     adb = backend or _make_backend(cfg)
     if isinstance(adb, ProviderRegistry):
@@ -69,6 +76,7 @@ def build_runtime(cfg, backend=None):
             _make_notifications_provider(),
             _make_termux_provider(),
             adb,
+            _make_ocr_provider(),   # appended last — lowest priority, observe_ocr only
         ] if p is not None]
         registry = ProviderRegistry(providers)
     session = Session()
@@ -432,8 +440,33 @@ def _cmd_extract_form(args):
 
 
 def _cmd_find(args):
+    import re
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
+    ocr_pattern = getattr(args, "ocr_text", None)
+    if ocr_pattern is not None:
+        p = backend.for_capability("observe_ocr")
+        if p is None:
+            env = results.err(
+                errors.CapabilityUnavailableError("OCR not available"),
+                capability="extraction.find",
+                user_action="Install 'tesseract' (pkg install tesseract) or the companion ML-Kit OCR provider.",
+            )
+            if getattr(args, "json", False):
+                print(json.dumps(env, indent=2))
+            else:
+                print(f"phonectl: {env['error']['message']}")
+            return 1
+        ocr_data = p.ocr_screen(backend)
+        rx = re.compile(ocr_pattern)
+        matches = [r for r in ocr_data["regions"] if rx.search(r["text"])]
+        env = results.ok(capability="extraction.find", provider="ocr", data={"matches": matches})
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            for m in matches:
+                print(f"text={m['text']!r} bounds={m['bounds']}")
+        return 0
     conn.ensure()
     snap = observer.observe(backend, session)
     matches = ui_parser.find_by_text_regex(snap["elements"], args.text_regex)
@@ -445,6 +478,31 @@ def _cmd_find(args):
     else:
         for m in matches:
             print(f"i={m['i']} text={m['text']!r}")
+    return 0
+
+
+def _cmd_ocr_screen(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    p = backend.for_capability("observe_ocr")
+    if p is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("OCR not available"),
+            capability="ocr.screen",
+            user_action="Install 'tesseract' (pkg install tesseract) or the companion ML-Kit OCR provider.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    data = p.ocr_screen(backend, min_confidence=getattr(args, "min_confidence", 0.0))
+    env = results.ok(capability="ocr.screen", provider=type(p).__name__, data=data)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for r in data["regions"]:
+            print(f"{r['text']}  {r['bounds']}")
     return 0
 
 
@@ -1076,7 +1134,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     # find command
     fi = sub.add_parser("find")
-    fi.add_argument("--text-regex", dest="text_regex", required=True)
+    fi.add_argument("--text-regex", dest="text_regex", default=None)
+    fi.add_argument("--ocr-text", dest="ocr_text", default=None,
+                    metavar="REGEX",
+                    help="OCR the screen and match region text; fallback when UI tree is empty")
     fi.add_argument("--json", action="store_true")
     fi.set_defaults(func=_cmd_find)
 
@@ -1177,6 +1238,15 @@ def build_parser() -> argparse.ArgumentParser:
     ntd.add_argument("--json", action="store_true")
     ntd.set_defaults(func=_cmd_notifications_dismiss)
     nt.set_defaults(func=lambda args: (nt.print_help(), 2)[1])
+
+    # ocr subcommand group (Phase 4.4 — optional, lowest priority)
+    oc = sub.add_parser("ocr")
+    ocsub = oc.add_subparsers(dest="ocr_cmd")
+    ocs = ocsub.add_parser("screen")
+    ocs.add_argument("--min-confidence", dest="min_confidence", type=float, default=0.0)
+    ocs.add_argument("--json", action="store_true")
+    ocs.set_defaults(func=_cmd_ocr_screen)
+    oc.set_defaults(func=lambda args: (oc.print_help(), 2)[1])
 
     return p
 

@@ -88,6 +88,17 @@ notification capabilities return `capability_unavailable`. `notifications_reply`
 **high-risk** (it sends visible content into arbitrary apps) and routes through
 `runtime.run_action` for mode/kill-switch/risk gating, matching the policy contract of `tap`/`type`.
 
+**OCR is the lowest-priority, optional `observe_ocr` provider (Phase 4.4):** `OcrProvider`
+(`src/phonectl/providers/ocr.py`) reads text from screenshots when the structured UI tree is
+empty or unavailable — custom-drawn surfaces, canvas/game UIs, WebViews that don't expose
+nodes, or image content. It is **appended last** in `build_runtime()`, so it never shadows
+`observe_ui_tree`. It activates when `tesseract` is found on `PATH` (local path, no companion
+round trip) or when the companion APK advertises an `observe_ocr` capability (ML-Kit). When
+neither is present, `_make_ocr_provider()` returns `None` and the registry is unchanged. OCR
+output is normalized to `{text, bounds: [l,t,r,b], confidence: 0.0–1.0}` — the same `bounds`
+convention as UI elements — so `find --ocr-text` and `phone_ocr_screen` compose with the same
+region/regex consumers as the structured tree.
+
 **Power rationale (why ADB, not the a11y APK, is the first backend):** ADB runs as the
 `shell` user (uid 2000) and is system-wide — a superset of the AccessibilityService's
 abilities. It can drive the UI (`uiautomator` + `input`) **and** reach beneath it
