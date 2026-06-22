@@ -629,3 +629,51 @@ def test_find_ocr_text_returns_matching_regions(tmp_path, monkeypatch, capsys):
     assert rc == 0 and out["ok"] is True
     assert len(out["data"]["matches"]) == 1
     assert out["data"]["matches"][0]["text"] == "Balance"
+
+
+# ── Task 8: _dispatch + daemon routing ────────────────────────────────────
+
+def test_dispatch_in_process_when_no_daemon(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    called = {"n": 0}
+
+    def in_proc():
+        called["n"] += 1
+        return {"ok": True, "data": {"via": "in_process"}}
+
+    out = cli._dispatch("observe", {}, in_proc)
+    assert called["n"] == 1
+    assert out["data"]["via"] == "in_process"
+
+
+def test_dispatch_routes_to_daemon_when_reachable(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    class FakeClient:
+        def call(self, method, params, **kw):
+            return {"ok": True, "data": {"via": "daemon", "method": method}}
+
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: FakeClient())
+    out = cli._dispatch("observe", {}, lambda: {"ok": True, "data": {"via": "in_process"}})
+    assert out["data"]["via"] == "daemon"
+    assert out["data"]["method"] == "observe"
+
+
+def test_observe_command_unchanged_without_daemon(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["observe", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and "hash" in out["data"]
+
+
+# ── Task 9: daemon command ─────────────────────────────────────────────────
+
+def test_daemon_status_reports_not_running(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    rc = cli.main(["daemon", "status", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and out["data"]["running"] is False

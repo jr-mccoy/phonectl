@@ -6,6 +6,8 @@ DEFAULTS: dict = {
     "companion_host": "127.0.0.1",
     "companion_port": None,
     "companion_timeout": 2.0,
+    "daemon_host": "127.0.0.1",
+    "daemon_autostart": False,
 }
 
 

@@ -26,6 +26,34 @@ from phonectl.providers.ocr import OcrProvider
 from phonectl import trust
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
+from phonectl.daemon import discovery as _daemon_discovery
+from phonectl.daemon.client import DaemonClient
+
+
+def _daemon_client(cfg):
+    def _ping(host, port):
+        return DaemonClient(host, port).is_running()
+    info = _daemon_discovery.discover(ping=_ping)
+    if info is None:
+        return None
+    return DaemonClient.from_discovery(info)
+
+
+def _dispatch(method, params, in_process_fn, *, cfg=None):
+    client = _daemon_client(cfg)
+    if client is not None:
+        return client.call(method, params)
+    return in_process_fn()
+
+
+def _act_params(args, verb, target):
+    p = {"verb": verb, "target": target,
+         "yes": getattr(args, "yes", False),
+         "request_id": getattr(args, "request_id", None),
+         "idempotency_key": getattr(args, "idempotency_key", None)}
+    if isinstance(target, dict):
+        p.update({k: v for k, v in target.items() if k not in p})
+    return p
 
 
 def _make_backend(cfg) -> AdbBackend:
@@ -90,30 +118,43 @@ def _emit(snap) -> None:
 
 def _cmd_observe(args):
     cfg = config.load()
-    backend, session, conn = build_runtime(cfg)
-    conn.ensure()
-    snap = observer.observe(backend, session, screenshot=args.screenshot,
-                            snap_path=args.screenshot_path, tree=args.tree,
-                            relations=args.relations)
-    if getattr(args, "json", False):
+
+    def in_process():
+        backend, session, conn = build_runtime(cfg)
+        conn.ensure()
+        snap = observer.observe(backend, session, screenshot=args.screenshot,
+                                snap_path=args.screenshot_path, tree=args.tree,
+                                relations=args.relations)
         provider = getattr(backend, "last_used", None) or "adb"
-        print(json.dumps(results.ok(capability="ui.observe", provider=provider, data=snap),
-                         indent=2))
+        return results.ok(capability="ui.observe", provider=provider, data=snap)
+
+    env = _dispatch("observe", {
+        "screenshot": args.screenshot, "snap_path": args.screenshot_path,
+        "tree": args.tree, "relations": args.relations,
+    }, in_process, cfg=cfg)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
     else:
-        _emit(snap)
+        _emit(env["data"])
     return 0
 
 
 def _do_action(args, verb, fn, target):
-    env = runtime.run_action(
-        verb,
-        fn,
-        target,
-        build=build_runtime,
-        yes=getattr(args, "yes", False),
-        request_id=getattr(args, "request_id", None),
-        idempotency_key=getattr(args, "idempotency_key", None),
-    )
+    cfg = config.load()
+
+    def in_process():
+        return runtime.run_action(
+            verb,
+            fn,
+            target,
+            build=build_runtime,
+            yes=getattr(args, "yes", False),
+            cfg=cfg,
+            request_id=getattr(args, "request_id", None),
+            idempotency_key=getattr(args, "idempotency_key", None),
+        )
+
+    env = _dispatch("act", _act_params(args, verb, target), in_process, cfg=cfg)
     if env["ok"]:
         if getattr(args, "json", False):
             print(json.dumps(env, indent=2))
@@ -931,6 +972,46 @@ def _cmd_notifications_dismiss(args):
     return 1
 
 
+def _cmd_daemon(args):
+    import signal
+    cfg = config.load()
+    sub = getattr(args, "daemon_cmd", None)
+    if sub == "start":
+        from phonectl.daemon.server import DaemonServer
+        srv = DaemonServer(cfg, build=build_runtime)
+        host, port = srv.bind()
+        signal.signal(signal.SIGINT, lambda *a: srv.shutdown())
+        print(f"phonectl daemon listening on {host}:{port} (Ctrl-C to stop)")
+        try:
+            srv.serve_forever()
+        finally:
+            srv.shutdown()
+        return 0
+    if sub == "status":
+        client = _daemon_client(cfg)
+        data = {"running": client is not None}
+        if client is not None:
+            st = client.call("status", {})
+            data.update(st.get("data", {}))
+        env = results.ok(capability="daemon.status", data=data)
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"daemon running={data['running']}")
+        return 0
+    if sub == "stop":
+        client = _daemon_client(cfg)
+        if client is None:
+            _daemon_discovery.remove()
+            print("phonectl: no running daemon")
+            return 0
+        client.call("stop", {})
+        print("phonectl: stop signalled")
+        return 0
+    print("usage: phonectl daemon {start|status|stop}")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="phonectl")
     p.add_argument("--version", action="version", version=__version__)
@@ -1247,6 +1328,16 @@ def build_parser() -> argparse.ArgumentParser:
     ocs.add_argument("--json", action="store_true")
     ocs.set_defaults(func=_cmd_ocr_screen)
     oc.set_defaults(func=lambda args: (oc.print_help(), 2)[1])
+
+    # daemon subcommand group (Phase 5.1)
+    dm = sub.add_parser("daemon")
+    dmsub = dm.add_subparsers(dest="daemon_cmd")
+    dmsub.add_parser("start").set_defaults(func=_cmd_daemon)
+    dmst = dmsub.add_parser("status")
+    dmst.add_argument("--json", action="store_true")
+    dmst.set_defaults(func=_cmd_daemon)
+    dmsub.add_parser("stop").set_defaults(func=_cmd_daemon)
+    dm.set_defaults(func=_cmd_daemon)
 
     return p
 

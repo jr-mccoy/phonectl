@@ -1156,3 +1156,74 @@ phonectl find --ocr-text "Total.*Due" --json
 `OcrProvider` is **appended last** in the provider registry, so it is the lowest-priority
 provider. It satisfies only `observe_ocr` and never shadows `observe_ui_tree` — the structured
 UI tree always takes precedence. OCR is strictly a **fallback** for surfaces the tree can't see.
+
+---
+
+## Daemon (Phase 5.1)
+
+`phonectl daemon` makes the runtime a **long-lived single-writer process** that keeps the provider graph, session, and connection warm across requests and brokers all actions through one global write lock.
+
+### Starting the daemon
+
+```bash
+phonectl daemon start
+# phonectl daemon listening on 127.0.0.1:<PORT> (Ctrl-C to stop)
+```
+
+The daemon binds to an **ephemeral loopback TCP port** (`127.0.0.1` only — non-loopback is refused). It writes its address to `$PHONECTL_HOME/daemon.json` and removes it on clean shutdown.
+
+### Frontend auto-routing
+
+Once a daemon is running, every `phonectl` CLI command (and the MCP server) **transparently routes through it** — no flags needed. `discover()` reads `daemon.json`, pings the endpoint, and on success the frontend sends a JSON-RPC call instead of building an in-process runtime. When no daemon is found, the original in-process path is used unchanged — daemonization is a **compatible evolution**.
+
+### Daemon commands
+
+```bash
+phonectl daemon start          # run daemon in foreground (Ctrl-C to stop)
+phonectl daemon status --json  # check if a daemon is running and its state
+phonectl daemon stop           # signal the daemon to stop (sets STOP sentinel)
+```
+
+### Loopback-only
+
+The daemon binds and listens on **`127.0.0.1` exclusively**. `daemon_host` is validated and a non-loopback address is rejected with a clear error. The socket is never exposed to the network.
+
+### Config keys
+
+| Key | Default | Description |
+|---|---|---|
+| `daemon_host` | `"127.0.0.1"` | Loopback address to bind on (loopback-only, non-loopback is rejected) |
+| `daemon_autostart` | `false` | Reserved for Termux:Boot autostart (not yet wired) |
+
+Set via `$PHONECTL_HOME/config.json`:
+
+```json
+{
+  "daemon_host": "127.0.0.1",
+  "daemon_autostart": false
+}
+```
+
+### Run records (`runs.jsonl`)
+
+Every action dispatched through the daemon is appended as a structured run record to `$PHONECTL_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before` (wired in Phase 5.2), `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
+
+### Discovery file (`daemon.json`)
+
+```json
+{
+  "pid": 12345,
+  "host": "127.0.0.1",
+  "port": 54321,
+  "version": 1,
+  "started_at": 1750000000.0
+}
+```
+
+### No daemon required
+
+In-process primitives (`observe`, `tap`, `type`, etc.) work exactly as they always did when no daemon is running. The daemon is a **compatible evolution** — it adds single-writer coordination and run records, it does not gate the v1 primitives.
+
+### Termux:Boot autostart (seam only)
+
+`daemon_autostart` config key exists and `phonectl daemon start` runs foreground. Autostart via Termux:Boot and companion foreground-service hosting are noted as seams; they land in Phase 5.2+.
