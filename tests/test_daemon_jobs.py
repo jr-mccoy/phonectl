@@ -101,3 +101,24 @@ def test_queue_cap_raises_busy():
         assert False, "expected BusyError"
     except errors.BusyError:
         pass
+
+
+def test_worker_thread_drains_submitted_job():
+    import time as _t
+    reg = JobRegistry(_ok_runner)
+    reg.start()
+    try:
+        jid = reg.submit("observe", {})
+        deadline = _t.monotonic() + 2.0
+        while _t.monotonic() < deadline and reg.get(jid).status != "done":
+            _t.sleep(0.01)
+        assert reg.get(jid).status == "done"
+    finally:
+        reg.stop()
+
+
+def test_stop_is_idempotent_and_joins():
+    reg = JobRegistry(_ok_runner)
+    reg.start()
+    reg.stop()
+    reg.stop()  # must not raise

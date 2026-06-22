@@ -103,3 +103,24 @@ class JobRegistry:
             job.status = "done" if env.get("ok") else "error"
             job.ts_finished = self._now()
         return True
+
+    # ── worker lifecycle ────────────────────────────────────────────────
+    def start(self) -> None:
+        if self._worker is not None:
+            return
+        self._stopped = False
+        self._worker = threading.Thread(
+            target=self._loop, name="phonectl-job-worker", daemon=True)
+        self._worker.start()
+
+    def _loop(self) -> None:
+        while not self._stopped:
+            self.run_next(block=True, timeout=0.5)
+
+    def stop(self) -> None:
+        with self._cv:
+            self._stopped = True
+            self._cv.notify_all()
+        worker, self._worker = self._worker, None
+        if worker is not None:
+            worker.join(timeout=2.0)
