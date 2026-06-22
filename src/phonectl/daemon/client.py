@@ -38,7 +38,7 @@ class DaemonClient:
 
     def submit_and_wait(self, method, params=None, *, overall_timeout,
                         poll_interval=0.5, sleep=time.sleep, now=time.monotonic) -> dict:
-        acc = self.call(method, params or {})
+        acc = self.call(method, params)
         if not acc.get("ok"):
             return acc                                   # unreachable / busy / timeout
         job_id = acc["data"]["job_id"]

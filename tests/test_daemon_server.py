@@ -395,6 +395,7 @@ def test_act_via_worker_appends_one_run_record(tmp_path, monkeypatch):
     rows = records.read()
     assert len(rows) == 1
     assert rows[0]["verb"] == "tap"
+    assert rows[0]["request_id"] == "rr"
 
 
 def test_act_is_not_in_handle_line_mutating_set():

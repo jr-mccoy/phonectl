@@ -142,6 +142,12 @@ def _cmd_observe(args):
         "screenshot": args.screenshot, "snap_path": args.screenshot_path,
         "tree": args.tree, "relations": args.relations,
     }, in_process, cfg=cfg, async_job=True)
+    if not env.get("ok"):
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
     if getattr(args, "json", False):
         print(json.dumps(env, indent=2))
     else:

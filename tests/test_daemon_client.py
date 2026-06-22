@@ -1,5 +1,4 @@
 import socket
-import time as _time
 
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.daemon.client import DaemonClient
@@ -82,7 +81,7 @@ def test_submit_and_wait_returns_inner_result_on_done():
 
     c = DaemonClient("127.0.0.1", 8799, transport=FakeTransport(responder))
     out = c.submit_and_wait("act", {}, overall_timeout=5.0, poll_interval=0.0,
-                            sleep=lambda s: None)
+                            sleep=lambda s: None, now=lambda: 0.0)
     assert out["ok"] is True
     assert out["data"]["tapped"] is True
 

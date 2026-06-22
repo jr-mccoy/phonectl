@@ -64,11 +64,8 @@ class DaemonServer:
             p = dict(params)
             p["request_id"] = ctx.get("request_id")
             job_id = self.jobs.submit("act", p)
-            return results.ok(
-                capability="daemon.job_accepted",
-                data={"job_id": job_id, "status": self.jobs.get(job_id).status
-                      if self.jobs.get(job_id).status != "queued" else "accepted"},
-            )
+            return results.ok(capability="daemon.job_accepted",
+                              data={"job_id": job_id, "status": "accepted"})
 
         @self.registry.register("observe")
         def _observe(params, ctx):
