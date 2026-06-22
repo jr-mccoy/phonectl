@@ -1,7 +1,7 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 4 → 7 + cross-cutting evaluation suite (Phases 1–3 complete; all four Phase-4 plans now written)
+**Status:** Authoring index for Phases 6 → 7 + cross-cutting evaluation suite (Phases 1–3 complete; all four Phase-4 plans written; Phase-5 spec + both Phase-5 plans now written)
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
 This document is the **instruction set for writing the remaining implementation plans**. **All four
@@ -23,8 +23,12 @@ convention — `phonectl-plan-<N.M>-<slug>.md` — so the plan number is obvious
 (`phonectl-plan-4.1-accessibility-native-provider.md`), 4.2
 (`phonectl-plan-4.2-notification-listener-provider.md`), 4.3
 (`phonectl-plan-4.3-foreground-service-transport-and-trust-ux.md`), 4.4
-(`phonectl-plan-4.4-ocr-provider.md`). Everything from Phase 5 onward is **scoped here**
-and turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order.
+(`phonectl-plan-4.4-ocr-provider.md`). Phase 5 is **spec-first**: the daemon design spec
+(`docs/superpowers/specs/2026-06-22-phonectl-daemon-event-runtime-design.md`) was written first, then its
+two implementation plans — 5.1 (`phonectl-plan-5.1-daemon-process-and-rpc-api.md`) and 5.2
+(`phonectl-plan-5.2-event-bus-and-snapshot-cache.md`). Everything from Phase 6 onward is **scoped here**
+and turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order
+(Phase 6, the macro engine, is likewise spec-first).
 
 ---
 
@@ -50,8 +54,11 @@ Use this table before reading commit history. "Written" means the plan document 
 | 4.2 NotificationListenerService provider | `phonectl-plan-4.2-notification-listener-provider.md` | 📝 Written, not yet executed | — |
 | 4.3 Foreground-service transport + trust UX | `phonectl-plan-4.3-foreground-service-transport-and-trust-ux.md` | 📝 Written, not yet executed | — |
 | 4.4 Optional OCR provider | `phonectl-plan-4.4-ocr-provider.md` | 📝 Written, not yet executed | — |
+| 5.0 Daemon & event runtime design spec | `specs/2026-06-22-phonectl-daemon-event-runtime-design.md` | 📝 Written (spec) | — |
+| 5.1 Daemon process + JSON-RPC/socket API | `phonectl-plan-5.1-daemon-process-and-rpc-api.md` | 📝 Written, not yet executed | — |
+| 5.2 Event bus + subscriptions + snapshot cache | `phonectl-plan-5.2-event-bus-and-snapshot-cache.md` | 📝 Written, not yet executed | — |
 
-**Next unimplemented written plan:** Phase 4.1 AccessibilityService native provider (`phonectl-plan-4.1-accessibility-native-provider.md`).
+**Next unimplemented written plan:** Phase 4.1 AccessibilityService native provider (`phonectl-plan-4.1-accessibility-native-provider.md`) — Phase 4 executes before Phase 5; the daemon (Phase 5) depends on the Phase-4 event sources.
 
 ## 1. Authoring rules (apply to every plan written from this index)
 
@@ -283,14 +290,41 @@ wiring (optional) + CLI `ocr screen` / `find --ocr-text` → MCP `phone_ocr_scre
 Tesseract/ML-Kit fallback for screenshots (strategy §13.4). *Deps:* 1.1, 3.1 (graph), 3.4 (region text
 consumers); optional on 4.1 (transport for the ML-Kit path).
 
-### Phase 5 (daemon & event runtime) — **spec first**
+### Phase 5 (daemon & event runtime) — **spec first** — ✅ all written
 
-**Spec 5.0 — daemon brainstorm→spec:** single writer + event broker, snapshot cache + invalidation
-(monotonic snapshot IDs, foreground checks, stale-index protection), provider lifecycle, event fanout,
-one policy choke-point, durable run records (strategy §22). CLI/MCP become frontends; daemon starts as
-`phonectl daemon`, later Termux:Boot / companion foreground service.
-**5.1** daemon process + JSON-RPC/socket API. **5.2** event bus + subscriptions + snapshot cache.
-*Deps:* 2.1 (single-writer seam), 3.1 (providers), 4.x (event sources).
+The daemon is the north-star core: the **single writer + event broker** for all phone actions, with
+CLI/MCP as frontends. Phase 5 was written spec-first (the discipline required for the daemon): the design
+spec was authored before either implementation plan. The two plans share a locked contract — loopback
+newline-JSON RPC reusing the Plan 4.3 transport framing, `daemon.json` discovery (no static port), the
+single writer reusing `runtime.run_action` verbatim, a warm `ProviderRegistry` lifecycle, monotonic
+snapshot IDs with stale-index protection, and durable `runs.jsonl` records extending audit v2 — so the
+daemon is a **compatible evolution, not a rewrite**, and is never required for v1 primitives.
+
+**Spec 5.0 — daemon brainstorm→spec** — ✅ **WRITTEN** as
+`docs/superpowers/specs/2026-06-22-phonectl-daemon-event-runtime-design.md`: single writer + event broker,
+snapshot cache + invalidation (monotonic snapshot IDs, foreground checks, stale-index protection),
+provider lifecycle, event fanout, one policy choke-point, durable run records (strategy §22). CLI/MCP
+become frontends; daemon starts as `phonectl daemon`, later Termux:Boot / companion foreground service
+(noted as a seam). Locks the RPC method set, wire protocol, daemon.json discovery, snapshot/event models,
+and the run-record schema; hands off to Plans 5.1 and 5.2.
+
+**5.1 — Daemon process + JSON-RPC/socket API** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-5.1-daemon-process-and-rpc-api.md` (9 tasks: additive daemon errors
++ `daemon/` package + `daemon.json` discovery → `rpc.py` method registry → `DaemonServer.handle_line`
+single-writer dispatch → warm-once provider lifecycle with `act` via `runtime.run_action` → RPC handlers
+(observe/find/capabilities/policy_explain/audit_query/stop/resume/status) → durable `runs.jsonl` records →
+`DaemonClient` over `SocketTransport` → frontend auto-routing in `cli.py` → `phonectl daemon` command +
+config keys + docs). Loopback-only; tests drive `handle_line` synchronously (no real sockets). *Strategy:*
+§22. *Deps:* 2.1 (single-writer `run_action`), 3.1 (providers), 4.3 (transport framing).
+
+**5.2 — Event bus + subscriptions + snapshot cache** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-5.2-event-bus-and-snapshot-cache.md` (8 tasks: `SnapshotCache`
+(monotonic `snap_N` ids + foreground accessor) → `observe` mints a `snapshot_id` → stale-index protection
+on `act` → snapshot invalidation + `snapshot_before`/`snapshot_after` (backfilling `runs.jsonl`) →
+`EventBus` (seq/publish/cursor-poll) → internal action/lifecycle event hooks → step-wise provider
+`EventPoller` (drains 4.1 `poll_events` + 4.2 notifications) → `events_poll` RPC + subscription docs).
+Cursor-based event contract matches Plan 4.1; no threads/sockets in tests. *Strategy:* §21, §22.
+*Deps:* 5.1 (DaemonServer), 4.1 (UI events), 4.2 (notification events).
 
 ### Phase 6 (macro runtime & progressive autonomy) — **spec first**
 
