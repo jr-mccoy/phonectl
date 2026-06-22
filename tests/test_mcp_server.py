@@ -359,3 +359,79 @@ def test_phone_scroll_until_returns_ok(build):
                                {"direction": "down", "text": "x", "max_scrolls": 1},
                                build)
     assert env["ok"] is True
+
+
+# ── Task 7 (Plan 4.2): notification MCP tools ────────────────────────────────
+
+from phonectl.providers.notifications import NotificationsProvider
+from phonectl.providers.transport import LoopbackTransport as _LoopbackTransport
+
+_NOTIF_RAW = {
+    "key": "k1", "package": "com.msg", "title": "Alice", "text": "hi",
+    "category": "msg", "post_time": 1,
+    "actions": [{"title": "Reply", "remote_input": True}],
+}
+
+
+def _fake_build_with_companion(tmp_path):
+    from phonectl.session import Session
+    np = NotificationsProvider(transport=_LoopbackTransport({
+        "notifications_list": lambda _p: {"notifications": [_NOTIF_RAW]},
+        "notifications_reply": lambda p: {"sent": True},
+        "notifications_dismiss": lambda p: {"dismissed": True},
+    }))
+
+    class _FakeBackend(FakeBackend):
+        def capabilities(self):
+            from phonectl import capabilities as caps
+            return caps.make(observe_ui_tree=True, act_tap=True, requires_adb=True)
+
+    fb = _FakeBackend()
+
+    def build(cfg):
+        from phonectl.providers.registry import ProviderRegistry
+        registry = ProviderRegistry([np, fb])
+        return registry, Session(), FakeConn()
+
+    return build
+
+
+def test_phone_notifications_list_tool_registered():
+    assert "phone_notifications_list" in mcp_server.TOOLS
+
+
+def test_phone_notifications_wait_tool_registered():
+    assert "phone_notifications_wait" in mcp_server.TOOLS
+
+
+def test_phone_notifications_reply_tool_registered():
+    assert "phone_notifications_reply" in mcp_server.TOOLS
+
+
+def test_phone_notifications_dismiss_tool_registered():
+    assert "phone_notifications_dismiss" in mcp_server.TOOLS
+
+
+def test_phone_notifications_list_returns_items(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build = _fake_build_with_companion(tmp_path)
+    env = mcp_server.call_tool("phone_notifications_list", {}, build)
+    assert env["ok"] is True
+    assert isinstance(env["data"], list)
+    assert env["data"][0]["can_reply"] is True
+
+
+def test_phone_notifications_reply_routes_through_policy(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build = _fake_build_with_companion(tmp_path)
+    env = mcp_server.call_tool("phone_notifications_reply",
+                               {"key": "k1", "text": "hi"}, build)
+    assert "ok" in env
+
+
+def test_phone_notifications_unavailable_returns_err(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_notifications_list", {}, build)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "capability_unavailable"
