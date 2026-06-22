@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from phonectl import errors, results
 
-MUTATING = {"act", "stop", "resume"}
+MUTATING = {"stop", "resume"}
 
 
 class Registry:

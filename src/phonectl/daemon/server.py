@@ -5,13 +5,13 @@ import json
 import os
 import threading
 import time
-import uuid
 
 from phonectl import audit, config, errors, observer, policy, results
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.daemon import rpc as rpc_mod
 from phonectl.daemon.discovery import LOOPBACK
 from phonectl.daemon.events import EventBus
+from phonectl.daemon.jobs import JobRegistry
 from phonectl.daemon.snapshots import SnapshotCache
 
 
@@ -35,6 +35,12 @@ class DaemonServer:
         self._port = None
         self.snapshots = SnapshotCache()
         self.events = EventBus()
+        self.jobs = JobRegistry(
+            self._run_job,
+            queue_max=cfg.get("job_queue_max", 8),
+            idempotency_ttl=cfg.get("idempotency_ttl", 300.0),
+            now=now,
+        )
         # poller is built lazily on first events_poll call (avoids eager triple build)
         self.poller = None
         self._register_builtins()
@@ -55,103 +61,30 @@ class DaemonServer:
 
         @self.registry.register("act")
         def _act(params, ctx):
-            from phonectl import actuator, runtime
-            verb = params["verb"]
-            target = params.get("target", {})
-            request_id = ctx.get("request_id")
-
-            # Stale-index protection: validate before dispatch
-            try:
-                self.snapshots.validate(
-                    params.get("snapshot_id"),
-                    current_foreground=self.snapshots.current_foreground,
-                )
-            except errors.StaleSnapshotError as exc:
-                env = results.err(
-                    exc,
-                    user_action="Re-observe (the screen changed); resolve the index against a fresh snapshot.",
-                    request_id=request_id,
-                )
-                self.events.publish(
-                    "action_finished",
-                    {"verb": verb, "target": target, "request_id": request_id,
-                     "ok": False, "snapshot_after": None},
-                    source="daemon",
-                )
-                return env
-
-            self.events.publish(
-                "action_started",
-                {"verb": verb, "target": target, "request_id": request_id},
-                source="daemon",
+            p = dict(params)
+            p["request_id"] = ctx.get("request_id")
+            job_id = self.jobs.submit("act", p)
+            return results.ok(
+                capability="daemon.job_accepted",
+                data={"job_id": job_id, "status": self.jobs.get(job_id).status
+                      if self.jobs.get(job_id).status != "queued" else "accepted"},
             )
-
-            fn = self._fn_for(params)
-            snapshot_before = self.snapshots.current_id
-
-            def warm_build(cfg):
-                return self._warm_triple()
-
-            env = runtime.run_action(
-                verb, fn, target,
-                build=warm_build,
-                yes=bool(params.get("yes", False)),
-                cfg=self._cfg,
-                request_id=request_id,
-                idempotency_key=params.get("idempotency_key"),
-            )
-
-            # Mint snapshot_after from post-action session (invalidates the prior id)
-            snapshot_after = None
-            _, session, _ = self._warm_triple()
-            if env.get("ok") and session.last is not None:
-                snapshot_after = self.snapshots.put(session.last)
-                env["snapshot_before"] = snapshot_before
-                env["snapshot_after"] = snapshot_after
-
-            self.events.publish(
-                "action_finished",
-                {"verb": verb, "target": target, "request_id": request_id,
-                 "ok": bool(env.get("ok")), "snapshot_after": snapshot_after},
-                source="daemon",
-            )
-
-            from phonectl.daemon import records as _records
-            rec = _records.build_record(
-                env, params,
-                action_id=uuid.uuid4().hex,
-                now=self._now,
-            )
-            rec["snapshot_before"] = snapshot_before
-            rec["snapshot_after"] = snapshot_after
-            self._append_record(rec)
-            return env
 
         @self.registry.register("observe")
         def _observe(params, ctx):
-            reg, session, conn = self._warm_triple()
-            if hasattr(conn, "ensure"):
-                conn.ensure()
-            snap = observer.observe(reg, session, **{
-                k: params[k] for k in ("screenshot", "snap_path", "tree", "relations")
-                if k in params
-            })
-            snapshot_id = self.snapshots.put(snap)
-            return results.ok(
-                capability="ui.observe",
-                provider=getattr(reg, "last_used", None) or "adb",
-                data=snap,
-                snapshot_id=snapshot_id,
-            )
+            p = dict(params)
+            p["request_id"] = ctx.get("request_id")
+            job_id = self.jobs.submit("observe", p)
+            return results.ok(capability="daemon.job_accepted",
+                              data={"job_id": job_id, "status": "accepted"})
 
         @self.registry.register("find")
         def _find(params, ctx):
-            reg, session, conn = self._warm_triple()
-            if hasattr(conn, "ensure"):
-                conn.ensure()
-            observer.observe(reg, session)
-            matches = session.find(params.get("selector", {}))
-            return results.ok(capability="ui.find", data={"matches": matches})
+            p = dict(params)
+            p["request_id"] = ctx.get("request_id")
+            job_id = self.jobs.submit("find", p)
+            return results.ok(capability="daemon.job_accepted",
+                              data={"job_id": job_id, "status": "accepted"})
 
         @self.registry.register("capabilities")
         def _capabilities(params, ctx):
@@ -194,6 +127,19 @@ class DaemonServer:
                 "methods": sorted(self.registry._handlers),
             })
 
+        @self.registry.register("job_poll")
+        def _job_poll(params, ctx):
+            job = self.jobs.get(params.get("job_id"))
+            if job is None:
+                return results.err(
+                    ("unknown_job", f"no job {params.get('job_id')!r}"),
+                    user_action="Submit the action again; the job id is unknown to this daemon.",
+                )
+            return results.ok(
+                capability="daemon.job_poll",
+                data={"status": job.status, "result": job.result_env},
+            )
+
         @self.registry.register("events_poll")
         def _events_poll(params, ctx):
             # Build the poller lazily on first call
@@ -211,6 +157,109 @@ class DaemonServer:
                 data=self.events.poll(since, max=max_n),
                 request_id=ctx.get("request_id"),
             )
+
+    # ── worker run-fns (executed by the JobRegistry worker) ──────────────
+    def _run_job(self, method, params):
+        with self._write_lock:
+            if method == "act":
+                return self._run_act(params)
+            if method == "observe":
+                return self._run_observe(params)
+            if method == "find":
+                return self._run_find(params)
+            return results.err(("internal_error", f"no run-fn for {method!r}"))
+
+    def _run_act(self, params):
+        from phonectl import runtime
+        import uuid
+        verb = params["verb"]
+        target = params.get("target", {})
+        request_id = params.get("request_id")
+
+        try:
+            self.snapshots.validate(
+                params.get("snapshot_id"),
+                current_foreground=self.snapshots.current_foreground,
+            )
+        except errors.StaleSnapshotError as exc:
+            env = results.err(
+                exc,
+                user_action="Re-observe (the screen changed); resolve the index against a fresh snapshot.",
+                request_id=request_id,
+            )
+            self.events.publish(
+                "action_finished",
+                {"verb": verb, "target": target, "request_id": request_id,
+                 "ok": False, "snapshot_after": None},
+                source="daemon",
+            )
+            return env
+
+        self.events.publish(
+            "action_started",
+            {"verb": verb, "target": target, "request_id": request_id},
+            source="daemon",
+        )
+
+        fn = self._fn_for(params)
+        snapshot_before = self.snapshots.current_id
+
+        def warm_build(cfg):
+            return self._warm_triple()
+
+        env = runtime.run_action(
+            verb, fn, target,
+            build=warm_build,
+            yes=bool(params.get("yes", False)),
+            cfg=self._cfg,
+            request_id=request_id,
+            idempotency_key=params.get("idempotency_key"),
+        )
+
+        snapshot_after = None
+        _, session, _ = self._warm_triple()
+        if env.get("ok") and session.last is not None:
+            snapshot_after = self.snapshots.put(session.last)
+            env["snapshot_before"] = snapshot_before
+            env["snapshot_after"] = snapshot_after
+
+        self.events.publish(
+            "action_finished",
+            {"verb": verb, "target": target, "request_id": request_id,
+             "ok": bool(env.get("ok")), "snapshot_after": snapshot_after},
+            source="daemon",
+        )
+
+        from phonectl.daemon import records as _records
+        rec = _records.build_record(env, params, action_id=uuid.uuid4().hex, now=self._now)
+        rec["snapshot_before"] = snapshot_before
+        rec["snapshot_after"] = snapshot_after
+        self._append_record(rec)
+        return env
+
+    def _run_observe(self, params):
+        reg, session, conn = self._warm_triple()
+        if hasattr(conn, "ensure"):
+            conn.ensure()
+        snap = observer.observe(reg, session, **{
+            k: params[k] for k in ("screenshot", "snap_path", "tree", "relations")
+            if k in params
+        })
+        snapshot_id = self.snapshots.put(snap)
+        return results.ok(
+            capability="ui.observe",
+            provider=getattr(reg, "last_used", None) or "adb",
+            data=snap,
+            snapshot_id=snapshot_id,
+        )
+
+    def _run_find(self, params):
+        reg, session, conn = self._warm_triple()
+        if hasattr(conn, "ensure"):
+            conn.ensure()
+        observer.observe(reg, session)
+        matches = session.find(params.get("selector", {}))
+        return results.ok(capability="ui.find", data={"matches": matches})
 
     # ── core dispatch ───────────────────────────────────────────────────────
 

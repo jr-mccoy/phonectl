@@ -57,6 +57,16 @@ def _srv(tmp_path):
     return DaemonServer(config.load(), build=lambda cfg: (registry, session, _FakeConn()))
 
 
+def _submit_run_poll(srv, method, params, rid="j1"):
+    """Drive an async job to completion synchronously: submit -> run_next -> poll."""
+    acc = json.loads(srv.handle_line(_req(method, params, rid)))
+    assert acc["ok"] is True, acc
+    job_id = acc["data"]["job_id"]
+    assert srv.jobs.run_next() is True
+    polled = json.loads(srv.handle_line(_req("job_poll", {"job_id": job_id})))
+    return acc, polled
+
+
 # ── Task 3: handle_line basics ─────────────────────────────────────────────
 
 def test_handle_line_ping(tmp_path, monkeypatch):
@@ -135,13 +145,10 @@ def test_act_reuses_one_registry_across_two_calls(tmp_path, monkeypatch):
         return registry, session, _FakeConn()
 
     srv = DaemonServer(config.load(), build=build)
-    rid = "x1"
-    line = json.dumps({"method": "act",
-                       "params": {"verb": "tap", "target": {"i": 0}, "i": 0},
-                       "request_id": rid, "timeout": 2.0, "version": PROTOCOL_VERSION})
-    r1 = json.loads(srv.handle_line(line))
-    r2 = json.loads(srv.handle_line(line))
-    assert r1["ok"] is True and r2["ok"] is True
+    _acc1, polled1 = _submit_run_poll(srv, "act", {"verb": "tap", "target": {"i": 0}, "i": 0}, rid="x1")
+    _acc2, polled2 = _submit_run_poll(srv, "act", {"verb": "tap", "target": {"i": 0}, "i": 0}, rid="x2")
+    assert polled1["data"]["result"]["ok"] is True
+    assert polled2["data"]["result"]["ok"] is True
     assert build_calls["n"] == 1  # warm triple built once, reused by run_action
 
 
@@ -157,8 +164,8 @@ def test_capabilities_method(tmp_path, monkeypatch):
 def test_observe_method_returns_snapshot(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    resp = json.loads(srv.handle_line(_req("observe")))
-    assert resp["ok"] is True and "hash" in resp["data"]
+    _acc, polled = _submit_run_poll(srv, "observe", {})
+    assert "hash" in polled["data"]["result"]["data"]
 
 
 def test_stop_then_resume_toggles_sentinel(tmp_path, monkeypatch):
@@ -185,20 +192,6 @@ def test_status_method(tmp_path, monkeypatch):
     assert resp["ok"] is True
     assert resp["data"]["protocol_version"] == PROTOCOL_VERSION
     assert "ping" in resp["data"]["methods"]
-
-
-# ── Task 6: run records ────────────────────────────────────────────────────
-
-def test_act_appends_run_record(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl.daemon import records
-    srv = _srv(tmp_path)
-    line = json.dumps({"method": "act", "params": {"verb": "tap", "target": {"i": 0}, "i": 0},
-                       "request_id": "rr", "timeout": 2.0, "version": PROTOCOL_VERSION})
-    srv.handle_line(line)
-    rows = records.read()
-    assert len(rows) == 1
-    assert rows[0]["verb"] == "tap" and rows[0]["request_id"] == "rr"
 
 
 # ── Task 9: bind / shutdown lifecycle ─────────────────────────────────────
@@ -231,18 +224,18 @@ def _observe_line():
 def test_observe_returns_snapshot_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    out = json.loads(srv.handle_line(_observe_line()))
-    assert out["ok"] is True
-    assert out["snapshot_id"] == "snap_1"
+    _acc, polled = _submit_run_poll(srv, "observe", {}, rid="r1")
+    assert polled["ok"] is True
+    assert polled["data"]["result"]["snapshot_id"] == "snap_1"
 
 
 def test_second_observe_increments_snapshot_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    first = json.loads(srv.handle_line(_observe_line()))
-    second = json.loads(srv.handle_line(_observe_line()))
-    assert first["snapshot_id"] == "snap_1"
-    assert second["snapshot_id"] == "snap_2"
+    _acc1, polled1 = _submit_run_poll(srv, "observe", {}, rid="r1")
+    _acc2, polled2 = _submit_run_poll(srv, "observe", {}, rid="r2")
+    assert polled1["data"]["result"]["snapshot_id"] == "snap_1"
+    assert polled2["data"]["result"]["snapshot_id"] == "snap_2"
     assert srv.snapshots.current_id == "snap_2"
 
 
@@ -251,12 +244,14 @@ def test_second_observe_increments_snapshot_id(tmp_path, monkeypatch):
 def test_act_rejects_stale_snapshot_id_before_running(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))   # snap_1 (current)
+    _submit_run_poll(srv, "observe", {}, rid="obs1")   # snap_1 (current)
     # Pin a stale id that is no longer current.
-    line = json.dumps({"method": "act",
-                       "params": {"verb": "tap", "target": "i=0", "snapshot_id": "snap_0", "yes": True},
-                       "request_id": "r2"})
-    out = json.loads(srv.handle_line(line))
+    _acc, polled = _submit_run_poll(
+        srv, "act",
+        {"verb": "tap", "target": "i=0", "snapshot_id": "snap_0", "yes": True},
+        rid="r2",
+    )
+    out = polled["data"]["result"]
     assert out["ok"] is False
     assert out["error"]["code"] == "stale_snapshot"
     assert "re-observe" in out["error"]["user_action"].lower()
@@ -267,11 +262,13 @@ def test_act_rejects_stale_snapshot_id_before_running(tmp_path, monkeypatch):
 def test_act_returns_before_and_after_snapshot_ids(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))   # snap_1 current
-    line = json.dumps({"method": "act",
-                       "params": {"verb": "tap", "target": "i=0", "yes": True},
-                       "request_id": "r3"})
-    out = json.loads(srv.handle_line(line))
+    _submit_run_poll(srv, "observe", {}, rid="obs1")   # snap_1 current
+    _acc, polled = _submit_run_poll(
+        srv, "act",
+        {"verb": "tap", "target": "i=0", "yes": True},
+        rid="r3",
+    )
+    out = polled["data"]["result"]
     assert out["ok"] is True
     assert out["snapshot_before"] == "snap_1"
     assert out["snapshot_after"] == "snap_2"
@@ -282,10 +279,8 @@ def test_act_returns_before_and_after_snapshot_ids(tmp_path, monkeypatch):
 def test_act_backfills_runs_jsonl_snapshot_fields(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))
-    srv.handle_line(json.dumps({"method": "act",
-                    "params": {"verb": "tap", "target": "i=0", "yes": True},
-                    "request_id": "r4"}))
+    _submit_run_poll(srv, "observe", {}, rid="obs1")
+    _submit_run_poll(srv, "act", {"verb": "tap", "target": "i=0", "yes": True}, rid="r4")
     runs = (tmp_path / "runs.jsonl").read_text().strip().splitlines()
     rec = json.loads(runs[-1])
     assert rec["snapshot_before"] == "snap_1"
@@ -297,10 +292,8 @@ def test_act_backfills_runs_jsonl_snapshot_fields(tmp_path, monkeypatch):
 def test_act_emits_started_and_finished_events(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))
-    srv.handle_line(json.dumps({"method": "act",
-                    "params": {"verb": "tap", "target": "i=0", "yes": True},
-                    "request_id": "r5"}))
+    _submit_run_poll(srv, "observe", {}, rid="obs1")
+    _submit_run_poll(srv, "act", {"verb": "tap", "target": "i=0", "yes": True}, rid="r5")
     out = srv.events.poll(since=0)
     types = [e["type"] for e in out["events"]]
     assert "action_started" in types
@@ -332,10 +325,8 @@ def test_bind_and_shutdown_emit_lifecycle_events(tmp_path, monkeypatch):
 def test_events_poll_returns_events_and_cursor(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))
-    srv.handle_line(json.dumps({"method": "act",
-                    "params": {"verb": "tap", "target": "i=0", "yes": True},
-                    "request_id": "r6"}))
+    _submit_run_poll(srv, "observe", {}, rid="obs1")
+    _submit_run_poll(srv, "act", {"verb": "tap", "target": "i=0", "yes": True}, rid="r6")
     out = json.loads(srv.handle_line(json.dumps(
         {"method": "events_poll", "params": {"since": 0}, "request_id": "r7"})))
     assert out["ok"] is True
@@ -348,10 +339,8 @@ def test_events_poll_returns_events_and_cursor(tmp_path, monkeypatch):
 def test_events_poll_since_cursor_returns_only_newer(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     srv = _srv(tmp_path)
-    json.loads(srv.handle_line(_observe_line()))
-    srv.handle_line(json.dumps({"method": "act",
-                    "params": {"verb": "tap", "target": "i=0", "yes": True},
-                    "request_id": "r8"}))
+    _submit_run_poll(srv, "observe", {}, rid="obs1")
+    _submit_run_poll(srv, "act", {"verb": "tap", "target": "i=0", "yes": True}, rid="r8")
     first = json.loads(srv.handle_line(json.dumps(
         {"method": "events_poll", "params": {"since": 0}, "request_id": "r9"})))
     cursor = first["data"]["cursor"]
@@ -359,3 +348,56 @@ def test_events_poll_since_cursor_returns_only_newer(tmp_path, monkeypatch):
         {"method": "events_poll", "params": {"since": cursor}, "request_id": "r10"})))
     assert again["data"]["events"] == []
     assert again["data"]["cursor"] == cursor
+
+
+# ── Task 5 new tests: async job submission + job_poll ─────────────────────
+
+def test_act_submit_returns_job_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    acc = json.loads(srv.handle_line(_req("act", {"verb": "tap", "target": {"i": 0}, "i": 0})))
+    assert acc["ok"] is True
+    assert acc["data"]["status"] == "accepted"
+    assert isinstance(acc["data"]["job_id"], str) and acc["data"]["job_id"]
+
+
+def test_act_job_poll_returns_result_when_done(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    _acc, polled = _submit_run_poll(srv, "act", {"verb": "tap", "target": {"i": 0}, "i": 0})
+    assert polled["ok"] is True
+    assert polled["data"]["status"] == "done"
+    assert polled["data"]["result"]["ok"] is True
+
+
+def test_observe_job_poll_returns_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    _acc, polled = _submit_run_poll(srv, "observe", {})
+    assert polled["data"]["status"] == "done"
+    assert "hash" in polled["data"]["result"]["data"]
+    assert "snapshot_id" in polled["data"]["result"]
+
+
+def test_job_poll_unknown_id_is_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("job_poll", {"job_id": "nope"})))
+    assert resp["ok"] is False
+    assert resp["error"]["code"] == "unknown_job"
+
+
+def test_act_via_worker_appends_one_run_record(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.daemon import records
+    srv = _srv(tmp_path)
+    _submit_run_poll(srv, "act", {"verb": "tap", "target": {"i": 0}, "i": 0}, rid="rr")
+    rows = records.read()
+    assert len(rows) == 1
+    assert rows[0]["verb"] == "tap"
+
+
+def test_act_is_not_in_handle_line_mutating_set():
+    from phonectl.daemon import rpc as rpc_mod
+    assert "act" not in rpc_mod.MUTATING
+    assert "stop" in rpc_mod.MUTATING and "resume" in rpc_mod.MUTATING
