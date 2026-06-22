@@ -18,6 +18,7 @@ from phonectl import (
 )
 from phonectl.adb_backend import AdbBackend
 from phonectl.providers.registry import ProviderRegistry
+from phonectl.providers.termux import TermuxApiProvider
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
 
@@ -26,9 +27,19 @@ def _make_backend(cfg) -> AdbBackend:
     return AdbBackend(serial=cfg.get("serial"))
 
 
+def _make_termux_provider():
+    p = TermuxApiProvider()
+    return p if p.is_available() else None
+
+
 def build_runtime(cfg, backend=None):
-    raw = backend or _make_backend(cfg)
-    registry = raw if isinstance(raw, ProviderRegistry) else ProviderRegistry([raw])
+    adb = backend or _make_backend(cfg)
+    if isinstance(adb, ProviderRegistry):
+        registry = adb
+    else:
+        termux = _make_termux_provider()
+        providers = [p for p in [termux, adb] if p is not None]
+        registry = ProviderRegistry(providers)
     session = Session()
     conn = Connection(registry, cfg)
     return registry, session, conn
@@ -442,6 +453,78 @@ def _cmd_get_text_in_region(args):
     return 0
 
 
+def _cmd_device_battery(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    p = registry.for_capability("device_battery")
+    if p is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("device_battery not available"),
+            capability="device.battery",
+            user_action="Install Termux:API and run 'phonectl setup termux-api'.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    data = p.battery_status()
+    env = results.ok(capability="device.battery", provider=type(p).__name__, data=data)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"Battery: {data.get('percentage')}% ({data.get('status')})")
+    return 0
+
+
+def _cmd_device_wifi(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    p = registry.for_capability("device_wifi_info")
+    if p is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("device_wifi_info not available"),
+            capability="device.wifi",
+            user_action="Install Termux:API and run 'phonectl setup termux-api'.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    data = p.wifi_info()
+    env = results.ok(capability="device.wifi", provider=type(p).__name__, data=data)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"WiFi: ssid={data.get('ssid')} ip={data.get('ip')}")
+    return 0
+
+
+def _cmd_tts_speak(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    p = registry.for_capability("tts_speak")
+    if p is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("tts_speak not available"),
+            capability="tts.speak",
+            user_action="Install Termux:API and run 'phonectl setup termux-api'.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    p.tts_speak(args.text,
+                language=getattr(args, "language", None),
+                rate=getattr(args, "rate", None))
+    env = results.ok(capability="tts.speak", provider=type(p).__name__)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    return 0
+
+
 def _cmd_mcp(args):
     from phonectl import mcp_server
 
@@ -835,6 +918,28 @@ def build_parser() -> argparse.ArgumentParser:
     getir.add_argument("--json", action="store_true")
     getir.set_defaults(func=_cmd_get_text_in_region)
     ge.set_defaults(func=lambda args: (ge.print_help(), 2)[1])
+
+    # device subcommand group
+    dv = sub.add_parser("device")
+    dvsub = dv.add_subparsers(dest="device_cmd")
+    dvb = dvsub.add_parser("battery")
+    dvb.add_argument("--json", action="store_true")
+    dvb.set_defaults(func=_cmd_device_battery)
+    dvw = dvsub.add_parser("wifi")
+    dvw.add_argument("--json", action="store_true")
+    dvw.set_defaults(func=_cmd_device_wifi)
+    dv.set_defaults(func=lambda args: (dv.print_help(), 2)[1])
+
+    # tts subcommand group
+    tt = sub.add_parser("tts")
+    ttsub = tt.add_subparsers(dest="tts_cmd")
+    tts = ttsub.add_parser("speak")
+    tts.add_argument("text")
+    tts.add_argument("--language", default=None)
+    tts.add_argument("--rate", type=float, default=None)
+    tts.add_argument("--json", action="store_true")
+    tts.set_defaults(func=_cmd_tts_speak)
+    tt.set_defaults(func=lambda args: (tt.print_help(), 2)[1])
 
     # packages subcommand group
     pk = sub.add_parser("packages")
