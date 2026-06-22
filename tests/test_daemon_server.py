@@ -220,3 +220,142 @@ def test_bind_publishes_daemon_json_and_shutdown_removes_it(tmp_path, monkeypatc
     srv.shutdown()
     assert discovery.read() is None
     assert sock.closed is True
+
+
+# ── Task 2: observe mints snapshot_id ─────────────────────────────────────
+
+def _observe_line():
+    return json.dumps({"method": "observe", "params": {}, "request_id": "r1"})
+
+
+def test_observe_returns_snapshot_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    out = json.loads(srv.handle_line(_observe_line()))
+    assert out["ok"] is True
+    assert out["snapshot_id"] == "snap_1"
+
+
+def test_second_observe_increments_snapshot_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    first = json.loads(srv.handle_line(_observe_line()))
+    second = json.loads(srv.handle_line(_observe_line()))
+    assert first["snapshot_id"] == "snap_1"
+    assert second["snapshot_id"] == "snap_2"
+    assert srv.snapshots.current_id == "snap_2"
+
+
+# ── Task 3: stale-index protection ────────────────────────────────────────
+
+def test_act_rejects_stale_snapshot_id_before_running(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))   # snap_1 (current)
+    # Pin a stale id that is no longer current.
+    line = json.dumps({"method": "act",
+                       "params": {"verb": "tap", "target": "i=0", "snapshot_id": "snap_0", "yes": True},
+                       "request_id": "r2"})
+    out = json.loads(srv.handle_line(line))
+    assert out["ok"] is False
+    assert out["error"]["code"] == "stale_snapshot"
+    assert "re-observe" in out["error"]["user_action"].lower()
+
+
+# ── Task 4: snapshot_before/after on act + runs.jsonl ─────────────────────
+
+def test_act_returns_before_and_after_snapshot_ids(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))   # snap_1 current
+    line = json.dumps({"method": "act",
+                       "params": {"verb": "tap", "target": "i=0", "yes": True},
+                       "request_id": "r3"})
+    out = json.loads(srv.handle_line(line))
+    assert out["ok"] is True
+    assert out["snapshot_before"] == "snap_1"
+    assert out["snapshot_after"] == "snap_2"
+    assert out["snapshot_before"] != out["snapshot_after"]
+    assert srv.snapshots.current_id == "snap_2"
+
+
+def test_act_backfills_runs_jsonl_snapshot_fields(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))
+    srv.handle_line(json.dumps({"method": "act",
+                    "params": {"verb": "tap", "target": "i=0", "yes": True},
+                    "request_id": "r4"}))
+    runs = (tmp_path / "runs.jsonl").read_text().strip().splitlines()
+    rec = json.loads(runs[-1])
+    assert rec["snapshot_before"] == "snap_1"
+    assert rec["snapshot_after"] == "snap_2"
+
+
+# ── Task 6: action_started/finished + lifecycle events ────────────────────
+
+def test_act_emits_started_and_finished_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))
+    srv.handle_line(json.dumps({"method": "act",
+                    "params": {"verb": "tap", "target": "i=0", "yes": True},
+                    "request_id": "r5"}))
+    out = srv.events.poll(since=0)
+    types = [e["type"] for e in out["events"]]
+    assert "action_started" in types
+    assert "action_finished" in types
+    started = next(e for e in out["events"] if e["type"] == "action_started")
+    assert started["data"]["request_id"] == "r5"
+    assert started["source"] == "daemon"
+    finished = next(e for e in out["events"] if e["type"] == "action_finished")
+    assert finished["data"]["ok"] is True
+
+
+def test_bind_and_shutdown_emit_lifecycle_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+
+    class FakeServerSock:
+        def getsockname(self): return ("127.0.0.1", 54321)
+        def close(self): pass
+
+    srv.bind(server_factory=lambda h: FakeServerSock())   # threadless/socketless
+    srv.shutdown()
+    phases = [e["data"]["phase"] for e in srv.events.poll(since=0)["events"]
+              if e["type"] == "lifecycle"]
+    assert phases == ["started", "stopped"]
+
+
+# ── Task 8: events_poll RPC ───────────────────────────────────────────────
+
+def test_events_poll_returns_events_and_cursor(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))
+    srv.handle_line(json.dumps({"method": "act",
+                    "params": {"verb": "tap", "target": "i=0", "yes": True},
+                    "request_id": "r6"}))
+    out = json.loads(srv.handle_line(json.dumps(
+        {"method": "events_poll", "params": {"since": 0}, "request_id": "r7"})))
+    assert out["ok"] is True
+    assert "events" in out["data"] and "cursor" in out["data"]
+    types = [e["type"] for e in out["data"]["events"]]
+    assert "action_started" in types and "action_finished" in types
+    assert out["data"]["cursor"] == out["data"]["events"][-1]["seq"]
+
+
+def test_events_poll_since_cursor_returns_only_newer(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    json.loads(srv.handle_line(_observe_line()))
+    srv.handle_line(json.dumps({"method": "act",
+                    "params": {"verb": "tap", "target": "i=0", "yes": True},
+                    "request_id": "r8"}))
+    first = json.loads(srv.handle_line(json.dumps(
+        {"method": "events_poll", "params": {"since": 0}, "request_id": "r9"})))
+    cursor = first["data"]["cursor"]
+    again = json.loads(srv.handle_line(json.dumps(
+        {"method": "events_poll", "params": {"since": cursor}, "request_id": "r10"})))
+    assert again["data"]["events"] == []
+    assert again["data"]["cursor"] == cursor
