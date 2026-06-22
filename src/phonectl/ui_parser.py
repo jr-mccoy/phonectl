@@ -151,6 +151,26 @@ def parse_relations(xml: str) -> dict:
     return {"parent": parent, "children": children, "siblings": siblings, "ancestors": ancestors}
 
 
+def extract_list(elements: list, *, container_i=None, relations=None) -> list:
+    """Return child elements of a scrollable list container using spatial containment."""
+    if not elements:
+        return []
+    container = None
+    if container_i is not None:
+        container = next((e for e in elements if e["i"] == container_i), None)
+    if container is None:
+        container = next((e for e in elements if e.get("scrollable")), None)
+    if container is None:
+        return []
+    x1, y1, x2, y2 = container["bounds"]
+    return [
+        e for e in elements
+        if e["i"] != container["i"]
+        and x1 <= e["center"][0] <= x2
+        and y1 <= e["center"][1] <= y2
+    ]
+
+
 _SELECTOR_KEYS = {
     "text", "text_regex", "content_desc", "resource_id", "id", "class", "ancestor_text",
     "sibling_text", "bounds_near", "nth_match", "clickable", "enabled", "focused", "checkable",

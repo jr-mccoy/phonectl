@@ -204,3 +204,48 @@ def test_parse_mdns_services_extracts_host_ports():
 def test_parse_mdns_services_empty_when_none_found():
     assert ui_parser.parse_mdns_services("List of discovered mdns services\n") == []
     assert ui_parser.parse_mdns_services("") == []
+
+
+# ── Task 1: extract_list ──────────────────────────────────────────────────────
+
+def _make_el(i, text, bounds, scrollable=False, clickable=True):
+    x1, y1, x2, y2 = bounds
+    return {
+        "i": i, "text": text, "id": "", "class": "android.view.View",
+        "content_desc": "", "clickable": clickable, "enabled": True,
+        "focused": False, "checkable": False, "checked": False,
+        "scrollable": scrollable, "long_clickable": False, "password": False,
+        "selected": False, "editable": False, "package": "",
+        "bounds": list(bounds), "center": [(x1+x2)//2, (y1+y2)//2],
+    }
+
+
+def test_extract_list_finds_children_of_scrollable_container():
+    container = _make_el(0, "", [0, 100, 1080, 900], scrollable=True, clickable=False)
+    row1 = _make_el(1, "Row A", [10, 120, 1070, 180])
+    row2 = _make_el(2, "Row B", [10, 190, 1070, 250])
+    outside = _make_el(3, "Outside", [0, 0, 1080, 90])
+    elements = [container, row1, row2, outside]
+    rows = ui_parser.extract_list(elements)
+    texts = [r["text"] for r in rows]
+    assert "Row A" in texts
+    assert "Row B" in texts
+    assert "Outside" not in texts
+    assert "" not in texts  # container itself excluded
+
+
+def test_extract_list_with_explicit_container_i():
+    container = _make_el(0, "", [0, 100, 1080, 900], scrollable=True, clickable=False)
+    row1 = _make_el(1, "Item 1", [10, 120, 1070, 180])
+    elements = [container, row1]
+    rows = ui_parser.extract_list(elements, container_i=0)
+    assert any(r["text"] == "Item 1" for r in rows)
+
+
+def test_extract_list_returns_empty_when_no_scrollable():
+    el = _make_el(0, "plain text", [0, 0, 100, 50])
+    assert ui_parser.extract_list([el]) == []
+
+
+def test_extract_list_returns_empty_for_empty_input():
+    assert ui_parser.extract_list([]) == []
