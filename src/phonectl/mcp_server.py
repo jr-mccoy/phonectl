@@ -198,6 +198,89 @@ def packages_clear(build=_default_build, *, package, confirm=False, dry_run=Fals
     return PackageProvider(_as_registry(backend)).clear(package, build=build, yes=confirm, cfg=cfg)
 
 
+def named_swipe(build=_default_build, *, direction, distance_pct=0.5, ms=400,
+                within_index=None, dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "named_swipe",
+        lambda b, s: actuator.named_swipe(b, s, direction, distance_pct=distance_pct,
+                                           ms=ms, within_i=within_index),
+        {"direction": direction},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def long_press(build=_default_build, *, index=None, selector=None, x=None, y=None,
+               duration_ms=1000, dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "long_press",
+        lambda b, s: actuator.long_press(b, s, i=index, selector=selector, x=x, y=y,
+                                          duration_ms=duration_ms),
+        {"i": index, "x": x, "y": y},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def double_tap(build=_default_build, *, index=None, selector=None, x=None, y=None,
+               interval_ms=100, dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "double_tap",
+        lambda b, s: actuator.double_tap(b, s, i=index, selector=selector, x=x, y=y,
+                                          interval_ms=interval_ms),
+        {"i": index, "x": x, "y": y},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def drag(build=_default_build, *, x1, y1, x2, y2, duration_ms=500,
+         dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "drag",
+        lambda b, s: actuator.drag(b, s, x1, y1, x2, y2, duration_ms),
+        {"coords": [x1, y1, x2, y2]},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def fling(build=_default_build, *, direction, dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "fling",
+        lambda b, s: actuator.fling(b, s, direction),
+        {"direction": direction},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def scroll(build=_default_build, *, direction, within_index=None,
+           distance_pct=0.5, dry_run=False, confirm=False) -> dict:
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "scroll",
+        lambda b, s: actuator.scroll(b, s, direction, within_i=within_index,
+                                      distance_pct=distance_pct),
+        {"direction": direction},
+        build=build, yes=confirm, cfg=cfg,
+    )
+
+
+def scroll_until_mcp(build=_default_build, *, direction="down", text=None,
+                     selector=None, max_scrolls=10, within_index=None) -> dict:
+    try:
+        backend, session, conn = build(config.load())
+        conn.ensure()
+        snap = actuator.scroll_until(backend, session, direction,
+                                     text=text, selector=selector,
+                                     max_scrolls=max_scrolls,
+                                     within_i=within_index)
+        return results.ok(capability="gesture.scroll_until", provider="adb", data=snap)
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
 def policy_explain(build=_default_build, *, verb="tap", index=None, selector=None, x=None, y=None) -> dict:
     try:
         backend, session, conn = build(config.load())
@@ -274,6 +357,14 @@ TOOLS = {
     "phone_packages_launch": {"description": "Launch an app by package name.", "schema": _schema(package={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": packages_launch, "needs_build": True},
     "phone_packages_stop": {"description": "Force-stop a package (high risk).", "schema": _schema(package={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": packages_stop, "needs_build": True},
     "phone_packages_clear": {"description": "Clear package data (critical risk; confirm=true required).", "schema": _schema(package={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": packages_clear, "needs_build": True},
+    # Phase 3.3: gesture primitives
+    "phone_named_swipe": {"description": "Swipe in a named direction (up/down/left/right) with density-aware scaling.", "schema": _schema(direction={"type": "string"}, distance_pct={"type": "number"}, ms={"type": "integer"}, within_index={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": named_swipe, "needs_build": True},
+    "phone_long_press": {"description": "Long-press by element index, selector, or coordinates.", "schema": _schema(index={"type": "integer"}, selector={"type": "object"}, x={"type": "integer"}, y={"type": "integer"}, duration_ms={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": long_press, "needs_build": True},
+    "phone_double_tap": {"description": "Double-tap by element index, selector, or coordinates.", "schema": _schema(index={"type": "integer"}, selector={"type": "object"}, x={"type": "integer"}, y={"type": "integer"}, interval_ms={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": double_tap, "needs_build": True},
+    "phone_drag": {"description": "Drag from (x1,y1) to (x2,y2) using a long-duration swipe.", "schema": _schema(x1={"type": "integer"}, y1={"type": "integer"}, x2={"type": "integer"}, y2={"type": "integer"}, duration_ms={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": drag, "needs_build": True},
+    "phone_fling": {"description": "Fling in a direction with velocity-scaled speed.", "schema": _schema(direction={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": fling, "needs_build": True},
+    "phone_scroll": {"description": "Scroll in a direction, optionally within a scrollable container.", "schema": _schema(direction={"type": "string"}, within_index={"type": "integer"}, distance_pct={"type": "number"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": scroll, "needs_build": True},
+    "phone_scroll_until": {"description": "Scroll until text or selector appears, or max_scrolls is exhausted.", "schema": _schema(direction={"type": "string"}, text={"type": "string"}, selector={"type": "object"}, max_scrolls={"type": "integer"}, within_index={"type": "integer"}), "handler": scroll_until_mcp, "needs_build": True},
 }
 
 

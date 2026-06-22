@@ -26,6 +26,8 @@ class FakeBackend:
     def input_text(self, t): self.calls.append(("text", t))
     def input_key(self, k): self.calls.append(("key", k))
     def input_swipe(self, x1, y1, x2, y2, ms=200): self.calls.append(("swipe", x1, y1, x2, y2))
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400): self.calls.append(("named_swipe", direction))
+    def input_long_press(self, x, y, duration_ms=1000): self.calls.append(("long_press", x, y))
     def launch(self, pkg): self.calls.append(("launch", pkg))
     def screencap(self, path): return path
     def capabilities(self): return capabilities.make(
@@ -352,3 +354,22 @@ def test_packages_list_emits_ok(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert out["ok"] is True
     assert "com.a" in out["data"]["packages"]
+
+
+# --- Task 6: new gesture CLI verbs ---
+
+def test_swipe_named_direction(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["swipe", "up", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+
+
+def test_scroll_until_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["scroll-until", "--text", "NotHere", "--max", "1", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
