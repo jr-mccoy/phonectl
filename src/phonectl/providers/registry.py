@@ -39,6 +39,12 @@ class ProviderRegistry:
         p = self.for_capability("requires_adb")
         return getattr(p, "serial", None) if p else None
 
+    @serial.setter
+    def serial(self, value) -> None:
+        p = self.for_capability("requires_adb")
+        if p is not None:
+            p.serial = value
+
     def _require(self, cap: str):
         p = self.for_capability(cap)
         if p is None:
