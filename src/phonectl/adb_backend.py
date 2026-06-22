@@ -59,6 +59,12 @@ class AdbBackend:
         self._adb("shell", "monkey", "-p", package,
                   "-c", "android.intent.category.LAUNCHER", "1")
 
+    def clipboard_write(self, text: str) -> None:
+        self._adb("shell", "service", "call", "clipboard", "2", "s16", shlex.quote(text))
+
+    def clipboard_read(self) -> str:
+        return self._adb("shell", "service", "call", "clipboard", "1")
+
     def get_state(self) -> str:
         return self._adb("get-state").strip()
 

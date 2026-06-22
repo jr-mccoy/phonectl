@@ -130,3 +130,15 @@ def test_adb_capabilities_include_new_keys():
     assert caps["intent_start"] is True
     assert caps["intent_broadcast"] is True
     assert caps["read_clipboard"] is False
+
+
+def test_clipboard_write_calls_service_call():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).clipboard_write("hello world")
+    assert any("service" in str(c[0]) and "clipboard" in str(c[0]) for c in calls)
+
+
+def test_clipboard_read_calls_service_call():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).clipboard_read()
+    assert any("service" in str(c[0]) and "clipboard" in str(c[0]) for c in calls)
