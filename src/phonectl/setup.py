@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from copy import deepcopy
 
 from phonectl import config
 
@@ -54,6 +55,15 @@ _MODULE_META = {
 }
 
 
+def _connect_without_persisting(conn, addr: str) -> dict:
+    before = deepcopy(conn.cfg)
+    try:
+        conn.connect(addr, persist=False)
+    except TypeError:
+        conn.connect(addr)
+    return before
+
+
 def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.exists) -> int:
     out("phonectl setup — let's get your phone connected.")
 
@@ -70,13 +80,20 @@ def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.
     if hasattr(conn, "rediscover") and conn.cfg.get("serial"):
         answer = prompt(f"Last serial {conn.cfg['serial']} is offline. Try reconnecting? [Y/n]: ").strip().lower()
         if answer in ("", "y", "yes"):
-            conn.rediscover()
+            reconnect_failed = False
+            try:
+                conn.rediscover()
+            except ConnectionError:
+                reconnect_failed = True
             if conn.backend.get_state() == "device":
                 conn.cfg.setdefault("mode", "auto")
                 config.save(conn.cfg)
                 out(f"phonectl: reconnected (serial={conn.backend.serial}).")
                 return 0
-            out("phonectl: reconnect failed; falling back to full pairing.")
+            if not reconnect_failed:
+                reconnect_failed = True
+            if reconnect_failed:
+                out("phonectl: reconnect failed; falling back to full pairing.")
 
     out(WIRELESS_GUIDANCE)
     pair_addr = prompt("Pairing host:port (e.g. 127.0.0.1:37000): ").strip()
@@ -84,13 +101,16 @@ def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.
     conn.pair(pair_addr, code)
 
     connect_addr = prompt("Connect host:port (e.g. 127.0.0.1:41000): ").strip()
-    conn.connect(connect_addr)
+    before_connect_cfg = _connect_without_persisting(conn, connect_addr)
 
     state = conn.backend.get_state()
     if state != "device":
+        conn.cfg.clear()
+        conn.cfg.update(before_connect_cfg)
         out(f"phonectl: device did not come online (get-state={state!r}). Re-check Wireless debugging and re-run: phonectl setup")
         return 2
 
+    conn.cfg["serial"] = conn.backend.serial or connect_addr
     conn.cfg.setdefault("mode", "auto")
     if ":" in connect_addr:
         conn.cfg["last_port"] = connect_addr.rsplit(":", 1)[-1]

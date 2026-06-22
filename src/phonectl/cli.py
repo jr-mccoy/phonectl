@@ -182,6 +182,10 @@ def _cmd_reconnect(args):
 def _cmd_doctor(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
+    if getattr(args, "bundle", None):
+        path = diagnostics.bundle(args.bundle, backend, cfg)
+        print(f"phonectl: diagnostics bundle written to {path}")
+        return 0
     try:
         conn.ensure()
     except ConnectionError as e:
@@ -198,10 +202,6 @@ def _cmd_doctor(args):
         "state": backend.get_state(),
         "capabilities": backend.capabilities(),
     }
-    if getattr(args, "bundle", None):
-        path = diagnostics.bundle(args.bundle, backend, cfg)
-        print(f"phonectl: diagnostics bundle written to {path}")
-        return 0
     if getattr(args, "json", False):
         print(json.dumps(results.ok(provider="adb", data=data), indent=2))
     else:

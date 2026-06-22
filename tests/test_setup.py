@@ -188,3 +188,61 @@ def test_run_module_reports_without_pairing(tmp_path, monkeypatch):
     assert rc == 0
     assert conn.pairs == [] and conn.connects == []
     assert any("notification" in line.lower() for line in out_lines)
+
+
+def test_rediscover_error_falls_back_to_pairing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    class RediscoverFailsConn(RecordingConn):
+        def __init__(self):
+            super().__init__(states=["offline", "offline", "device"], cfg={"serial": "old:5555"})
+            self.rediscovers = 0
+
+        def rediscover(self):
+            self.rediscovers += 1
+            raise ConnectionError("no device")
+
+    conn = RediscoverFailsConn()
+    out_lines, out = collector()
+    rc = setup.run_setup(
+        conn,
+        prompt=scripted(["y", "127.0.0.1:37000", "482913", "127.0.0.1:41000"]),
+        out=out,
+        which=lambda name: "/usr/bin/adb",
+        exists=lambda path: True,
+    )
+    assert rc == 0
+    assert conn.rediscovers == 1
+    assert conn.pairs == [("127.0.0.1:37000", "482913")]
+    assert conn.connects == ["127.0.0.1:41000"]
+    assert any("falling back" in line for line in out_lines)
+
+
+def test_verify_failure_with_real_connection_does_not_save_failed_serial(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.connection import Connection
+
+    class OfflineBackend:
+        def __init__(self):
+            self.serial = None
+            self.calls = []
+
+        def _adb(self, *args):
+            self.calls.append(args)
+
+        def get_state(self):
+            return "offline"
+
+    backend = OfflineBackend()
+    conn = Connection(backend, {})
+    rc = setup.run_setup(
+        conn,
+        prompt=scripted(["127.0.0.1:37000", "482913", "127.0.0.1:41000"]),
+        out=collector()[1],
+        which=lambda name: "/usr/bin/adb",
+        exists=lambda path: True,
+    )
+    assert rc == 2
+    assert backend.calls == [("pair", "127.0.0.1:37000", "482913"), ("connect", "127.0.0.1:41000")]
+    assert conn.cfg == {}
+    assert not (tmp_path / "config.json").exists()
