@@ -1,23 +1,34 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 3 → 7 + cross-cutting evaluation suite (all of Phase 1, Phase 2, and Phase 3 now written)
+**Status:** Authoring index for Phases 4 → 7 + cross-cutting evaluation suite (Phases 1–3 complete; all four Phase-4 plans now written)
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
 This document is the **instruction set for writing the remaining implementation plans**. **All four
-Phase-1 plans, all three Phase-2 plans, and all five Phase-3 plans are now written in full.** Phase 1: 1.1
+Phase-1 plans, all three Phase-2 plans, and all five Phase-3 plans are written and shipped
+(implemented + green); all four Phase-4 plans are now written.** Phase 1: 1.1
 (`2026-06-22-phonectl-structured-results-and-capabilities.md`), 1.2
 (`2026-06-22-phonectl-selector-and-tree-observation.md`), 1.3
 (`2026-06-22-phonectl-resilience-and-connection-recovery.md`), 1.4
 (`2026-06-22-phonectl-setup-and-diagnostics.md`). Phase 2: 2.1
 (`2026-06-22-phonectl-action-serialization-and-audit-v2.md`), 2.2
 (`2026-06-22-phonectl-risk-classifier-and-ledger.md`), 2.3
-(`2026-06-22-phonectl-structured-result-mcp-server.md`). Everything from Phase 3 onward is **scoped here**
+(`2026-06-22-phonectl-structured-result-mcp-server.md`). Phase 3: 3.1
+(`2026-06-21-phonectl-provider-capability-graph.md`), 3.2
+(`2026-06-21-phonectl-clipboard-intent-packages.md`), 3.3
+(`2026-06-21-phonectl-scroll-and-gestures.md`), 3.4
+(`2026-06-21-phonectl-structured-extraction.md`), 3.5
+(`2026-06-21-phonectl-termux-api-provider.md`). Phase 4 adopts a clearer plan-file naming
+convention — `phonectl-plan-<N.M>-<slug>.md` — so the plan number is obvious when browsing the repo: 4.1
+(`phonectl-plan-4.1-accessibility-native-provider.md`), 4.2
+(`phonectl-plan-4.2-notification-listener-provider.md`), 4.3
+(`phonectl-plan-4.3-foreground-service-transport-and-trust-ux.md`), 4.4
+(`phonectl-plan-4.4-ocr-provider.md`). Everything from Phase 5 onward is **scoped here**
 and turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order.
 
 ---
 
-## 0. Implementation tracker (updated 2026-06-21)
+## 0. Implementation tracker (updated 2026-06-22)
 
 Use this table before reading commit history. "Written" means the plan document exists; "Complete" means code/docs/tests have landed and the plan document has an implementation-status note.
 
@@ -30,17 +41,25 @@ Use this table before reading commit history. "Written" means the plan document 
 | 2.1 Action serialization + audit v2 | `2026-06-22-phonectl-action-serialization-and-audit-v2.md` | ✅ Complete | `f5415b4` → `b7328c4` |
 | 2.2 Risk classifier + risk ledger | `2026-06-22-phonectl-risk-classifier-and-ledger.md` | ✅ Complete | `162744d` → `69b57c8` |
 | 2.3 Structured-result MCP server | `2026-06-22-phonectl-structured-result-mcp-server.md` | ✅ Complete | `c0aa779` |
-| 3.1 Provider/capability graph refactor | `2026-06-21-phonectl-provider-capability-graph.md` | 📝 Written, not yet executed | — |
-| 3.2 Clipboard + intent/packages providers | `2026-06-21-phonectl-clipboard-intent-packages.md` | 📝 Written, not yet executed | — |
-| 3.3 Scroll-until + gestures | `2026-06-21-phonectl-scroll-and-gestures.md` | 📝 Written, not yet executed | — |
-| 3.4 Structured extraction APIs | `2026-06-21-phonectl-structured-extraction.md` | 📝 Written, not yet executed | — |
-| 3.5 Termux:API provider | `2026-06-21-phonectl-termux-api-provider.md` | 📝 Written, not yet executed | — |
+| 3.1 Provider/capability graph refactor | `2026-06-21-phonectl-provider-capability-graph.md` | ✅ Complete | `ed26d1e` → `841c4eb` (PR #15) |
+| 3.2 Clipboard + intent/packages providers | `2026-06-21-phonectl-clipboard-intent-packages.md` | ✅ Complete | `0038e3c` → `8ac0d79` (PR #18) |
+| 3.3 Scroll-until + gestures | `2026-06-21-phonectl-scroll-and-gestures.md` | ✅ Complete | `a96ca54` → `9ee1eb8` (PR #19) |
+| 3.4 Structured extraction APIs | `2026-06-21-phonectl-structured-extraction.md` | ✅ Complete | `c54b614` → `b8292a4` (PR #20) |
+| 3.5 Termux:API provider | `2026-06-21-phonectl-termux-api-provider.md` | ✅ Complete | `d69263f` → `193b441` (PR #21) |
+| 4.1 AccessibilityService native provider | `phonectl-plan-4.1-accessibility-native-provider.md` | 📝 Written, not yet executed | — |
+| 4.2 NotificationListenerService provider | `phonectl-plan-4.2-notification-listener-provider.md` | 📝 Written, not yet executed | — |
+| 4.3 Foreground-service transport + trust UX | `phonectl-plan-4.3-foreground-service-transport-and-trust-ux.md` | 📝 Written, not yet executed | — |
+| 4.4 Optional OCR provider | `phonectl-plan-4.4-ocr-provider.md` | 📝 Written, not yet executed | — |
 
-**Next unimplemented written plan:** Phase 3.1 provider/capability graph refactor (`2026-06-21-phonectl-provider-capability-graph.md`).
+**Next unimplemented written plan:** Phase 4.1 AccessibilityService native provider (`phonectl-plan-4.1-accessibility-native-provider.md`).
 
 ## 1. Authoring rules (apply to every plan written from this index)
 
-- **File name:** `docs/superpowers/plans/YYYY-MM-DD-phonectl-<slug>.md` (date = the day it is written).
+- **File name:** `docs/superpowers/plans/phonectl-plan-<N.M>-<slug>.md`, where `<N.M>` is the roadmap
+  plan number (e.g. `phonectl-plan-4.1-accessibility-native-provider.md`). This convention — adopted at
+  Phase 4 — leads with the plan number so files sort in roadmap order and each document's scope is
+  obvious when browsing the repo. Earlier plans (Phases 1–3) keep their original
+  `YYYY-MM-DD-phonectl-<slug>.md` names for traceability; **do not rename them.**
 - **Document template** (match `2026-06-22-phonectl-structured-results-and-capabilities.md` exactly):
   1. Title + the `> **For agentic workers:** REQUIRED SUB-SKILL …` banner.
   2. A "Plan N.M of the platform roadmap" line + **Goal / Architecture / Tech Stack**.
@@ -220,17 +239,49 @@ tools → docs). Original scope below, retained for traceability.
 (strategy §13.2, §19), never a hard dependency.
 *Files:* `providers/termux.py` (capability-gated). *Deps:* 3.1. *Strategy:* §13.2, §19.
 
-### Phase 4 (companion APK event providers) *(supersedes accessibility-backend)*
+### Phase 4 (companion APK event providers) *(supersedes accessibility-backend)* — ✅ all written
 
-**4.1 — AccessibilityService native provider** — native JSON tree + UI event stream + gesture dispatch +
-`ACTION_SET_TEXT`, satisfying `backend.Backend` and adding event capabilities; Python seam + an Android
-APK design spec (`android/`). *Strategy:* §11. *Deps:* 1.1 (Protocol), 3.1 (graph).
-**4.2 — NotificationListenerService provider** — `notifications list/wait/reply/dismiss` with per-
-notification reply capability flags (strategy §19, §20.3). *Deps:* 1.1, 2.2.
-**4.3 — Foreground-service transport + emergency-stop + trust UX** — low-latency localhost socket/IPC,
+These four plans introduce the companion-APK provider surface. They scope only the **Python-side
+provider seam plus an Android design spec** per plan; the Kotlin APK itself is built from those specs
+in a separate native effort. All four share one transport seam (`providers/transport.py`, born in 4.1):
+a request/response `Transport` Protocol with `request_id` / `timeout` / version / capability negotiation /
+stale-response protection, so a provider degrades cleanly when the companion is absent.
+
+**4.1 — AccessibilityService native provider** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-4.1-accessibility-native-provider.md` (8 tasks: `Transport`
+Protocol + in-proc fake → capability keys + `AccessibilityProvider` discovery → native JSON tree +
+pure `native_tree.to_compat_xml` for uiautomator-compatible `ui_dump` → gesture dispatch +
+`ACTION_SET_TEXT` → semantic node actions → UI event polling → `build_runtime` wiring (prepended above
+ADB for native observe/gesture) → Android APK design spec + docs). Native JSON tree + UI event stream +
+gesture dispatch + `ACTION_SET_TEXT`, satisfying `backend.Backend` and adding event capabilities; Python
+seam + an Android APK design spec (`android/`). *Strategy:* §11. *Deps:* 1.1 (Protocol), 3.1 (graph).
+
+**4.2 — NotificationListenerService provider** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-4.2-notification-listener-provider.md` (8 tasks: capability keys +
+`NotificationsProvider` over the 4.1 transport with a degraded Termux:API `termux-notification-list`
+read path → `list()` → per-notification `can_reply` flags from RemoteInput actions → `wait(predicate,
+timeout)` → `reply`/`dismiss` routed through `run_action` (mutating, risk-classified) → CLI
+`notifications list|wait|reply|dismiss` → MCP tools → docs). `notifications list/wait/reply/dismiss` with
+per-notification reply capability flags (strategy §19, §20.3). *Deps:* 1.1, 2.1 (`run_action`), 2.2
+(risk), 3.1 (graph), 4.1 (transport).
+
+**4.3 — Foreground-service transport + emergency-stop + trust UX** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-4.3-foreground-service-transport-and-trust-ux.md` (7 tasks:
+low-latency `SocketTransport` (localhost) implementing the 4.1 `Transport` seam → version/capability
+handshake → per-capability toggle surface intersected into provider `capabilities()` → emergency-stop
+state folded into `audit.kill_switch_active()` → CLI `trust status` + transport preference (socket →
+broadcast/file fallback) → Android APK design spec (foreground service + persistent "Stop phonectl"
+notification + Quick-Settings tile + per-capability toggle UI) → docs). Low-latency localhost socket/IPC,
 persistent "Stop phonectl" notification + Quick-Settings tile, per-capability toggles (strategy §8.4,
-§11.3, §11.4).
-**4.4 — Optional OCR provider** — Tesseract/ML-Kit fallback for screenshots (strategy §13.4).
+§11.3, §11.4). *Deps:* 2.1 (kill switch/stop), 4.1 (transport seam + providers).
+
+**4.4 — Optional OCR provider** — ✅ **WRITTEN** as
+`docs/superpowers/plans/phonectl-plan-4.4-ocr-provider.md` (6 tasks: capability key + `OcrProvider`
+runtime discovery (`tesseract` on PATH or companion ML-Kit over transport) → pure
+`ocr.parse_tsv` regions parser + `ocr_image` → `ocr_screen` via registry `screencap` → `build_runtime`
+wiring (optional) + CLI `ocr screen` / `find --ocr-text` → MCP `phone_ocr_screen` → docs).
+Tesseract/ML-Kit fallback for screenshots (strategy §13.4). *Deps:* 1.1, 3.1 (graph), 3.4 (region text
+consumers); optional on 4.1 (transport for the ML-Kit path).
 
 ### Phase 5 (daemon & event runtime) — **spec first**
 
