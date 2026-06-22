@@ -59,3 +59,14 @@ class ConfirmationRequiredError(PhonectlError):
     # Confirm mode or a future risk-policy confirm without --yes.
     code = "confirmation_required"
     requires_user = True
+
+
+class DaemonUnreachableError(PhonectlError):
+    # No reachable daemon was found; frontends fall back to the in-process path.
+    code = "daemon_unreachable"
+    retryable = True
+
+
+class UnknownMethodError(PhonectlError):
+    # The daemon received an RPC method it has no handler for.
+    code = "unknown_method"
