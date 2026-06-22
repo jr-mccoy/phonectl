@@ -106,12 +106,14 @@ class JobRegistry:
 
     # ── worker lifecycle ────────────────────────────────────────────────
     def start(self) -> None:
-        if self._worker is not None:
-            return
-        self._stopped = False
-        self._worker = threading.Thread(
-            target=self._loop, name="phonectl-job-worker", daemon=True)
-        self._worker.start()
+        with self._cv:
+            if self._worker is not None:
+                return
+            self._stopped = False
+            worker = threading.Thread(
+                target=self._loop, name="phonectl-job-worker", daemon=True)
+            self._worker = worker
+        worker.start()
 
     def _loop(self) -> None:
         while not self._stopped:
