@@ -39,18 +39,28 @@ def _daemon_client(cfg):
     return DaemonClient.from_discovery(info)
 
 
-def _dispatch(method, params, in_process_fn, *, cfg=None):
+def _dispatch(method, params, in_process_fn, *, cfg=None, async_job=False, detach=False):
     client = _daemon_client(cfg)
-    if client is not None:
+    if client is None:
+        return in_process_fn()
+    if not async_job:
         return client.call(method, params)
-    return in_process_fn()
+    if detach:
+        return client.call(method, params)          # returns {job_id, status: accepted}
+    cfg = cfg or config.load()
+    return client.submit_and_wait(
+        method, params,
+        overall_timeout=cfg.get("act_timeout", 60.0),
+        poll_interval=cfg.get("poll_interval", 0.5),
+    )
 
 
 def _act_params(args, verb, target):
+    import uuid
     p = {"verb": verb, "target": target,
          "yes": getattr(args, "yes", False),
-         "request_id": getattr(args, "request_id", None),
-         "idempotency_key": getattr(args, "idempotency_key", None)}
+         "request_id": getattr(args, "request_id", None) or uuid.uuid4().hex,
+         "idempotency_key": getattr(args, "idempotency_key", None) or uuid.uuid4().hex}
     if isinstance(target, dict):
         p.update({k: v for k, v in target.items() if k not in p})
     return p
@@ -131,7 +141,7 @@ def _cmd_observe(args):
     env = _dispatch("observe", {
         "screenshot": args.screenshot, "snap_path": args.screenshot_path,
         "tree": args.tree, "relations": args.relations,
-    }, in_process, cfg=cfg)
+    }, in_process, cfg=cfg, async_job=True)
     if getattr(args, "json", False):
         print(json.dumps(env, indent=2))
     else:
@@ -154,7 +164,12 @@ def _do_action(args, verb, fn, target):
             idempotency_key=getattr(args, "idempotency_key", None),
         )
 
-    env = _dispatch("act", _act_params(args, verb, target), in_process, cfg=cfg)
+    detach = getattr(args, "detach", False)
+    env = _dispatch("act", _act_params(args, verb, target), in_process,
+                    cfg=cfg, async_job=True, detach=detach)
+    if detach and env.get("ok") and "job_id" in env.get("data", {}):
+        print(f"phonectl: job {env['data']['job_id']} (use: phonectl job {env['data']['job_id']})")
+        return 0
     if env["ok"]:
         if getattr(args, "json", False):
             print(json.dumps(env, indent=2))
@@ -1005,11 +1020,35 @@ def _cmd_daemon(args):
             _daemon_discovery.remove()
             print("phonectl: no running daemon")
             return 0
-        client.call("stop", {})
-        print("phonectl: stop signalled")
+        client.call("shutdown", {})
+        print("phonectl: shutdown signalled")
         return 0
     print("usage: phonectl daemon {start|status|stop}")
     return 1
+
+
+def _cmd_job(args):
+    cfg = config.load()
+    client = _daemon_client(cfg)
+    if client is None:
+        print("phonectl: no running daemon")
+        return 1
+    import time as _t
+    deadline = _t.monotonic() + (cfg.get("act_timeout", 60.0) if getattr(args, "wait", False) else 0.0)
+    while True:
+        env = client.call("job_poll", {"job_id": args.job_id})
+        if not env.get("ok"):
+            print(json.dumps(env, indent=2) if getattr(args, "json", False) else f"phonectl: {env['error']['message']}")
+            return 1
+        status = env["data"]["status"]
+        if status in ("done", "error") or not getattr(args, "wait", False) or _t.monotonic() >= deadline:
+            break
+        _t.sleep(cfg.get("poll_interval", 0.5))
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"phonectl: job {args.job_id} status={env['data']['status']}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1022,6 +1061,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--json", action="store_true")
         sp.add_argument("--request-id", default=None)
         sp.add_argument("--idempotency-key", default=None)
+        sp.add_argument("--detach", action="store_true",
+                        help="submit the action and print its job id instead of waiting")
 
     o = sub.add_parser("observe")
     o.add_argument("--screenshot", action="store_true")
@@ -1328,6 +1369,13 @@ def build_parser() -> argparse.ArgumentParser:
     ocs.add_argument("--json", action="store_true")
     ocs.set_defaults(func=_cmd_ocr_screen)
     oc.set_defaults(func=lambda args: (oc.print_help(), 2)[1])
+
+    # job command (Task 8)
+    jb = sub.add_parser("job")
+    jb.add_argument("job_id")
+    jb.add_argument("--wait", action="store_true", help="block until the job is terminal")
+    jb.add_argument("--json", action="store_true")
+    jb.set_defaults(func=_cmd_job)
 
     # daemon subcommand group (Phase 5.1)
     dm = sub.add_parser("daemon")
