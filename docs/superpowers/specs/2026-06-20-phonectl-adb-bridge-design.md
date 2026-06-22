@@ -64,6 +64,17 @@ extensible: adding `TermuxApiProvider` (Phase 3.5) or `AccessibilityServiceProvi
 changes required. Every result envelope includes a `provider` field (the class name of
 the provider that handled the last call) so callers can observe which path was used.
 
+**AccessibilityService is an additional `Backend` provider (Phase 4.1):** `AccessibilityProvider`
+(`src/phonectl/providers/accessibility.py`) talks to a companion Android AccessibilityService APK
+through an injected `Transport` (`src/phonectl/providers/transport.py`). It never calls
+`adb`/`subprocess` and never imports `adb_backend`. It is prepended to the provider list in
+`build_runtime()` ahead of `TermuxApiProvider` and `AdbBackend`, so it wins for
+`observe_ui_tree`/`act_*` when the companion is reachable. ADB remains the shell/system provider
+— `wake`, `keyguard`, `get_state`, and other ADB-specific helpers fall through to `AdbBackend`
+via `ProviderRegistry.__getattr__`, so the companion never has to reimplement shell access. When
+the companion is absent, `_make_accessibility_provider()` returns `None` and the registry is
+ADB-first, unchanged.
+
 **Power rationale (why ADB, not the a11y APK, is the first backend):** ADB runs as the
 `shell` user (uid 2000) and is system-wide — a superset of the AccessibilityService's
 abilities. It can drive the UI (`uiautomator` + `input`) **and** reach beneath it
