@@ -24,7 +24,14 @@ class FakeBackend:
     def wm_size(self): return (1080, 2400)
     def input_tap(self, x, y): self.calls.append(("tap", x, y))
     def input_text(self, t): self.calls.append(("text", t))
-    def capabilities(self): return capabilities.make(observe_ui_tree=True, act_tap=True, requires_adb=True)
+    def input_key(self, k): self.calls.append(("key", k))
+    def input_swipe(self, x1, y1, x2, y2, ms=200): self.calls.append(("swipe", x1, y1, x2, y2))
+    def launch(self, pkg): self.calls.append(("launch", pkg))
+    def screencap(self, path): return path
+    def capabilities(self): return capabilities.make(
+        observe_ui_tree=True, act_tap=True, act_type=True, act_key=True,
+        launch_app=True, observe_screenshot=True, requires_adb=True,
+    )
 
 def test_observe_prints_json(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
@@ -244,7 +251,7 @@ def test_setup_verb_wires_runtime_to_run_module(tmp_path, monkeypatch):
     rc = cli.main(["setup", "notifications"])
     assert rc == 0
     assert captured["module"] == "notifications"
-    assert captured["conn"].backend is fb
+    assert captured["conn"].backend.for_capability("act_tap") is fb
 
 
 def test_setup_verb_defaults_to_adb(tmp_path, monkeypatch):
@@ -266,3 +273,26 @@ def test_doctor_bundle_writes_zip(tmp_path, monkeypatch, capsys):
     rc = cli.main(["doctor", "--bundle", out_zip])
     assert rc == 0
     assert out_zip in capsys.readouterr().out
+
+
+# Task 3 tests — build_runtime returns ProviderRegistry
+
+from phonectl.providers.registry import ProviderRegistry
+
+
+def test_build_runtime_returns_registry(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import config, cli
+    cfg = config.load()
+    backend, session, conn = cli.build_runtime(cfg)
+    assert isinstance(backend, ProviderRegistry)
+
+
+def test_build_runtime_wraps_explicit_backend(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import config, cli
+    cfg = config.load()
+    fake = FakeBackend()
+    backend, session, conn = cli.build_runtime(cfg, backend=fake)
+    assert isinstance(backend, ProviderRegistry)
+    assert backend.for_capability("act_tap") is fake
