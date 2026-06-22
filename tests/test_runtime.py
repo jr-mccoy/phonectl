@@ -439,6 +439,53 @@ def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
     assert env["provider"] == "RegistryFakeBackend"
 
 
+def test_run_action_blocked_by_companion_stop(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import config, runtime
+    from phonectl.providers.transport import LoopbackTransport
+    from phonectl.providers.registry import ProviderRegistry
+    from phonectl import capabilities as caps_mod
+
+    class MinimalBackend:
+        serial = "fake"
+        def get_state(self): return "device"
+        def ui_dump(self): return "<hierarchy></hierarchy>"
+        def window_dump(self): return ""
+        def wm_size(self): return (1080, 2400)
+        def input_tap(self, x, y): pass
+        def input_text(self, t): pass
+        def input_swipe(self, x1, y1, x2, y2, ms=200): pass
+        def input_named_swipe(self, d, distance_pct=0.5, ms=400): pass
+        def input_long_press(self, x, y, duration_ms=1000): pass
+        def input_key(self, k): pass
+        def launch(self, pkg): pass
+        def screencap(self, path): return path
+        def capabilities(self): return caps_mod.make(
+            observe_ui_tree=True, act_tap=True, act_type=True, act_key=True,
+            launch_app=True, observe_screenshot=True, requires_adb=True,
+        )
+
+    stop_transport = LoopbackTransport({"handshake": lambda p: {
+        "version": 1, "capabilities": {}, "stopped": True}})
+    registry = ProviderRegistry([MinimalBackend()])
+
+    def build(cfg):
+        from phonectl.session import Session
+        from phonectl.connection import Connection
+        sess = Session()
+        conn = Connection(registry, cfg)
+        conn.ensure = lambda: None
+        return registry, sess, conn
+
+    cfg = config.load()
+    env = runtime.run_action(
+        "tap", lambda b, s: {}, "i=0", build=build, yes=True,
+        cfg=cfg, companion_transport=stop_transport,
+    )
+    assert env["ok"] is False
+    assert env["error"]["code"] == "stopped"
+
+
 def test_blocked_action_is_audited(tmp_path, monkeypatch):
     import json as _json
 

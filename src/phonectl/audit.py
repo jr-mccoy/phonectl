@@ -4,8 +4,16 @@ from phonectl import redact
 from phonectl.config import config_dir, load
 
 
-def kill_switch_active() -> bool:
-    return (config_dir() / "STOP").exists()
+def kill_switch_active(*, extra_checks=()) -> bool:
+    if (config_dir() / "STOP").exists():
+        return True
+    for check in extra_checks:
+        try:
+            if check():
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def audit_level(cfg: dict | None = None) -> str:

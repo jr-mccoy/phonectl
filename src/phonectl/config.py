@@ -2,6 +2,12 @@ import json
 import os
 from pathlib import Path
 
+DEFAULTS: dict = {
+    "companion_host": "127.0.0.1",
+    "companion_port": None,
+    "companion_timeout": 2.0,
+}
+
 
 def config_dir() -> Path:
     base = os.environ.get("PHONECTL_HOME")
@@ -16,9 +22,10 @@ def _path() -> Path:
 
 def load() -> dict:
     p = _path()
-    if not p.exists():
-        return {}
-    return json.loads(p.read_text())
+    base = dict(DEFAULTS)
+    if p.exists():
+        base.update(json.loads(p.read_text()))
+    return base
 
 
 def save(cfg: dict) -> None:

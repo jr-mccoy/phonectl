@@ -618,6 +618,97 @@ surface, message contract, permissions, and error codes.
 
 ---
 
+## Companion transport & trust controls
+
+The companion APK communicates with phonectl over a **loopback TCP socket** — a newline-delimited
+JSON protocol running on `127.0.0.1` only. Configure the port phonectl connects to:
+
+```json
+// ~/.config/phonectl/config.json
+{
+  "companion_port": 8765,
+  "companion_host": "127.0.0.1",
+  "companion_timeout": 2.0
+}
+```
+
+`companion_port` defaults to `null` (unset). When unset, `_make_accessibility_provider()` and
+`_make_notifications_provider()` skip the transport and the build stays ADB-first — no companion
+required. When set, phonectl pings the companion on startup; if it does not respond, the providers
+are omitted silently.
+
+### Transport guarantee: loopback only
+
+`SocketTransport` rejects any `companion_host` that is not `127.0.0.1`, `localhost`, or `::1` with
+a `ValueError`. There is no way to connect the transport to an external host. The companion APK
+server also binds `127.0.0.1` only — never `0.0.0.0`.
+
+### `phonectl trust status`
+
+Inspect the current handshake from the companion:
+
+```bash
+phonectl trust status
+phonectl trust status --json
+```
+
+```json
+{
+  "ok": true,
+  "capability": "trust.status",
+  "data": {
+    "reachable": true,
+    "version": 1,
+    "stopped": false,
+    "capabilities": {
+      "observe_ui_native": true,
+      "act_gesture_native": true,
+      "act_set_text_native": false
+    }
+  }
+}
+```
+
+When `companion_port` is not configured, `reachable` is `false` and `capabilities` is `{}`.
+
+### Per-capability toggles
+
+The companion APK exposes a per-capability toggle UI. The user enables or disables each capability
+(e.g. `act_set_text_native`) in the APK settings screen. The enabled set is returned by
+`handshake.capabilities` and intersected with each provider's technically-supported capabilities by
+`trust.gate_capabilities`. A disabled toggle removes the grant from the provider graph; the registry
+falls back to ADB or returns `CapabilityUnavailableError` for that capability.
+
+Keys absent from the companion's `capabilities` map default to **enabled** — the toggle set only
+ever removes grants, never invents capabilities the provider does not support.
+
+### Emergency stop
+
+The companion APK's persistent "Stop phonectl" notification and Quick-Settings tile set a
+`stopped=true` flag in the `handshake` response. This flag is registered as an `extra_check` in
+`audit.kill_switch_active`. When either the `STOP` sentinel file **or** `stopped=true` is active,
+**all** action verbs (CLI, MCP, and later daemon) are blocked immediately with exit code `2`.
+
+The precedence rule: **file sentinel OR companion stop flag blocks**. The file kill-switch is the
+hard guarantee (survives APK crashes); the companion flag is the low-latency path for the running
+session. A flaky companion socket never wedges the CLI — socket exceptions in extra checks are
+swallowed and treated as "not stopped".
+
+```bash
+# File-based kill switch (always available, no companion needed)
+touch ~/.config/phonectl/STOP    # engage
+rm ~/.config/phonectl/STOP       # disengage
+
+# Companion-based stop (requires APK running and connected)
+# Tap "Stop phonectl" in the persistent notification or the Quick-Settings tile
+```
+
+**Design spec:** `android/foreground-service/SPEC.md` covers the foreground service, loopback TCP
+server, persistent stop notification, Quick-Settings tile, per-capability toggle UI, and trust
+guarantees.
+
+---
+
 ## Notifications
 
 phonectl treats notifications as a **first-class provider**, not UI-scraping. The `NotificationsProvider` exposes four capabilities with per-notification `can_reply`/`can_dismiss` flags derived from each notification's actions and `RemoteInput`.

@@ -21,6 +21,8 @@ from phonectl.providers.registry import ProviderRegistry
 from phonectl.providers.termux import TermuxApiProvider
 from phonectl.providers.accessibility import AccessibilityProvider  # noqa: F401
 from phonectl.providers.notifications import NotificationsProvider
+from phonectl.providers.transport import SocketTransport
+from phonectl import trust
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
 
@@ -29,22 +31,30 @@ def _make_backend(cfg) -> AdbBackend:
     return AdbBackend(serial=cfg.get("serial"))
 
 
+def _make_companion_transport(cfg):
+    port = cfg.get("companion_port")
+    if not port:
+        return None
+    return SocketTransport(cfg.get("companion_host", "127.0.0.1"), int(port))
+
+
 def _make_termux_provider():
     p = TermuxApiProvider()
     return p if p.is_available() else None
 
 
 def _make_accessibility_provider():
-    # Plan 4.1: no default transport yet — Plan 4.3 supplies SocketTransport.
-    # Returns None so default builds are ADB-first; tests patch this to inject a provider.
-    return None
+    cfg = config.load()
+    transport = _make_companion_transport(cfg)
+    if transport is None or not transport.ping():
+        return None
+    hs = trust.negotiate(transport)
+    return trust.GatedProvider(AccessibilityProvider(transport), hs.capabilities)
 
 
 def _make_notifications_provider():
-    # Companion transport comes from Plan 4.3; termux from Plan 3.5.
-    # Returns None when neither source is available so the registry omits it cleanly.
     termux = _make_termux_provider()
-    transport = None  # Plan 4.3 supplies SocketTransport; None here keeps builds Termux-only.
+    transport = _make_companion_transport(config.load())
     p = NotificationsProvider(transport=transport, termux=termux)
     return p if p.is_available() else None
 
@@ -543,6 +553,24 @@ def _cmd_tts_speak(args):
     env = results.ok(capability="tts.speak", provider=type(p).__name__)
     if getattr(args, "json", False):
         print(json.dumps(env, indent=2))
+    return 0
+
+
+def _cmd_trust_status(args):
+    cfg = config.load()
+    transport = _make_companion_transport(cfg)
+    if transport is None:
+        data = {"reachable": False, "version": 0, "capabilities": {}, "stopped": False}
+    else:
+        hs = trust.negotiate(transport)
+        data = {"reachable": hs.reachable, "version": hs.version,
+                "capabilities": hs.capabilities, "stopped": hs.stopped}
+    env = results.ok(capability="trust.status", data=data)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"companion: reachable={data['reachable']} version={data['version']} "
+              f"stopped={data['stopped']}")
     return 0
 
 
@@ -1114,6 +1142,14 @@ def build_parser() -> argparse.ArgumentParser:
     pkcl.add_argument("--json", action="store_true")
     pkcl.set_defaults(func=_cmd_packages_clear)
     pk.set_defaults(func=lambda args: (pk.print_help(), 2)[1])
+
+    # trust subcommand group
+    tr = sub.add_parser("trust")
+    trsub = tr.add_subparsers(dest="trust_cmd")
+    trs = trsub.add_parser("status")
+    trs.add_argument("--json", action="store_true")
+    trs.set_defaults(func=_cmd_trust_status)
+    tr.set_defaults(func=lambda args: (tr.print_help(), 2)[1])
 
     # notifications subcommand group
     nt = sub.add_parser("notifications")

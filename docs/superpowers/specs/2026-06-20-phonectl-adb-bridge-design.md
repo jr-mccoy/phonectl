@@ -298,3 +298,18 @@ Selectors are the durable target form across UI reordering, while index `i` rema
 ```
 
 Actions can carry `expected_hash` and `stale_ok`. On hash mismatch, the actuator re-observes once and emits/raises the typed `stale_snapshot` failure unless stale execution is explicitly allowed.
+
+## Emergency-stop precedence and loopback-only constraint (Plan 4.3)
+
+**Emergency-stop precedence rule:** `audit.kill_switch_active()` returns `True` if **either** the
+`$PHONECTL_HOME/STOP` sentinel file exists **or** any callable in `extra_checks` returns `True`.
+The companion APK's `stopped=true` handshake flag is registered as such an extra check when a
+transport is configured. Both sources must be cleared to resume: removing the file AND having the
+companion report `stopped=false`. A flaky transport never blocks actions — socket exceptions are
+swallowed and treated as not stopped.
+
+**Loopback-only constraint:** `SocketTransport` validates the `host` parameter against
+`{"127.0.0.1", "localhost", "::1"}` and raises `ValueError` for any external address. This is
+enforced in the Python transport layer, independent of the companion APK's own bind constraint
+(`127.0.0.1` only — never `0.0.0.0`). No configuration path permits a non-loopback host; this is a
+hard invariant, not a default.
