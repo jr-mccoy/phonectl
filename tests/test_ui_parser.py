@@ -350,3 +350,28 @@ def test_find_by_text_regex_preserves_order():
     els = [_make_el(i, f"Item {i}", [0, i*50, 100, i*50+40]) for i in range(5)]
     results = ui_parser.find_by_text_regex(els, r"Item")
     assert [r["i"] for r in results] == [0, 1, 2, 3, 4]
+
+
+# ── Task 4: get_visible_text_in_region ───────────────────────────────────────
+
+def test_get_visible_text_in_region_returns_overlapping():
+    a = _make_el(0, "In region", [10, 100, 400, 200])
+    b = _make_el(1, "Partially in", [350, 150, 600, 300])
+    c = _make_el(2, "Outside", [500, 400, 900, 500])
+    region = (0, 50, 450, 250)
+    found = ui_parser.get_visible_text_in_region([a, b, c], region)
+    ids = [e["i"] for e in found]
+    assert 0 in ids
+    assert 1 in ids
+    assert 2 not in ids
+
+
+def test_get_visible_text_in_region_returns_empty_when_none_overlap():
+    el = _make_el(0, "Far away", [800, 800, 1000, 900])
+    assert ui_parser.get_visible_text_in_region([el], (0, 0, 100, 100)) == []
+
+
+def test_get_visible_text_in_region_preserves_order():
+    els = [_make_el(i, f"el{i}", [i*50, 0, i*50+40, 50]) for i in range(4)]
+    found = ui_parser.get_visible_text_in_region(els, (0, 0, 1000, 100))
+    assert [e["i"] for e in found] == [0, 1, 2, 3]

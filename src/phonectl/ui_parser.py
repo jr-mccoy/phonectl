@@ -151,6 +151,18 @@ def parse_relations(xml: str) -> dict:
     return {"parent": parent, "children": children, "siblings": siblings, "ancestors": ancestors}
 
 
+def get_visible_text_in_region(elements: list, bounds: tuple) -> list:
+    """Return elements whose bounds overlap with the given region."""
+    rx1, ry1, rx2, ry2 = bounds
+    return [
+        e for e in elements
+        if e["bounds"][0] <= rx2
+        and e["bounds"][2] >= rx1
+        and e["bounds"][1] <= ry2
+        and e["bounds"][3] >= ry1
+    ]
+
+
 def get_focused_field(elements: list) -> dict | None:
     """Return the focused editable field, or the first focused element, or None."""
     focused_editable = next(
