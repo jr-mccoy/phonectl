@@ -151,6 +151,22 @@ def parse_relations(xml: str) -> dict:
     return {"parent": parent, "children": children, "siblings": siblings, "ancestors": ancestors}
 
 
+def get_focused_field(elements: list) -> dict | None:
+    """Return the focused editable field, or the first focused element, or None."""
+    focused_editable = next(
+        (e for e in elements if e.get("focused") and e.get("editable")), None
+    )
+    if focused_editable:
+        return focused_editable
+    return next((e for e in elements if e.get("focused")), None)
+
+
+def find_by_text_regex(elements: list, pattern: str) -> list:
+    """Return elements whose text matches the regex pattern (re.search)."""
+    compiled = re.compile(pattern)
+    return [e for e in elements if compiled.search(e.get("text", "") or "")]
+
+
 def extract_form(elements: list, *, relations: dict | None = None) -> list:
     """Return form fields with associated labels.
 

@@ -310,3 +310,43 @@ def test_extract_form_marks_focused_field():
 def test_extract_form_returns_empty_when_no_fields():
     label = _make_label(0, "Title", [0, 0, 100, 30])
     assert ui_parser.extract_form([label]) == []
+
+
+# ── Task 3: get_focused_field + find_by_text_regex ────────────────────────────
+
+def test_get_focused_field_returns_focused_editable():
+    f = _make_edittext(0, "text", [0, 0, 100, 50], focused=True)
+    other = _make_el(1, "label", [0, 60, 100, 90])
+    assert ui_parser.get_focused_field([other, f])["i"] == 0
+
+
+def test_get_focused_field_falls_back_to_any_focused():
+    el = _make_el(0, "button", [0, 0, 100, 50])
+    el["focused"] = True
+    assert ui_parser.get_focused_field([el])["i"] == 0
+
+
+def test_get_focused_field_returns_none_when_none_focused():
+    el = _make_el(0, "button", [0, 0, 100, 50])
+    assert ui_parser.get_focused_field([el]) is None
+
+
+def test_find_by_text_regex_matches_substring():
+    a = _make_el(0, "Total: $5.00", [0, 0, 100, 50])
+    b = _make_el(1, "Balance: $10.00", [0, 60, 100, 110])
+    c = _make_el(2, "No match here", [0, 120, 100, 170])
+    results = ui_parser.find_by_text_regex([a, b, c], r"\$\d+\.\d+")
+    assert len(results) == 2
+    assert any(r["i"] == 0 for r in results)
+    assert any(r["i"] == 1 for r in results)
+
+
+def test_find_by_text_regex_empty_when_no_match():
+    el = _make_el(0, "nothing", [0, 0, 100, 50])
+    assert ui_parser.find_by_text_regex([el], r"\d{4}") == []
+
+
+def test_find_by_text_regex_preserves_order():
+    els = [_make_el(i, f"Item {i}", [0, i*50, 100, i*50+40]) for i in range(5)]
+    results = ui_parser.find_by_text_regex(els, r"Item")
+    assert [r["i"] for r in results] == [0, 1, 2, 3, 4]
