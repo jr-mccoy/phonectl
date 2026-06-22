@@ -385,6 +385,60 @@ def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
     assert later["ok"] is True
 
 
+def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import config, capabilities as caps_mod
+    from phonectl.providers.registry import ProviderRegistry
+
+    class RegistryFakeBackend:
+        serial = "r:5555"
+        calls = []
+        def get_state(self): return "device"
+        def ui_dump(self): return "<hierarchy></hierarchy>"
+        def window_dump(self): return ""
+        def wm_size(self): return (1080, 2400)
+        def input_tap(self, x, y): RegistryFakeBackend.calls.append(("tap", x, y))
+        def input_text(self, t): pass
+        def input_swipe(self, x1, y1, x2, y2, ms=200): pass
+        def input_key(self, k): pass
+        def launch(self, pkg): pass
+        def screencap(self, path): return path
+        def capabilities(self): return caps_mod.make(
+            observe_ui_tree=True, act_tap=True, act_type=True, act_key=True,
+            launch_app=True, observe_screenshot=True, requires_adb=True,
+        )
+
+    fake = RegistryFakeBackend()
+    registry = ProviderRegistry([fake])
+
+    def build(cfg):
+        from phonectl.session import Session
+        from phonectl.connection import Connection
+        sess = Session()
+        conn = Connection(registry, cfg)
+        conn.ensure = lambda: None
+        return registry, sess, conn
+
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h", "app": {"package": "com.x"}, "elements": []}),
+    )
+
+    def action_fn(b, s):
+        b.input_tap(0, 0)
+        return {"hash": "after", "app": {}, "elements": []}
+
+    cfg = config.load()
+    env = runtime.run_action(
+        "tap", action_fn, {"i": 0},
+        build=build, yes=True,
+        cfg=cfg,
+    )
+    assert env["ok"] is True
+    assert env["provider"] == "RegistryFakeBackend"
+
+
 def test_blocked_action_is_audited(tmp_path, monkeypatch):
     import json as _json
 

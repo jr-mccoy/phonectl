@@ -125,7 +125,7 @@ def test_observe_json_emits_ok_envelope(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert out["ok"] is True
     assert out["capability"] == "ui.observe"
-    assert out["provider"] == "adb"
+    assert out["provider"] == "FakeBackend"
     assert out["data"]["elements"][0]["text"] == "Wi-Fi"
 
 

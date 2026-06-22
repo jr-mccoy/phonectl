@@ -46,7 +46,8 @@ def _cmd_observe(args):
                             snap_path=args.screenshot_path, tree=args.tree,
                             relations=args.relations)
     if getattr(args, "json", False):
-        print(json.dumps(results.ok(capability="ui.observe", provider="adb", data=snap),
+        provider = getattr(backend, "last_used", None) or "adb"
+        print(json.dumps(results.ok(capability="ui.observe", provider=provider, data=snap),
                          indent=2))
     else:
         _emit(snap)
