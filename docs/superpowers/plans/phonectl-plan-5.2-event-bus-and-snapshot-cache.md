@@ -32,11 +32,12 @@ each taking an **injectable id-counter / clock** so tests are deterministic. A t
 `src/phonectl/daemon/poller.py` (`EventPoller`) is a plain object with a `drain_once(sources)` /
 `tick()` method that pulls from injected provider sources and publishes onto the bus, advancing each
 source's cursor — **driven manually in tests; no real thread or sleep**. `daemon/server.py` (created in
-5.1) is extended: it holds one `SnapshotCache` and one `EventBus` alongside its warm registry/session;
-its `observe` RPC mints+returns a `snapshot_id`; its `act` path captures `snapshot_before`, runs the
-mutating action through `runtime.run_action` under the single-writer lock, mints `snapshot_after`,
-populates both on the envelope **and** backfills the `runs.jsonl` fields 5.1 left as `None`, and publishes
-`action_started`/`action_finished`. A new `events_poll` RPC returns `{"events", "cursor"}`.
+5.1) is extended: `DaemonServer` holds one `SnapshotCache` and one `EventBus` alongside its warm
+runtime (reached via `self._warm_triple()`); its `observe` RPC mints+returns a `snapshot_id`; its `act`
+path captures `snapshot_before`, runs the mutating action through `runtime.run_action` under the
+single-writer lock, mints `snapshot_after`, populates both on the envelope **and** sets the same two ids
+on the `runs.jsonl` record before `self._append_record(rec)` (the 5.1 record builds them as `None`), and
+publishes `action_started`/`action_finished`. A new `events_poll` RPC returns `{"events", "cursor"}`.
 
 **Tech Stack:** Python 3 (stdlib only: `json`, `threading`, `time`, `itertools`, `typing`); `pytest` for
 tests; no new runtime deps. The daemon transport/discovery/loopback-only guarantees are all owned by Plan
@@ -88,17 +89,23 @@ tests; no new runtime deps. The daemon transport/discovery/loopback-only guarant
   and a notifications source with `list()` (→ `notification_posted`, `source="notifications"`, diffed by
   notification `key`). Sources are injected so tests feed canned data.
 - **RPC additions to `daemon/server.py`:** `observe` returns `snapshot_id`; `act` returns
-  `snapshot_before` and `snapshot_after` (and backfills the same two `runs.jsonl` fields 5.1 left `None`);
+  `snapshot_before` and `snapshot_after` (and sets the same two `runs.jsonl` fields on the record before it
+  is appended — 5.1 builds them as `None`);
   new `events_poll(since, max)` RPC returns `{"events", "cursor"}`. `events_subscribe` is **documented**
   as the cursor-based long-poll contract over `events_poll`; real server-push streaming is deferred (noted).
 
-> **Assumed Plan-5.1 symbols** (authored in parallel; reference, do not redefine): the module
-> `phonectl.daemon.server` exposing a `Server` (or equivalent dispatcher object) with a
-> `handle_line(line: str) -> str` method, a warm `self.registry` (`ProviderRegistry`), `self.session`
-> (`Session`), `self.conn` (`Connection`), a `runs.jsonl` append on each act with `snapshot_before` /
-> `snapshot_after` initialized to `None`, and act routing through `runtime.run_action`. If 5.1 named the
-> dispatcher or its attributes differently, **reuse 5.1's names** — do not introduce parallel ones; the
-> tasks below touch only the named seams.
+> **Confirmed Plan-5.1 symbols** (reuse, do not redefine): the module `phonectl.daemon.server` exposing
+> `DaemonServer` with a `handle_line(line: str) -> str` method. **`self.registry` is the RPC method
+> registry (`rpc.Registry()`), NOT the provider registry** — the warm
+> `(ProviderRegistry, Session, Connection)` is obtained via `self._warm_triple()` (built once via
+> `self._build(self._cfg)`, cached in `self._warm`). Per-act durable records go through
+> `phonectl.daemon.records.build_record(env, params, *, action_id, now)` / `records.append`, where the 5.1
+> `_act` handler builds the record inline after `run_action` returns (`snapshot_before=None`,
+> `snapshot_after=env["data"]` on success) and calls `self._append_record(rec)`. Lifecycle is
+> `DaemonServer.bind(*, server_factory=...)` / `DaemonServer.shutdown()` (there is **no** `start()`/`stop()`).
+> `PROTOCOL_VERSION` is importable from `phonectl.daemon`. Tests use the `_srv(tmp_path)` helper in
+> `tests/test_daemon_server.py` (a warm `DaemonServer` over a `FakeBackend`-backed `ProviderRegistry`). The
+> tasks below touch only these named seams.
 
 ---
 
@@ -245,7 +252,8 @@ git commit -m "feat: SnapshotCache — monotonic snapshot ids + foreground acces
 - Test: `tests/test_daemon_server.py` (append; created by Plan 5.1)
 
 **Interfaces:**
-- `Server.__init__` constructs `self.snapshots = SnapshotCache()` alongside the warm registry/session.
+- `DaemonServer.__init__` constructs `self.snapshots = SnapshotCache()` alongside its other attributes
+  (do not collide with `self.registry`, which is the RPC method registry).
 - The `observe` RPC handler: after `observer.observe(...)` populates `session.last`, call
   `self.snapshots.put(session.last)` and add `snapshot_id` to the `results.ok(...)` envelope's top level
   (alongside the snapshot `data`). A second `observe` returns the next id.
@@ -253,10 +261,11 @@ git commit -m "feat: SnapshotCache — monotonic snapshot ids + foreground acces
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# Append to tests/test_daemon_server.py
+# Append to tests/test_daemon_server.py (so the Plan-5.1 _srv helper is in scope)
 import json
 
-from phonectl.daemon.server import Server  # 5.1 dispatcher
+from phonectl.daemon import PROTOCOL_VERSION
+from phonectl.daemon.server import DaemonServer  # 5.1 dispatcher
 
 
 def _observe_line():
@@ -265,7 +274,7 @@ def _observe_line():
 
 def test_observe_returns_snapshot_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)   # 5.1 test helper: warm Server over FakeBackend registry
+    srv = _srv(tmp_path)   # 5.1 test helper: warm DaemonServer over FakeBackend registry
     out = json.loads(srv.handle_line(_observe_line()))
     assert out["ok"] is True
     assert out["snapshot_id"] == "snap_1"
@@ -273,7 +282,7 @@ def test_observe_returns_snapshot_id(tmp_path, monkeypatch):
 
 def test_second_observe_increments_snapshot_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     first = json.loads(srv.handle_line(_observe_line()))
     second = json.loads(srv.handle_line(_observe_line()))
     assert first["snapshot_id"] == "snap_1"
@@ -281,8 +290,9 @@ def test_second_observe_increments_snapshot_id(tmp_path, monkeypatch):
     assert srv.snapshots.current_id == "snap_2"
 ```
 
-> Reuse the Plan-5.1 `make_test_server(tmp_path)` helper (warm `Server` over a `FakeBackend`-backed
-> `ProviderRegistry`). If 5.1 named it differently, call that name — do not build a second harness.
+> These tests **append to `tests/test_daemon_server.py`** so the Plan-5.1 `_srv(tmp_path)` helper (a warm
+> `DaemonServer` over a `FakeBackend`-backed `ProviderRegistry`) is in scope — do not build a second
+> harness.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -292,33 +302,37 @@ Expected: FAIL (`KeyError: 'snapshot_id'` — the 5.1 `observe` envelope has no 
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/phonectl/daemon/server.py — in Server.__init__ (alongside the warm registry/session)
+# src/phonectl/daemon/server.py — in DaemonServer.__init__ (self.registry is the RPC registry)
 from phonectl.daemon.snapshots import SnapshotCache
 
-#   self.registry, self.session, self.conn already built by Plan 5.1
+#   the warm (ProviderRegistry, Session, Connection) is reached via self._warm_triple()
 self.snapshots = SnapshotCache()
 ```
 
 ```python
 # src/phonectl/daemon/server.py — in the observe RPC handler, after observer.observe(...)
-def _handle_observe(self, params, request_id):
-    self.conn.ensure()
+@self.registry.register("observe")
+def _observe(params, ctx):
+    registry, session, conn = self._warm_triple()
+    if hasattr(conn, "ensure"):
+        conn.ensure()
     snap = observer.observe(
-        self.registry, self.session,
+        registry, session,
         tree=bool(params.get("tree")), relations=bool(params.get("relations")),
     )
     snapshot_id = self.snapshots.put(snap)
     return results.ok(
         capability="ui.observe",
-        provider=getattr(self.registry, "last_used", None) or "adb",
+        provider=getattr(registry, "last_used", None) or "adb",
         data=snap,
         snapshot_id=snapshot_id,
-        request_id=request_id,
+        request_id=ctx.get("request_id"),
     )
 ```
 
 (Keep the rest of the 5.1 `observe` handler intact; only the `snapshots.put` + `snapshot_id=` addition is
-new. If 5.1 already returns the snapshot via `results.ok(..., data=snap)`, just thread `snapshot_id` in.)
+new. The 5.1 `observe` handler already returns the snapshot via `results.ok(..., data=snap)` — just thread
+`snapshot_id` in. Note the warm providers come from `self._warm_triple()`, not `self.registry`.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -390,7 +404,7 @@ def test_validate_none_expected_is_noop():
 # Append to tests/test_daemon_server.py
 def test_act_rejects_stale_snapshot_id_before_running(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))   # snap_1 (current)
     # Pin a stale id that is no longer current.
     line = json.dumps({"method": "act",
@@ -430,8 +444,9 @@ def validate(self, expected_id, *, current_foreground) -> None:
 ```
 
 ```python
-# src/phonectl/daemon/server.py — in the act RPC handler, BEFORE dispatch
-def _handle_act(self, params, request_id):
+# src/phonectl/daemon/server.py — in the act RPC handler (5.1 _act(params, ctx)), BEFORE dispatch
+@self.registry.register("act")  # replaces the 5.1 builtin act handler
+def _act(params, ctx):
     try:
         self.snapshots.validate(
             params.get("snapshot_id"),
@@ -441,7 +456,7 @@ def _handle_act(self, params, request_id):
         return results.err(
             exc,
             user_action="Re-observe (the screen changed); resolve the index against a fresh snapshot.",
-            request_id=request_id,
+            request_id=ctx.get("request_id"),
         )
     # ... existing Plan-5.1 dispatch through runtime.run_action follows ...
 ```
@@ -470,11 +485,14 @@ git commit -m "feat: stale-index protection — SnapshotCache.validate gates ind
 
 **Interfaces:**
 - `act` handler flow (after stale-validation passes): record `snapshot_before = self.snapshots.current_id`;
-  run the action via `runtime.run_action` (which re-observes into `session.last`); on success mint
-  `snapshot_after = self.snapshots.put(session.last)`; add `snapshot_before` and `snapshot_after` to the
-  envelope **top level**; and backfill the same two fields in the durable `runs.jsonl` record (Plan 5.1
-  writes the record with both as `None` — populate them here). The fresh `snapshot_after` id supersedes the
-  prior current id, which is the invalidation: any act pinning the old id now fails `validate` (Task 3).
+  run the action via `runtime.run_action` (which re-observes into the warm `session.last` from
+  `self._warm_triple()`); on success mint `snapshot_after = self.snapshots.put(session.last)`; add
+  `snapshot_before` and `snapshot_after` to the envelope **top level**. Then, on the durable `runs.jsonl`
+  record the 5.1 `_act` handler builds inline (`records.build_record(env, params, action_id=..., now=...)`,
+  which sets both to `None`), set `rec["snapshot_before"] = snapshot_before` and
+  `rec["snapshot_after"] = snapshot_after` **before** `self._append_record(rec)` — one write, no rewrite of
+  an already-appended line. The fresh `snapshot_after` id supersedes the prior current id, which is the
+  invalidation: any act pinning the old id now fails `validate` (Task 3).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -482,7 +500,7 @@ git commit -m "feat: stale-index protection — SnapshotCache.validate gates ind
 # Append to tests/test_daemon_server.py
 def test_act_returns_before_and_after_snapshot_ids(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))   # snap_1 current
     line = json.dumps({"method": "act",
                        "params": {"verb": "tap", "target": "i=0", "yes": True},
@@ -497,7 +515,7 @@ def test_act_returns_before_and_after_snapshot_ids(tmp_path, monkeypatch):
 
 def test_act_backfills_runs_jsonl_snapshot_fields(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))
     srv.handle_line(json.dumps({"method": "act",
                     "params": {"verb": "tap", "target": "i=0", "yes": True},
@@ -516,31 +534,42 @@ Expected: FAIL (`KeyError: 'snapshot_before'`; runs record still has `None` snap
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/phonectl/daemon/server.py — in the act handler, after stale-validation
+# src/phonectl/daemon/server.py — in the _act handler, after stale-validation
+from phonectl.daemon import records as _records
+
+registry, session, conn = self._warm_triple()
 snapshot_before = self.snapshots.current_id
 
+def warm_build(cfg):
+    return self._warm_triple()
+
 env = runtime.run_action(
-    verb, fn, target, build=self._build, yes=yes, cfg=self.cfg,
-    request_id=request_id,
+    verb, fn, target, build=warm_build,
+    yes=bool(params.get("yes", False)), cfg=self._cfg,
+    request_id=ctx.get("request_id"),
+    idempotency_key=params.get("idempotency_key"),
 )
 
 snapshot_after = None
-if env.get("ok") and self.session.last is not None:
-    snapshot_after = self.snapshots.put(self.session.last)
+if env.get("ok") and session.last is not None:
+    snapshot_after = self.snapshots.put(session.last)
     env["snapshot_before"] = snapshot_before
     env["snapshot_after"] = snapshot_after
 
-# Backfill the durable run record (Plan 5.1 wrote both as None).
-self._update_run_record(request_id,
-                        snapshot_before=snapshot_before,
-                        snapshot_after=snapshot_after)
+# Set the snapshot ids on the 5.1 run record BEFORE appending (5.1 builds both as None).
+rec = _records.build_record(env, params, action_id=uuid.uuid4().hex, now=self._now)
+rec["snapshot_before"] = snapshot_before
+rec["snapshot_after"] = snapshot_after
+self._append_record(rec)
 return env
 ```
 
-> `_update_run_record` is the Plan-5.1 hook that rewrites/patches the just-appended `runs.jsonl` line for
-> this `request_id`. If 5.1 appends the record only at completion, populate `snapshot_before`/
-> `snapshot_after` at append time instead — same fields, one write. Reuse 5.1's run-record writer; do not
-> add a second `runs.jsonl` path.
+> This reuses the Plan-5.1 `_act` record path verbatim: `records.build_record(...)` then
+> `self._append_record(rec)`. The only change is setting `rec["snapshot_before"]`/`rec["snapshot_after"]`
+> on the record **before** it is appended (5.1 leaves both `None`) — there is **no** rewrite of an
+> already-written line and **no** second `runs.jsonl` path. (Equivalently, you may extend
+> `records.build_record` to accept `snapshot_before=`/`snapshot_after=` kwargs; the set-on-rec form here is
+> the minimal, 5.1-consistent change.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -692,15 +721,18 @@ git commit -m "feat: EventBus — monotonic-seq publish + cursor poll (Plan 4.1 
 - Test: `tests/test_daemon_server.py` (append)
 
 **Interfaces:**
-- `Server.__init__` constructs `self.events = EventBus()`.
+- `DaemonServer.__init__` constructs `self.events = EventBus()`.
 - Around the `act` dispatch: `self.events.publish("action_started", {"verb", "target", "request_id"},
   source="daemon")` before `runtime.run_action`, and `self.events.publish("action_finished",
   {"verb", "target", "request_id", "ok", "snapshot_after"}, source="daemon")` after (in a `finally`, so a
   raised/blocked action still emits a finish). Stale-rejected acts (Task 3) emit start+finish too so
   subscribers see the rejection.
-- Lifecycle: `Server.start()` / `Server.stop()` (the Plan-5.1 lifecycle hooks) publish
-  `lifecycle` events (`{"state": "started"}` / `{"state": "stopped"}`, `source="daemon"`). If 5.1 exposes
-  different lifecycle method names, hook those.
+- Lifecycle: the Plan-5.1 lifecycle hooks are `DaemonServer.bind(*, server_factory=...)` and
+  `DaemonServer.shutdown()` (there is **no** `start()`/`stop()`). A small injectable
+  `_publish_lifecycle(phase)` helper publishes a `lifecycle` event (`{"phase": "started"}` /
+  `{"phase": "stopped"}`, `source="daemon"`); wire `_publish_lifecycle("started")` into `bind()` (after the
+  `daemon.json` is published) and `_publish_lifecycle("stopped")` into `shutdown()` (before
+  `discovery.remove()`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -708,7 +740,7 @@ git commit -m "feat: EventBus — monotonic-seq publish + cursor poll (Plan 4.1 
 # Append to tests/test_daemon_server.py
 def test_act_emits_started_and_finished_events(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))
     srv.handle_line(json.dumps({"method": "act",
                     "params": {"verb": "tap", "target": "i=0", "yes": True},
@@ -722,25 +754,42 @@ def test_act_emits_started_and_finished_events(tmp_path, monkeypatch):
     assert started["source"] == "daemon"
     finished = next(e for e in out["events"] if e["type"] == "action_finished")
     assert finished["data"]["ok"] is True
+
+
+def test_bind_and_shutdown_emit_lifecycle_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+
+    class FakeServerSock:
+        def getsockname(self): return ("127.0.0.1", 54321)
+        def close(self): pass
+
+    srv.bind(server_factory=lambda h: FakeServerSock())   # threadless/socketless
+    srv.shutdown()
+    phases = [e["data"]["phase"] for e in srv.events.poll(since=0)["events"]
+              if e["type"] == "lifecycle"]
+    assert phases == ["started", "stopped"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_daemon_server.py -v -k "started_and_finished"`
-Expected: FAIL (`AttributeError: 'Server' object has no attribute 'events'`).
+Expected: FAIL (`AttributeError: 'DaemonServer' object has no attribute 'events'`).
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/phonectl/daemon/server.py — Server.__init__
+# src/phonectl/daemon/server.py — DaemonServer.__init__
 from phonectl.daemon.events import EventBus
 self.events = EventBus()
 ```
 
 ```python
-# src/phonectl/daemon/server.py — wrap the act dispatch
-def _handle_act(self, params, request_id):
-    verb, target = params["verb"], params["target"]
+# src/phonectl/daemon/server.py — wrap the 5.1 act handler (registered _act(params, ctx))
+@self.registry.register("act")  # replaces the 5.1 builtin act handler
+def _act(params, ctx):
+    request_id = ctx.get("request_id")
+    verb, target = params.get("verb"), params.get("target")
     try:
         self.snapshots.validate(params.get("snapshot_id"),
                                 current_foreground=self.snapshots.current_foreground)
@@ -750,7 +799,7 @@ def _handle_act(self, params, request_id):
         self.events.publish("action_started",
                             {"verb": verb, "target": target, "request_id": request_id},
                             source="daemon")
-        env = self._dispatch_act(params, request_id)  # Task 4 body
+        env = self._dispatch_act(params, ctx)  # Task 4 body (run_action + snapshot ids + record)
     self.events.publish("action_finished",
                         {"verb": verb, "target": target, "request_id": request_id,
                          "ok": bool(env.get("ok")), "snapshot_after": env.get("snapshot_after")},
@@ -759,19 +808,24 @@ def _handle_act(self, params, request_id):
 ```
 
 ```python
-# src/phonectl/daemon/server.py — lifecycle hooks (extend Plan 5.1's start/stop)
-def start(self):
-    super_start = getattr(self, "_start_transport", None)
-    if super_start:
-        super_start()
-    self.events.publish("lifecycle", {"state": "started"}, source="daemon")
+# src/phonectl/daemon/server.py — lifecycle hooks (extend Plan 5.1's bind()/shutdown())
+def _publish_lifecycle(self, phase):
+    self.events.publish("lifecycle", {"phase": phase}, source="daemon")
 
-def stop(self):
-    self.events.publish("lifecycle", {"state": "stopped"}, source="daemon")
-    # ... Plan 5.1 transport teardown ...
+def bind(self, *, server_factory=None):
+    result = super().bind(server_factory=server_factory)  # or call the 5.1 bind body inline
+    self._publish_lifecycle("started")                    # after daemon.json is published
+    return result
+
+def shutdown(self):
+    self._publish_lifecycle("stopped")                    # before discovery.remove()
+    return super().shutdown()  # or the 5.1 shutdown body
 ```
 
-(Adapt to the actual 5.1 start/stop method names; the only new behavior is the two `lifecycle` publishes.)
+(5.1's lifecycle hooks are `bind()`/`shutdown()` — there is **no** `start()`/`stop()`. Since 5.1 defines
+`bind`/`shutdown` directly on `DaemonServer` (not a base class), implement these by extending those same
+methods in place — add the `_publish_lifecycle(...)` call into the existing 5.1 `bind`/`shutdown` bodies
+rather than via `super()`. The only new behavior is the two `lifecycle` publishes.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -940,9 +994,10 @@ git commit -m "feat: EventPoller — step-wise drain of UI + notification provid
   `results.ok(capability="events.poll", data=self.events.poll(since, max=max))` (the `{"events","cursor"}`
   shape under `data`). Before polling, the server calls `self.poller.drain_once()` once so a synchronous
   `handle_line` test sees freshly-drained provider events without a background thread.
-- `Server.__init__` builds `self.poller = EventPoller(self.events, ui_source=..., notif_source=...)` from
-  the warm registry's providers (the `AccessibilityProvider` for UI, the `NotificationsProvider` for
-  notifications), each `None` when its provider is absent — so daemons without a companion still serve
+- `DaemonServer.__init__` builds `self.poller = EventPoller(self.events, ui_source=..., notif_source=...)`
+  from the warm provider registry's providers (resolved via `self._warm_triple()` — the
+  `AccessibilityProvider` for UI, the `NotificationsProvider` for notifications), each `None` when its
+  provider is absent — so daemons without a companion still serve
   `events_poll` (internal `action_*`/`lifecycle` events only).
 - **`events_subscribe` semantics (documented, not a new RPC here):** subscription is **cursor-based
   long-poll** — a client holds the last `cursor`, calls `events_poll(since=cursor, max=N)`, processes the
@@ -955,7 +1010,7 @@ git commit -m "feat: EventPoller — step-wise drain of UI + notification provid
 # Append to tests/test_daemon_server.py
 def test_events_poll_returns_events_and_cursor(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))
     srv.handle_line(json.dumps({"method": "act",
                     "params": {"verb": "tap", "target": "i=0", "yes": True},
@@ -971,7 +1026,7 @@ def test_events_poll_returns_events_and_cursor(tmp_path, monkeypatch):
 
 def test_events_poll_since_cursor_returns_only_newer(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    srv = make_test_server(tmp_path)
+    srv = _srv(tmp_path)
     json.loads(srv.handle_line(_observe_line()))
     srv.handle_line(json.dumps({"method": "act",
                     "params": {"verb": "tap", "target": "i=0", "yes": True},
@@ -994,31 +1049,34 @@ so `out["data"]` / `events` assertions fail).
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/phonectl/daemon/server.py — Server.__init__
+# src/phonectl/daemon/server.py — DaemonServer.__init__
 from phonectl.daemon.poller import EventPoller
 
-ui_source = self.registry.for_capability("observe_ui_events")     # AccessibilityProvider or None
-notif_source = self.registry.for_capability("observe_notifications")  # NotificationsProvider or None
+# self.registry is the RPC method registry; the PROVIDER registry is the warm one.
+provider_registry, _session, _conn = self._warm_triple()
+ui_source = provider_registry.for_capability("observe_ui_events")        # AccessibilityProvider or None
+notif_source = provider_registry.for_capability("observe_notifications")  # NotificationsProvider or None
 self.poller = EventPoller(self.events, ui_source=ui_source, notif_source=notif_source)
 ```
 
 ```python
-# src/phonectl/daemon/server.py — events_poll RPC handler + dispatch registration
-def _handle_events_poll(self, params, request_id):
+# src/phonectl/daemon/server.py — events_poll RPC handler (registered _events_poll(params, ctx))
+@self.registry.register("events_poll")
+def _events_poll(params, ctx):
     self.poller.drain_once()  # fold in any pending provider events synchronously
     since = int(params.get("since", 0))
     max_n = int(params.get("max", 100))
     return results.ok(
         capability="events.poll",
         data=self.events.poll(since, max=max_n),
-        request_id=request_id,
+        request_id=ctx.get("request_id"),
     )
-
-# register "events_poll" -> self._handle_events_poll in the 5.1 method dispatch table
 ```
 
-(`for_capability` is the Plan-3.1 registry resolver; it returns the winning provider or `None`. If the
-registry exposes a different resolver name, use it.)
+(`for_capability` is the Plan-3.1 **provider** registry resolver, reached via `self._warm_triple()` — NOT
+`self.registry` (the RPC method registry). It returns the winning provider or `None`. If the registry
+exposes a different resolver name, use it. Building the poller in `__init__` warms the triple eagerly; if
+you prefer lazy warming, construct `self.poller` on first `events_poll` instead.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1044,7 +1102,7 @@ poll cursor, provider poller) contracts, and the `events_subscribe` long-poll/st
 
 Run: `pytest -v`
 Expected: PASS (all tests — the cache/bus/poller modules are additive; no existing CLI/MCP test changes
-because they don't construct the daemon `Server`).
+because they don't construct the daemon `DaemonServer`).
 
 - [ ] **Step 7: Commit**
 
@@ -1093,10 +1151,12 @@ No device, APK, socket, thread, or sleep is needed. `SnapshotCache` and `EventBu
 `drain_once()`; `tests/test_event_poller.py` feeds canned `poll_events` batches and `list()` results and
 asserts the published envelope type/source and cursor/dedup behavior — **no real thread**. The
 `daemon/server.py` additions are exercised through Plan 5.1's synchronous `handle_line(line) -> line` and
-its `make_test_server(tmp_path)` warm-`Server` helper (over a `FakeBackend`-backed registry): `observe`
-returns a `snapshot_id`, a stale pinned id is rejected before dispatch, an act yields distinct
-`snapshot_before`/`snapshot_after` (and backfills `runs.jsonl`), acts emit `action_started`/
-`action_finished`, and `events_poll` returns the `{"events","cursor"}` shape and filters by cursor.
-`monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))` isolates config/audit/run-record state. Existing
-CLI/MCP suites stay green because they never construct the daemon `Server`; the cache/bus/poller only
-activate inside it.
+its `_srv(tmp_path)` warm-`DaemonServer` helper (in `tests/test_daemon_server.py`, over a
+`FakeBackend`-backed `ProviderRegistry`): `observe` returns a `snapshot_id`, a stale pinned id is rejected
+before dispatch, an act yields distinct `snapshot_before`/`snapshot_after` (and sets the same two fields on
+the `runs.jsonl` record before append), acts emit `action_started`/`action_finished`, `bind()`/`shutdown()`
+emit `lifecycle` events, and `events_poll` returns the `{"events","cursor"}` shape and filters by cursor.
+The warm `(ProviderRegistry, Session, Connection)` is reached via `self._warm_triple()`, not `self.registry`
+(which is the RPC method registry). `monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))` isolates
+config/audit/run-record state. Existing CLI/MCP suites stay green because they never construct the daemon
+`DaemonServer`; the cache/bus/poller only activate inside it.
