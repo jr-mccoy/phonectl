@@ -7,10 +7,12 @@ import threading
 import time
 import uuid
 
-from phonectl import audit, config, observer, policy, results
+from phonectl import audit, config, errors, observer, policy, results
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.daemon import rpc as rpc_mod
 from phonectl.daemon.discovery import LOOPBACK
+from phonectl.daemon.events import EventBus
+from phonectl.daemon.snapshots import SnapshotCache
 
 
 class DaemonServer:
@@ -31,6 +33,10 @@ class DaemonServer:
         self._sock = None
         self._running = False
         self._port = None
+        self.snapshots = SnapshotCache()
+        self.events = EventBus()
+        # poller is built lazily on first events_poll call (avoids eager triple build)
+        self.poller = None
         self._register_builtins()
 
     # ── warm provider lifecycle ─────────────────────────────────────────────
@@ -52,7 +58,36 @@ class DaemonServer:
             from phonectl import actuator, runtime
             verb = params["verb"]
             target = params.get("target", {})
+            request_id = ctx.get("request_id")
+
+            # Stale-index protection: validate before dispatch
+            try:
+                self.snapshots.validate(
+                    params.get("snapshot_id"),
+                    current_foreground=self.snapshots.current_foreground,
+                )
+            except errors.StaleSnapshotError as exc:
+                env = results.err(
+                    exc,
+                    user_action="Re-observe (the screen changed); resolve the index against a fresh snapshot.",
+                    request_id=request_id,
+                )
+                self.events.publish(
+                    "action_finished",
+                    {"verb": verb, "target": target, "request_id": request_id,
+                     "ok": False, "snapshot_after": None},
+                    source="daemon",
+                )
+                return env
+
+            self.events.publish(
+                "action_started",
+                {"verb": verb, "target": target, "request_id": request_id},
+                source="daemon",
+            )
+
             fn = self._fn_for(params)
+            snapshot_before = self.snapshots.current_id
 
             def warm_build(cfg):
                 return self._warm_triple()
@@ -62,15 +97,33 @@ class DaemonServer:
                 build=warm_build,
                 yes=bool(params.get("yes", False)),
                 cfg=self._cfg,
-                request_id=ctx.get("request_id"),
+                request_id=request_id,
                 idempotency_key=params.get("idempotency_key"),
             )
+
+            # Mint snapshot_after from post-action session (invalidates the prior id)
+            snapshot_after = None
+            _, session, _ = self._warm_triple()
+            if env.get("ok") and session.last is not None:
+                snapshot_after = self.snapshots.put(session.last)
+                env["snapshot_before"] = snapshot_before
+                env["snapshot_after"] = snapshot_after
+
+            self.events.publish(
+                "action_finished",
+                {"verb": verb, "target": target, "request_id": request_id,
+                 "ok": bool(env.get("ok")), "snapshot_after": snapshot_after},
+                source="daemon",
+            )
+
             from phonectl.daemon import records as _records
             rec = _records.build_record(
                 env, params,
                 action_id=uuid.uuid4().hex,
                 now=self._now,
             )
+            rec["snapshot_before"] = snapshot_before
+            rec["snapshot_after"] = snapshot_after
             self._append_record(rec)
             return env
 
@@ -83,10 +136,12 @@ class DaemonServer:
                 k: params[k] for k in ("screenshot", "snap_path", "tree", "relations")
                 if k in params
             })
+            snapshot_id = self.snapshots.put(snap)
             return results.ok(
                 capability="ui.observe",
                 provider=getattr(reg, "last_used", None) or "adb",
                 data=snap,
+                snapshot_id=snapshot_id,
             )
 
         @self.registry.register("find")
@@ -139,6 +194,24 @@ class DaemonServer:
                 "methods": sorted(self.registry._handlers),
             })
 
+        @self.registry.register("events_poll")
+        def _events_poll(params, ctx):
+            # Build the poller lazily on first call
+            if self.poller is None:
+                from phonectl.daemon.poller import EventPoller
+                pr, _, _ = self._warm_triple()
+                ui_src = pr.for_capability("observe_ui_events") if hasattr(pr, "for_capability") else None
+                notif_src = pr.for_capability("observe_notifications") if hasattr(pr, "for_capability") else None
+                self.poller = EventPoller(self.events, ui_source=ui_src, notif_source=notif_src)
+            self.poller.drain_once()
+            since = int(params.get("since", 0))
+            max_n = int(params.get("max", 100))
+            return results.ok(
+                capability="events.poll",
+                data=self.events.poll(since, max=max_n),
+                request_id=ctx.get("request_id"),
+            )
+
     # ── core dispatch ───────────────────────────────────────────────────────
 
     def handle_line(self, line: str) -> str:
@@ -177,9 +250,16 @@ class DaemonServer:
     def _fn_for(self, params):
         from phonectl import actuator
         verb = params["verb"]
+        target = params.get("target")
         if verb == "tap":
             if "i" in params:
                 i = params["i"]
+                return lambda b, s: actuator.tap(b, s, i=i)
+            if isinstance(target, dict) and "i" in target:
+                i = target["i"]
+                return lambda b, s: actuator.tap(b, s, i=i)
+            if isinstance(target, str) and target.startswith("i="):
+                i = int(target.split("=", 1)[1])
                 return lambda b, s: actuator.tap(b, s, i=i)
             x, y = params["x"], params["y"]
             return lambda b, s: actuator.tap(b, s, x=x, y=y)
@@ -198,6 +278,9 @@ class DaemonServer:
         raise NotImplementedError(f"no fn mapping for verb {verb!r}")
 
     # ── lifecycle (bind / serve / shutdown) ─────────────────────────────────
+
+    def _publish_lifecycle(self, phase: str) -> None:
+        self.events.publish("lifecycle", {"phase": phase}, source="daemon")
 
     def bind(self, *, server_factory=None) -> tuple:
         if server_factory is None:
@@ -220,6 +303,7 @@ class DaemonServer:
             "version": PROTOCOL_VERSION,
             "started_at": self._now(),
         })
+        self._publish_lifecycle("started")
         return self._host, self._port
 
     def serve_forever(self):
@@ -250,6 +334,7 @@ class DaemonServer:
 
     def shutdown(self):
         from phonectl.daemon import discovery
+        self._publish_lifecycle("stopped")
         self._running = False
         if self._sock is not None:
             self._sock.close()

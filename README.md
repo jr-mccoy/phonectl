@@ -1206,7 +1206,32 @@ Set via `$PHONECTL_HOME/config.json`:
 
 ### Run records (`runs.jsonl`)
 
-Every action dispatched through the daemon is appended as a structured run record to `$PHONECTL_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before` (wired in Phase 5.2), `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
+Every action dispatched through the daemon is appended as a structured run record to `$PHONECTL_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before`, `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
+
+### Events & snapshots (Phase 5.2)
+
+The daemon is the single writer **and** event broker.
+
+**Snapshot cache:** `observe` returns a monotonic `snapshot_id` (`snap_1`, `snap_2`, …). Every `act` records `snapshot_before` / `snapshot_after` on the response envelope and the `runs.jsonl` record, making the re-observe invariant explicit. Index-based acts may optionally carry a `snapshot_id` field; the daemon rejects with a `stale_snapshot` error (→ re-observe) if the id no longer matches the current snapshot or the foreground app changed since the snapshot was taken (strategy §21).
+
+**Event bus:** All events share the envelope `{"seq": int, "type": str, "ts": float, "source": str, "data": dict}`. Event types:
+
+| Type | Source | When |
+|---|---|---|
+| `ui_changed` | `accessibility` | Provider polled a UI state change |
+| `notification_posted` | `notifications` | New notification key seen by diff |
+| `action_started` | `daemon` | An act passed the stale check and was dispatched |
+| `action_finished` | `daemon` | An act completed (success or error) |
+| `lifecycle` | `daemon` | Daemon started or stopped |
+
+**Subscription — cursor-based long-poll:** hold the last `cursor`, call `events_poll(since=cursor, max=N)`, process the batch, repeat with the new cursor. Server-push streaming (`events_subscribe`) is a later evolution; the cursor contract makes it a drop-in addition.
+
+```python
+# RPC call
+{"method": "events_poll", "params": {"since": 0, "max": 50}}
+# Response
+{"ok": true, "data": {"events": [...], "cursor": 5}}
+```
 
 ### Discovery file (`daemon.json`)
 

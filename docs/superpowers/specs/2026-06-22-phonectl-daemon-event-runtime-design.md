@@ -453,3 +453,48 @@ keeps alive.
 Together, 5.1 and 5.2 deliver the strategy §22 daemon: single writer, snapshot cache + invalidation,
 provider lifecycle, event fanout, one policy choke-point, and durable run records — as a **compatible
 evolution** of the Phase 2.1 seam, never a rewrite.
+
+---
+
+## Plan 5.2 — Implemented contracts (as shipped)
+
+### Snapshot cache (`daemon/snapshots.py` — `SnapshotCache`)
+
+- `put(snapshot) -> str` — mints `snap_N` (monotonic, injectable counter), caches under that id, sets it current.
+- `get(snapshot_id) -> dict | None` — retrieve cached snapshot.
+- `current_id` / `current_foreground` — read-only properties; both `None` before first `put`.
+- `foreground_of(snapshot_id) -> str | None` — `snapshot["app"]["package"]` for any cached id.
+- `validate(expected_id, *, current_foreground) -> None` — no-op when `expected_id is None`. Raises `errors.StaleSnapshotError` when (a) `expected_id != current_id`, or (b) `expected_id == current_id` but both `current_foreground` and the pinned foreground are non-None and differ.
+
+**RPC integration:** `observe` calls `snapshots.put(snap)` and adds `snapshot_id` to the envelope. `act` captures `snapshot_before = snapshots.current_id` before dispatch, calls `snapshots.put(session.last)` after a successful action to mint `snapshot_after`, and sets both on the envelope and the `runs.jsonl` record. The stale check runs **before** `_fn_for` or `runtime.run_action` — a mismatched `snapshot_id` param aborts immediately with `code="stale_snapshot"`.
+
+### Event bus (`daemon/events.py` — `EventBus`)
+
+Event envelope: `{"seq": int, "type": str, "ts": float, "source": str, "data": dict}`.
+
+Valid types (`EVENT_TYPES` frozenset): `ui_changed`, `notification_posted`, `action_started`, `action_finished`, `lifecycle`. Publishing an unknown type raises `ValueError` before mutating the log.
+
+- `publish(type, data, *, source) -> dict` — next seq, appends event, returns it.
+- `poll(since=0, *, max=100) -> {"events": [...], "cursor": int}` — events with `seq > since`, bounded by `max`; `cursor` is the last emitted `seq` (or `since` when none).
+- `latest_seq` — highest assigned seq, or 0.
+
+### Provider poller (`daemon/poller.py` — `EventPoller`)
+
+`EventPoller(bus, *, ui_source=None, notif_source=None)` — sources are injected; either may be `None`.
+
+- `drain_once(*, max_events=50) -> int` — pulls from the UI source's cursor (publishing as `ui_changed`, `source="accessibility"`), diffs notifications `list()` against seen keys (publishing new ones as `notification_posted`, `source="notifications"`). Returns count published. No threads.
+- `tick(max_events)` — alias for `drain_once`.
+
+### RPC additions (`daemon/server.py`)
+
+| Method | Change |
+|---|---|
+| `observe` | Returns `snapshot_id` in the top-level envelope |
+| `act` | Validates `snapshot_id` param (stale check); returns `snapshot_before`/`snapshot_after`; emits `action_started`/`action_finished` on `self.events`; backfills both fields on the `runs.jsonl` record |
+| `events_poll` | New: calls `self.poller.drain_once()` then `self.events.poll(since, max)` → `results.ok(data={"events":[...],"cursor":int})` |
+
+Lifecycle: `bind()` publishes `lifecycle {"phase":"started"}`; `shutdown()` publishes `lifecycle {"phase":"stopped"}`.
+
+### `events_subscribe` — deferred
+
+Real server-push streaming (websocket/SSE-style fanout) is explicitly deferred. The cursor-based `events_poll` is the v1 subscription contract; `events_subscribe` is a drop-in evolution over the same cursor shape.
