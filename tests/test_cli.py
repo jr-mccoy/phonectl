@@ -570,3 +570,62 @@ def test_trust_status_reports_toggles(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert out["data"]["version"] == 3
     assert out["data"]["capabilities"]["act_set_text_native"] is False
+
+
+# --- Plan 4.4: OCR provider ---
+
+def test_ocr_screen_unavailable(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_ocr_provider", lambda: None)
+    rc = cli.main(["ocr", "screen", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc != 0 and out["ok"] is False
+    assert out["error"]["code"] == "capability_unavailable"
+
+
+def test_ocr_screen_ok(tmp_path, monkeypatch, capsys):
+    from phonectl.providers.ocr import OcrProvider
+
+    class FakeOcr(OcrProvider):
+        def __init__(self): pass
+        def is_available(self): return True
+        def capabilities(self):
+            from phonectl import capabilities
+            return capabilities.make(observe_ocr=True)
+        def ocr_screen(self, registry, **kw):
+            return {"regions": [{"text": "Balance", "bounds": [0, 0, 10, 10],
+                                 "confidence": 0.9}], "source": "tesseract"}
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_ocr_provider", lambda: FakeOcr())
+    rc = cli.main(["ocr", "screen", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+    assert out["data"]["regions"][0]["text"] == "Balance"
+
+
+def test_find_ocr_text_returns_matching_regions(tmp_path, monkeypatch, capsys):
+    from phonectl.providers.ocr import OcrProvider
+
+    class FakeOcr(OcrProvider):
+        def __init__(self): pass
+        def is_available(self): return True
+        def capabilities(self):
+            from phonectl import capabilities
+            return capabilities.make(observe_ocr=True)
+        def ocr_screen(self, registry, **kw):
+            return {"regions": [
+                {"text": "Balance", "bounds": [0, 0, 10, 10], "confidence": 0.9},
+                {"text": "Settings", "bounds": [0, 20, 10, 30], "confidence": 0.8},
+            ], "source": "tesseract"}
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_ocr_provider", lambda: FakeOcr())
+    rc = cli.main(["find", "--ocr-text", "Bal.*", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+    assert len(out["data"]["matches"]) == 1
+    assert out["data"]["matches"][0]["text"] == "Balance"
