@@ -63,3 +63,13 @@ class TermuxApiProvider:
             cmd += ["-r", str(rate)]
         cmd.append(text)
         self._run(*cmd)
+
+    def notifications_list(self) -> list:
+        raw = self._run("termux-notification-list").strip()
+        if not raw:
+            return []
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            return []
+        return data if isinstance(data, list) else []
