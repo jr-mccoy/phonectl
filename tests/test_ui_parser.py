@@ -249,3 +249,64 @@ def test_extract_list_returns_empty_when_no_scrollable():
 
 def test_extract_list_returns_empty_for_empty_input():
     assert ui_parser.extract_list([]) == []
+
+
+# ── Task 2: extract_form ──────────────────────────────────────────────────────
+
+def _make_edittext(i, value, bounds, password=False, focused=False, hint=""):
+    x1, y1, x2, y2 = bounds
+    el = _make_el(i, value, bounds, clickable=True)
+    el["editable"] = True
+    el["class"] = "android.widget.EditText"
+    el["password"] = password
+    el["focused"] = focused
+    if hint:
+        el["hint_text"] = hint
+    return el
+
+
+def _make_label(i, text, bounds):
+    el = _make_el(i, text, bounds, clickable=False)
+    el["editable"] = False
+    el["class"] = "android.widget.TextView"
+    return el
+
+
+def test_extract_form_finds_field_without_relations():
+    label = _make_label(0, "Username", [10, 50, 200, 90])
+    field = _make_edittext(1, "alice", [10, 100, 400, 150], hint="Enter username")
+    rows = ui_parser.extract_form([label, field])
+    assert len(rows) == 1
+    assert rows[0]["field_i"] == 1
+    assert rows[0]["value"] == "alice"
+
+
+def test_extract_form_redacts_password_fields():
+    field = _make_edittext(0, "secret", [0, 0, 100, 50], password=True)
+    rows = ui_parser.extract_form([field])
+    assert rows[0]["is_password"] is True
+    assert rows[0]["value"] == "[redacted]"
+
+
+def test_extract_form_finds_label_via_relations():
+    label = _make_label(0, "Email", [10, 50, 200, 90])
+    field = _make_edittext(1, "", [10, 100, 400, 150])
+    relations = {
+        "siblings": {0: [1], 1: [0]},
+        "parent": {0: None, 1: None},
+        "children": {0: [], 1: []},
+        "ancestors": {0: [], 1: []},
+    }
+    rows = ui_parser.extract_form([label, field], relations=relations)
+    assert rows[0]["label"] == "Email"
+
+
+def test_extract_form_marks_focused_field():
+    field = _make_edittext(0, "", [0, 0, 100, 50], focused=True)
+    rows = ui_parser.extract_form([field])
+    assert rows[0]["is_focused"] is True
+
+
+def test_extract_form_returns_empty_when_no_fields():
+    label = _make_label(0, "Title", [0, 0, 100, 30])
+    assert ui_parser.extract_form([label]) == []

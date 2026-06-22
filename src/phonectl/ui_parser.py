@@ -151,6 +151,66 @@ def parse_relations(xml: str) -> dict:
     return {"parent": parent, "children": children, "siblings": siblings, "ancestors": ancestors}
 
 
+def extract_form(elements: list, *, relations: dict | None = None) -> list:
+    """Return form fields with associated labels.
+
+    Uses sibling relations when available, Y-proximity otherwise.
+    Password fields have value replaced with '[redacted]'.
+    """
+    fields = [
+        e for e in elements
+        if e.get("editable") or "EditText" in e.get("class", "")
+    ]
+    by_i = {e["i"]: e for e in elements}
+    result = []
+
+    for field in fields:
+        label = None
+
+        if relations is not None:
+            sibs = relations.get("siblings", {}).get(field["i"], [])
+            for sib_i in sibs:
+                sib = by_i.get(sib_i, {})
+                if sib.get("text") and not sib.get("editable"):
+                    label = sib["text"]
+                    break
+            if label is None:
+                for anc_i in relations.get("ancestors", {}).get(field["i"], []):
+                    anc = by_i.get(anc_i, {})
+                    if anc.get("text") and not anc.get("editable"):
+                        label = anc["text"]
+                        break
+        else:
+            fy1, fy2 = field["bounds"][1], field["bounds"][3]
+            candidates = [
+                e for e in elements
+                if e["i"] != field["i"]
+                and e.get("text")
+                and not e.get("editable")
+                and e["bounds"][1] <= fy2 and e["bounds"][3] >= fy1
+            ]
+            if candidates:
+                fx = field["center"][0]
+                label = min(candidates,
+                            key=lambda e: abs(e["center"][0] - fx))["text"]
+
+        value = field.get("text", "") or ""
+        if field.get("password"):
+            value = "[redacted]"
+
+        result.append({
+            "field_i": field["i"],
+            "label": label,
+            "value": value,
+            "hint": field.get("hint_text", "") or "",
+            "class": field.get("class", ""),
+            "is_password": bool(field.get("password")),
+            "is_focused": bool(field.get("focused")),
+        })
+
+    return result
+
+
 def extract_list(elements: list, *, container_i=None, relations=None) -> list:
     """Return child elements of a scrollable list container using spatial containment."""
     if not elements:
