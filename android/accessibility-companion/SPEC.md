@@ -6,6 +6,11 @@ This document specifies the Kotlin AccessibilityService companion that the Pytho
 `AccessibilityProvider` talks to over a local transport (socket, Plan 4.3). The APK is built
 separately from this spec; this document is the input to that build.
 
+**Transport spec:** See `android/foreground-service/SPEC.md` for the full wire protocol (framing,
+request/response envelope, `request_id`/`timeout`/`version`, capability negotiation,
+`handshake` method, stale-response protection, and the persistent "Stop phonectl" notification /
+Quick-Settings tile / per-capability toggle UI).
+
 ---
 
 ## 1. Service surface
