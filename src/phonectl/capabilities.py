@@ -39,6 +39,8 @@ CAPABILITY_KEYS = (
     "notifications_wait",
     "notifications_reply",
     "notifications_dismiss",
+    # Phase 4.4 addition (optional OCR)
+    "observe_ocr",
 )
 
 
