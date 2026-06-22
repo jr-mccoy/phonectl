@@ -2,6 +2,7 @@
 
 **Date:** 2026-06-22
 **Status:** Design spec (Phase 5 brainstorm→spec). Required before Plans 5.1 and 5.2.
+**Plan 5.1 shipped:** daemon process + loopback JSON-RPC API + single-writer dispatch + durable run records (`runs.jsonl`) + frontend auto-routing. All 9 tasks implemented and green. **Plan 5.2 is next:** snapshot cache + monotonic snapshot IDs + event bus + fanout subscriptions.
 **Author:** Jeremy McCoy (with Claude)
 
 **Reads with:**
