@@ -74,3 +74,8 @@ def test_intent_broadcast_classifies_high():
     snap = {"app": {}, "elements": []}
     result = risk.classify(snap, "intent_broadcast", "com.example.ACTION")
     assert result["level"] == "high"
+
+
+def test_notifications_reply_is_high_risk():
+    from phonectl import risk
+    assert "notifications_reply" in risk.HIGH_RISK_VERBS

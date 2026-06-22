@@ -41,7 +41,7 @@ _SIGNAL_LEVEL = {
     "critical_verb": "critical",
 }
 
-HIGH_RISK_VERBS = frozenset({"packages_stop", "intent_broadcast"})
+HIGH_RISK_VERBS = frozenset({"packages_stop", "intent_broadcast", "notifications_reply"})
 CRITICAL_VERBS = frozenset({"packages_clear"})
 
 
