@@ -57,6 +57,7 @@ def run_action(
     kill_switch=audit.kill_switch_active,
     log=audit.log_action,
     now=time.time,
+    companion_transport=None,
 ) -> dict:
     if idempotency_key is not None and idempotency_key in _idempotency_cache:
         replay = dict(_idempotency_cache[idempotency_key])
@@ -67,6 +68,12 @@ def run_action(
     rid = request_id or gen_id()
     base = {"verb": verb, "target": target, "request_id": rid}
 
+    extra_checks = []
+    if companion_transport is not None:
+        from phonectl import trust as _trust
+        _t = companion_transport
+        extra_checks.append(lambda: _trust.companion_stopped(_t))
+
     env = _run_action_body(
         verb,
         fn,
@@ -76,6 +83,7 @@ def run_action(
         cfg,
         base,
         kill_switch=kill_switch,
+        extra_checks=extra_checks,
         log=log,
         now=now,
     )
@@ -85,11 +93,11 @@ def run_action(
 
 
 def _run_action_body(
-    verb, fn, target, build, yes, cfg, base, *, kill_switch, log, now
+    verb, fn, target, build, yes, cfg, base, *, kill_switch, extra_checks=(), log, now
 ) -> dict:
     rid = base["request_id"]
 
-    if kill_switch():
+    if kill_switch(extra_checks=extra_checks):
         return results.err(
             errors.StoppedError("action refused (kill switch STOP present)"),
             user_action="Remove the $PHONECTL_HOME/STOP file to resume.",
