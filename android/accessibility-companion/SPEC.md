@@ -278,7 +278,88 @@ The companion APK requires:
 
 ---
 
-## 6. Non-goals (Plan 4.1 scope)
+## 6. NotificationListenerService methods (Plan 4.2)
+
+The companion APK also implements a `NotificationListenerService` that surfaces notifications as a
+provider. These methods are dispatched over the **same** local transport as the
+`AccessibilityService` methods above.
+
+### `notifications_list`
+
+Params: `{}`
+
+Returns:
+
+```json
+{
+  "notifications": [
+    {
+      "key": "0|com.msg|42|tag|10123",
+      "package": "com.msg",
+      "title": "Alice",
+      "text": "see you at 6?",
+      "category": "msg",
+      "post_time": 1718900000000,
+      "actions": [
+        {"title": "Reply", "remote_input": true},
+        {"title": "Mark read"}
+      ]
+    }
+  ]
+}
+```
+
+`actions` lists the notification actions. An action with `"remote_input": true` supports direct
+reply via `notifications_reply`. The Python side sets `can_reply` on the normalized item when any
+action has `remote_input: true`.
+
+Implementation: iterate `NotificationListenerService.getActiveNotifications()`, serialize each
+`StatusBarNotification` with its `Notification.actions` and `RemoteInput` presence.
+
+---
+
+### `notifications_reply`
+
+Params: `{"key": "<StatusBarNotification key>", "text": "<reply text>"}`
+
+Returns: `{"sent": true}`
+
+Implementation: find the `StatusBarNotification` by `key`, locate the first `Action` with a
+`RemoteInput`, construct a `PendingIntent` with the reply text filled into the `RemoteInput`'s
+result key via `RemoteInput.addResultsToIntent`, and fire the intent.
+
+Returns `ok: false` with `code: "no_remote_input"` if the notification has no `RemoteInput`
+action, and `code: "not_found"` if the key is not in the active notification list.
+
+---
+
+### `notifications_dismiss`
+
+Params: `{"key": "<StatusBarNotification key>"}`
+
+Returns: `{"dismissed": true}`
+
+Implementation: call `NotificationListenerService.cancelNotification(key)`. Returns `ok: false`
+with `code: "not_found"` if the key is no longer active.
+
+---
+
+### Permission and grant flow
+
+The `NotificationListenerService` requires `android.permission.BIND_NOTIFICATION_LISTENER_SERVICE`
+(implicit from the `<service>` element) plus a runtime grant:
+
+```
+Settings → Notifications → Device & app notifications → [companion APK] → Allow
+```
+
+`phonectl setup notifications` guides the user through this flow, checks the grant with
+`NotificationManager.isNotificationListenerAccessGranted`, and reports whether the service is
+currently active.
+
+---
+
+## 7. Non-goals (Plan 4.1 scope)
 
 - The **Kotlin implementation** — this spec is the design input; code is built separately.
 - **`SocketTransport`** — specified in Plan 4.3.
@@ -289,7 +370,7 @@ The companion APK requires:
 
 ---
 
-## 7. Error codes
+## 8. Error codes
 
 | `error.code` | Meaning |
 |---|---|
@@ -299,3 +380,5 @@ The companion APK requires:
 | `gesture_rejected` | The gesture dispatcher rejected the gesture |
 | `screencap_unavailable` | Screenshot API not available on this device/API level |
 | `handler_error` | Unexpected exception in the handler |
+| `no_remote_input` | The notification has no `RemoteInput` action |
+| `not_found` | The notification key is no longer in the active list |

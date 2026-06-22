@@ -75,6 +75,19 @@ via `ProviderRegistry.__getattr__`, so the companion never has to reimplement sh
 the companion is absent, `_make_accessibility_provider()` returns `None` and the registry is
 ADB-first, unchanged.
 
+**Notifications are a first-class provider, not UI-scraping (Phase 4.2):** `NotificationsProvider`
+(`src/phonectl/providers/notifications.py`) exposes notifications as structured data rather than
+requiring agents to parse notification shade UI. It is prepended ahead of `TermuxApiProvider` in
+`build_runtime()`. When the companion's `NotificationListenerService` is reachable, the provider
+delivers full capability (`observe_notifications`, `notifications_wait`, `notifications_reply`,
+`notifications_dismiss`) with per-notification `can_reply`/`can_dismiss` flags derived from each
+notification's `RemoteInput` actions. When only Termux:API is present, the provider falls back to
+`termux-notification-list` for read-only listing (`observe_notifications=True`; reply and dismiss
+unavailable). When neither is present the provider is not added to the registry and all
+notification capabilities return `capability_unavailable`. `notifications_reply` is classified
+**high-risk** (it sends visible content into arbitrary apps) and routes through
+`runtime.run_action` for mode/kill-switch/risk gating, matching the policy contract of `tap`/`type`.
+
 **Power rationale (why ADB, not the a11y APK, is the first backend):** ADB runs as the
 `shell` user (uid 2000) and is system-wide — a superset of the AccessibilityService's
 abilities. It can drive the UI (`uiautomator` + `input`) **and** reach beneath it

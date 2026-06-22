@@ -20,6 +20,7 @@ from phonectl.adb_backend import AdbBackend
 from phonectl.providers.registry import ProviderRegistry
 from phonectl.providers.termux import TermuxApiProvider
 from phonectl.providers.accessibility import AccessibilityProvider  # noqa: F401
+from phonectl.providers.notifications import NotificationsProvider
 from phonectl.session import Session
 from phonectl.connection import Connection, GUIDANCE
 
@@ -39,13 +40,26 @@ def _make_accessibility_provider():
     return None
 
 
+def _make_notifications_provider():
+    # Companion transport comes from Plan 4.3; termux from Plan 3.5.
+    # Returns None when neither source is available so the registry omits it cleanly.
+    termux = _make_termux_provider()
+    transport = None  # Plan 4.3 supplies SocketTransport; None here keeps builds Termux-only.
+    p = NotificationsProvider(transport=transport, termux=termux)
+    return p if p.is_available() else None
+
+
 def build_runtime(cfg, backend=None):
     adb = backend or _make_backend(cfg)
     if isinstance(adb, ProviderRegistry):
         registry = adb
     else:
-        providers = [p for p in [_make_accessibility_provider(), _make_termux_provider(), adb]
-                     if p is not None]
+        providers = [p for p in [
+            _make_accessibility_provider(),
+            _make_notifications_provider(),
+            _make_termux_provider(),
+            adb,
+        ] if p is not None]
         registry = ProviderRegistry(providers)
     session = Session()
     conn = Connection(registry, cfg)
@@ -706,6 +720,131 @@ def _cmd_packages_clear(args):
     return 0 if env["ok"] else 1
 
 
+def _cmd_notifications_list(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    provider = registry.for_capability("observe_notifications")
+    if provider is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("observe_notifications not available"),
+            capability="notifications.list",
+            user_action="Install the phonectl companion APK or Termux:API.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    items = provider.list(package=getattr(args, "package", None))
+    env = results.ok(capability="notifications.list", data=items)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for n in items:
+            print(f"{n['package']}  title={n['title']!r}  can_reply={n['can_reply']}")
+    return 0
+
+
+def _cmd_notifications_wait(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    provider = registry.for_capability("observe_notifications")
+    if provider is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("observe_notifications not available"),
+            capability="notifications.wait",
+            user_action="Install the phonectl companion APK or Termux:API.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    match = provider.wait(
+        package=getattr(args, "package", None),
+        title_contains=getattr(args, "title_contains", None),
+        text_contains=getattr(args, "text_contains", None),
+        timeout=getattr(args, "timeout", 30.0),
+    )
+    env = results.ok(capability="notifications.wait", data=match)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif match:
+        print(f"{match['package']}  title={match['title']!r}")
+    else:
+        print("phonectl: no matching notification found (timed out)")
+    return 0
+
+
+def _cmd_notifications_reply(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    provider = registry.for_capability("observe_notifications")
+    if provider is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("observe_notifications not available"),
+            capability="notifications.reply",
+            user_action="Install the phonectl companion APK.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    key = args.key
+    text = args.text
+    env = runtime.run_action(
+        "notifications_reply",
+        lambda b, s: provider.reply(key, text),
+        {"key": key, "text": f"<{len(text)} chars>"},
+        build=build_runtime,
+        yes=getattr(args, "yes", False),
+    )
+    if env["ok"]:
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        return 0
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return 1
+
+
+def _cmd_notifications_dismiss(args):
+    cfg = config.load()
+    registry, session, conn = build_runtime(cfg)
+    provider = registry.for_capability("observe_notifications")
+    if provider is None:
+        env = results.err(
+            errors.CapabilityUnavailableError("observe_notifications not available"),
+            capability="notifications.dismiss",
+            user_action="Install the phonectl companion APK.",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: {env['error']['message']}")
+        return 1
+    key = args.key
+    env = runtime.run_action(
+        "notifications_dismiss",
+        lambda b, s: provider.dismiss(key),
+        {"key": key},
+        build=build_runtime,
+        yes=getattr(args, "yes", False),
+    )
+    if env["ok"]:
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        return 0
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="phonectl")
     p.add_argument("--version", action="version", version=__version__)
@@ -975,6 +1114,33 @@ def build_parser() -> argparse.ArgumentParser:
     pkcl.add_argument("--json", action="store_true")
     pkcl.set_defaults(func=_cmd_packages_clear)
     pk.set_defaults(func=lambda args: (pk.print_help(), 2)[1])
+
+    # notifications subcommand group
+    nt = sub.add_parser("notifications")
+    ntsub = nt.add_subparsers(dest="notifications_cmd")
+    ntl = ntsub.add_parser("list")
+    ntl.add_argument("--package", default=None)
+    ntl.add_argument("--json", action="store_true")
+    ntl.set_defaults(func=_cmd_notifications_list)
+    ntw = ntsub.add_parser("wait")
+    ntw.add_argument("--package", default=None)
+    ntw.add_argument("--title-contains", dest="title_contains", default=None)
+    ntw.add_argument("--text-contains", dest="text_contains", default=None)
+    ntw.add_argument("--timeout", type=float, default=30.0)
+    ntw.add_argument("--json", action="store_true")
+    ntw.set_defaults(func=_cmd_notifications_wait)
+    ntr = ntsub.add_parser("reply")
+    ntr.add_argument("key")
+    ntr.add_argument("text")
+    ntr.add_argument("--yes", action="store_true")
+    ntr.add_argument("--json", action="store_true")
+    ntr.set_defaults(func=_cmd_notifications_reply)
+    ntd = ntsub.add_parser("dismiss")
+    ntd.add_argument("key")
+    ntd.add_argument("--yes", action="store_true")
+    ntd.add_argument("--json", action="store_true")
+    ntd.set_defaults(func=_cmd_notifications_dismiss)
+    nt.set_defaults(func=lambda args: (nt.print_help(), 2)[1])
 
     return p
 

@@ -359,6 +359,85 @@ def resume() -> dict:
     return results.ok(capability="control.resume", data={"stopped": False})
 
 
+def _notifications_provider(build):
+    from phonectl.providers.registry import ProviderRegistry
+    backend, _session, _conn = build(config.load())
+    registry = backend if isinstance(backend, ProviderRegistry) else ProviderRegistry([backend])
+    return registry.for_capability("observe_notifications")
+
+
+def notifications_list(build=_default_build, *, package=None) -> dict:
+    try:
+        provider = _notifications_provider(build)
+        if provider is None:
+            return results.err(
+                errors.CapabilityUnavailableError("observe_notifications not available"),
+                capability="notifications.list",
+                user_action="Install the phonectl companion APK or Termux:API.",
+            )
+        items = provider.list(package=package)
+        return results.ok(capability="notifications.list", data=items)
+    except errors.PhonectlError as e:
+        return results.err(e)
+
+
+def notifications_wait(build=_default_build, *, package=None, title_contains=None,
+                       text_contains=None, timeout=30) -> dict:
+    try:
+        provider = _notifications_provider(build)
+        if provider is None:
+            return results.err(
+                errors.CapabilityUnavailableError("observe_notifications not available"),
+                capability="notifications.wait",
+                user_action="Install the phonectl companion APK or Termux:API.",
+            )
+        match = provider.wait(package=package, title_contains=title_contains,
+                              text_contains=text_contains, timeout=float(timeout))
+        return results.ok(capability="notifications.wait", data=match)
+    except errors.PhonectlError as e:
+        return results.err(e)
+
+
+def notifications_reply(build=_default_build, *, key, text, confirm=False, dry_run=False) -> dict:
+    try:
+        provider = _notifications_provider(build)
+        if provider is None:
+            return results.err(
+                errors.CapabilityUnavailableError("observe_notifications not available"),
+                capability="notifications.reply",
+                user_action="Install the phonectl companion APK.",
+            )
+        cfg = _action_cfg(dry_run)
+        return runtime.run_action(
+            "notifications_reply",
+            lambda b, s: provider.reply(key, text),
+            {"key": key, "text": f"<{len(text)} chars>"},
+            build=build, yes=confirm, cfg=cfg,
+        )
+    except errors.PhonectlError as e:
+        return results.err(e)
+
+
+def notifications_dismiss(build=_default_build, *, key, confirm=False, dry_run=False) -> dict:
+    try:
+        provider = _notifications_provider(build)
+        if provider is None:
+            return results.err(
+                errors.CapabilityUnavailableError("observe_notifications not available"),
+                capability="notifications.dismiss",
+                user_action="Install the phonectl companion APK.",
+            )
+        cfg = _action_cfg(dry_run)
+        return runtime.run_action(
+            "notifications_dismiss",
+            lambda b, s: provider.dismiss(key),
+            {"key": key},
+            build=build, yes=confirm, cfg=cfg,
+        )
+    except errors.PhonectlError as e:
+        return results.err(e)
+
+
 def _schema(**props):
     return {"type": "object", "properties": props}
 
@@ -409,6 +488,11 @@ TOOLS = {
     "phone_fling": {"description": "Fling in a direction with velocity-scaled speed.", "schema": _schema(direction={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": fling, "needs_build": True},
     "phone_scroll": {"description": "Scroll in a direction, optionally within a scrollable container.", "schema": _schema(direction={"type": "string"}, within_index={"type": "integer"}, distance_pct={"type": "number"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": scroll, "needs_build": True},
     "phone_scroll_until": {"description": "Scroll until text or selector appears, or max_scrolls is exhausted.", "schema": _schema(direction={"type": "string"}, text={"type": "string"}, selector={"type": "object"}, max_scrolls={"type": "integer"}, within_index={"type": "integer"}), "handler": scroll_until_mcp, "needs_build": True},
+    # Phase 4.2: notifications (companion NotificationListenerService or Termux:API read-only)
+    "phone_notifications_list": {"description": "List current notifications; each item includes can_reply/can_dismiss flags.", "schema": _schema(package={"type": "string"}), "handler": notifications_list, "needs_build": True},
+    "phone_notifications_wait": {"description": "Poll until a matching notification appears or timeout elapses.", "schema": _schema(package={"type": "string"}, title_contains={"type": "string"}, text_contains={"type": "string"}, timeout={"type": "integer"}), "handler": notifications_wait, "needs_build": True},
+    "phone_notifications_reply": {"description": "Reply to a notification via RemoteInput (high-risk; companion required).", "schema": _schema(key={"type": "string"}, text={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": notifications_reply, "needs_build": True},
+    "phone_notifications_dismiss": {"description": "Dismiss a notification (companion required).", "schema": _schema(key={"type": "string"}, confirm={"type": "boolean"}, dry_run={"type": "boolean"}), "handler": notifications_dismiss, "needs_build": True},
     # Phase 3.4: structured extraction
     "phone_extract_list": {"description": "Extract rows from a scrollable list container.", "schema": _schema(container_index={"type": "integer"}), "handler": extract_list, "needs_build": True},
     "phone_extract_form": {"description": "Extract form fields with associated labels.", "schema": _OBJ, "handler": extract_form, "needs_build": True},

@@ -500,3 +500,46 @@ def test_build_runtime_without_accessibility_uses_adb(tmp_path, monkeypatch):
     cfg = config.load()
     registry, _, _ = cli.build_runtime(cfg)
     assert registry.for_capability("observe_ui_native") is None
+
+
+def test_build_runtime_includes_notifications_when_available(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.providers.notifications import NotificationsProvider
+    from phonectl.providers.transport import LoopbackTransport
+    np = NotificationsProvider(transport=LoopbackTransport({}))
+    monkeypatch.setattr(cli, "_make_notifications_provider", lambda: np)
+    monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    cfg = config.load()
+    registry, _, _ = cli.build_runtime(cfg)
+    assert registry.for_capability("observe_notifications") is np
+
+
+def test_notifications_list_unavailable(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
+    monkeypatch.setattr(cli, "_make_notifications_provider", lambda: None)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    rc = cli.main(["notifications", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc != 0 and out["ok"] is False
+    assert out["error"]["code"] == "capability_unavailable"
+
+
+def test_notifications_list_ok(tmp_path, monkeypatch, capsys):
+    from phonectl.providers.notifications import NotificationsProvider
+    from phonectl.providers.transport import LoopbackTransport
+    raw = {"key": "k", "package": "com.msg", "title": "Alice", "text": "hi",
+           "category": "msg", "post_time": 1, "actions": [{"title": "Reply", "remote_input": True}]}
+    np = NotificationsProvider(transport=LoopbackTransport(
+        {"notifications_list": lambda p: {"notifications": [raw]}}))
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
+    monkeypatch.setattr(cli, "_make_notifications_provider", lambda: np)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    rc = cli.main(["notifications", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+    assert out["data"][0]["can_reply"] is True

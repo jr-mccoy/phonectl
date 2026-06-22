@@ -149,3 +149,30 @@ def test_tts_speak_includes_rate_flag():
     p.tts_speak("fast speech", rate=1.5)
     cmd = " ".join(str(a) for a in runner.calls[-1])
     assert "-r" in cmd and "1.5" in cmd
+
+
+# Task 5 (Plan 4.2): notifications_list
+
+_NOTIF_JSON = _json.dumps([
+    {"id": 1, "packageName": "com.msg", "title": "Alice", "content": "hi", "when": 0}
+])
+
+
+def test_notifications_list_parses_json():
+    runner = FakeRunner([_NOTIF_JSON])
+    p = TermuxApiProvider(runner=runner, which=_fake_which_found)
+    result = p.notifications_list()
+    assert isinstance(result, list)
+    assert result[0]["packageName"] == "com.msg"
+
+
+def test_notifications_list_returns_empty_on_blank_output():
+    runner = FakeRunner([""])
+    p = TermuxApiProvider(runner=runner, which=_fake_which_found)
+    assert p.notifications_list() == []
+
+
+def test_notifications_list_returns_empty_on_bad_json():
+    runner = FakeRunner(["not json"])
+    p = TermuxApiProvider(runner=runner, which=_fake_which_found)
+    assert p.notifications_list() == []
