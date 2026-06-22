@@ -224,8 +224,22 @@ def test_register_registers_all_tools_on_fake_app(tmp_path, monkeypatch):
         for fn in app.functions.values()
         for param in inspect.signature(fn).parameters.values()
     )
+    assert list(inspect.signature(app.functions["phone_find"]).parameters) == ["selector"]
+    assert list(inspect.signature(app.functions["phone_observe_ui"]).parameters) == ["tree", "relations", "screenshot"]
     env = app.functions["phone_observe_ui"]()
     assert env["ok"] is True and env["capability"] == "ui.observe"
+
+
+def test_register_fastmcp_tools_have_named_arguments_when_sdk_available():
+    pytest.importorskip("mcp")
+    from mcp.server.fastmcp import FastMCP
+
+    app = FastMCP("phonectl-test")
+    mcp_server._register(app)
+    tool = app._tool_manager.get_tool("phone_observe_ui")
+    assert tool is not None
+    assert set(tool.parameters["properties"]) == {"tree", "relations", "screenshot"}
+    assert "kwargs" not in tool.parameters["properties"]
 
 
 def test_serve_raises_capability_unavailable_without_sdk(monkeypatch):

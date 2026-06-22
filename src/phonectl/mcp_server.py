@@ -1,6 +1,8 @@
 """Structured-result MCP server handlers, registry, and optional transport."""
 from __future__ import annotations
 
+import inspect
+
 from phonectl import (
     actuator,
     audit,
@@ -185,10 +187,44 @@ def call_tool(name, args, build=_default_build) -> dict:
         return results.err(e, **getattr(e, "lock_state", {}))
 
 
+def _annotation_for_schema(prop: dict):
+    typ = prop.get("type")
+    if typ == "boolean":
+        return bool
+    if typ == "integer":
+        return int
+    if typ == "object":
+        return dict
+    if typ == "string":
+        return str
+    return inspect.Signature.empty
+
+
 def _make_tool(name, build):
+    entry = TOOLS[name]
+
     def tool(**kwargs):
         return call_tool(name, kwargs, build=build)
 
+    handler_sig = inspect.signature(entry["handler"])
+    params = []
+    for param_name, prop in entry["schema"].get("properties", {}).items():
+        handler_param = handler_sig.parameters.get(param_name)
+        default = inspect.Signature.empty
+        if handler_param is not None and handler_param.default is not inspect.Signature.empty:
+            default = handler_param.default
+        params.append(
+            inspect.Parameter(
+                param_name,
+                inspect.Parameter.KEYWORD_ONLY,
+                default=default,
+                annotation=_annotation_for_schema(prop),
+            )
+        )
+    tool.__name__ = name
+    tool.__qualname__ = name
+    tool.__doc__ = entry["description"]
+    tool.__signature__ = inspect.Signature(params)
     return tool
 
 
