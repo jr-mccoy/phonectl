@@ -15,12 +15,13 @@ class Connection:
     def pair(self, addr: str, code: str) -> None:
         self.backend._adb("pair", addr, code)
 
-    def connect(self, addr: str) -> None:
+    def connect(self, addr: str, *, persist: bool = True) -> None:
         self.backend._adb("connect", addr)
         self.backend.serial = addr
-        self.cfg["serial"] = addr
-        self.cfg["last_port"] = addr
-        config.save(self.cfg)
+        if persist:
+            self.cfg["serial"] = addr
+            self.cfg["last_port"] = addr
+            config.save(self.cfg)
 
     def ensure(self) -> None:
         if self.backend.get_state() == "device":

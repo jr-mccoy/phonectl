@@ -296,3 +296,29 @@ def test_build_runtime_wraps_explicit_backend(tmp_path, monkeypatch):
     backend, session, conn = cli.build_runtime(cfg, backend=fake)
     assert isinstance(backend, ProviderRegistry)
     assert backend.for_capability("act_tap") is fake
+
+
+def test_doctor_bundle_writes_zip_when_connection_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    class OfflineBackend(FakeBackend):
+        def __init__(self):
+            super().__init__()
+            self.serial = "stale:5555"
+            self.connects = []
+
+        def get_state(self):
+            return "offline"
+
+        def _adb(self, *args):
+            self.connects.append(args)
+
+    fb = OfflineBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    out_zip = str(tmp_path / "diag-offline.zip")
+    from phonectl import diagnostics
+    monkeypatch.setattr(diagnostics, "bundle", lambda path, backend, cfg: path)
+    rc = cli.main(["doctor", "--bundle", out_zip])
+    assert rc == 0
+    assert out_zip in capsys.readouterr().out
+    assert fb.connects == []
