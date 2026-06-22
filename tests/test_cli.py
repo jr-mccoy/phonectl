@@ -475,3 +475,28 @@ def test_device_battery_ok_with_termux(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert out["ok"] is True
     assert out["data"]["percentage"] == 42
+
+
+# --- Task 7: AccessibilityProvider wired into build_runtime ---
+
+def test_build_runtime_prepends_accessibility_when_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.providers.accessibility import AccessibilityProvider
+    from phonectl.providers.transport import LoopbackTransport
+
+    acc = AccessibilityProvider(LoopbackTransport({}))  # available
+    monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: acc)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    cfg = config.load()
+    registry, _, _ = cli.build_runtime(cfg)
+    assert registry.for_capability("observe_ui_tree") is acc
+    assert registry.for_capability("observe_ui_native") is acc
+
+
+def test_build_runtime_without_accessibility_uses_adb(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+    cfg = config.load()
+    registry, _, _ = cli.build_runtime(cfg)
+    assert registry.for_capability("observe_ui_native") is None
