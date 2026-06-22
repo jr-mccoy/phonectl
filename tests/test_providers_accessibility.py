@@ -18,3 +18,21 @@ def test_capabilities_all_relevant_true_when_available():
 def test_capabilities_all_false_when_unavailable():
     p = AccessibilityProvider(LoopbackTransport({}, available=False))
     assert all(v is False for v in p.capabilities().values())
+
+
+# --- Task 3: native tree + ui_dump ---
+
+def _native_handler(_params):
+    return {
+        "windows": [{"id": 1, "type": "application", "package": "com.android.settings",
+                     "nodes": [{"node_id": "n1", "text": "Network & internet",
+                                "class": "android.widget.TextView", "content_desc": "",
+                                "bounds": [0, 200, 1080, 320], "clickable": True,
+                                "enabled": True}]}]
+    }
+
+
+def test_ui_dump_returns_parseable_compat_xml():
+    p = AccessibilityProvider(LoopbackTransport({"observe_native": _native_handler}))
+    elements = ui_parser.parse_elements(p.ui_dump())
+    assert any(e.get("text") == "Network & internet" for e in elements)
