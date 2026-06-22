@@ -34,3 +34,11 @@ def test_is_running_true_on_ok_ping():
         return {"ok": True, "request_id": rid, "version": PROTOCOL_VERSION, "data": {"pong": True}}
     c = DaemonClient("127.0.0.1", 8799, transport=FakeTransport(responder))
     assert c.is_running() is True
+
+
+def test_job_timeout_error_shape():
+    from phonectl import errors
+    e = errors.JobTimeoutError("still running")
+    assert e.code == "job_timeout"
+    assert e.retryable is False
+    assert e.requires_user is True
