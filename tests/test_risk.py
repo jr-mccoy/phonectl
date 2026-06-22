@@ -54,3 +54,23 @@ def test_otp_like_content_is_medium():
     out = risk.classify(snap, "tap", {"i": 0})
     assert out["level"] == "medium"
     assert any(r["signal"] == "otp_like_content" for r in out["reasons"])
+
+
+def test_packages_clear_classifies_critical():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "packages_clear", "com.example")
+    assert result["level"] == "critical"
+    assert any(r["signal"] == "critical_verb" for r in result["reasons"])
+
+
+def test_packages_stop_classifies_high():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "packages_stop", "com.example")
+    assert result["level"] == "high"
+    assert any(r["signal"] == "high_risk_verb" for r in result["reasons"])
+
+
+def test_intent_broadcast_classifies_high():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "intent_broadcast", "com.example.ACTION")
+    assert result["level"] == "high"

@@ -24,6 +24,8 @@ DEFAULT_KEYWORDS = {
         "wipe",
         "delete account",
         "uninstall",
+        "clear data",
+        "force stop",
     ),
     "install_keyword": ("install", "allow", "grant", "subscribe", "send"),
 }
@@ -36,11 +38,11 @@ _SIGNAL_LEVEL = {
     "password_field": "high",
     "otp_like_content": "medium",
     "high_risk_verb": "high",
+    "critical_verb": "critical",
 }
 
-# Named seam for later provider verbs such as intent/uninstall. Current ADB verbs
-# are classified from screen/package signals by default.
-HIGH_RISK_VERBS = frozenset()
+HIGH_RISK_VERBS = frozenset({"packages_stop", "intent_broadcast"})
+CRITICAL_VERBS = frozenset({"packages_clear"})
 
 
 def _bump(level: str, candidate: str) -> str:
@@ -82,6 +84,8 @@ def classify(
         if _OTP_RE.search(text):
             add("otp_like_content", "screen shows an OTP-like code")
 
+    if verb in CRITICAL_VERBS:
+        add("critical_verb", f"{verb} is a critical-risk verb")
     if verb in HIGH_RISK_VERBS:
         add("high_risk_verb", f"{verb} is a high-risk verb")
 
