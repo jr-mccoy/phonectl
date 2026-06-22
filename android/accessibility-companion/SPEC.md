@@ -364,7 +364,44 @@ currently active.
 
 ---
 
-## 7. Non-goals (Plan 4.1 scope)
+## 7. ML-Kit OCR method (Plan 4.4)
+
+### `ocr_image`
+
+Params: `{"path": "<absolute path on device — existing PNG>"}`
+
+Returns:
+
+```json
+{
+  "regions": [
+    {
+      "text": "Wi-Fi",
+      "bounds": [44, 380, 164, 420],
+      "confidence": 0.965
+    }
+  ]
+}
+```
+
+`bounds` are `[left, top, right, bottom]` in screen pixels, matching the convention used by the
+structured UI tree. `confidence` is `0.0–1.0`.
+
+Implementation: read the PNG at `path` using `BitmapFactory.decodeFile`, run
+`com.google.mlkit.vision.text.TextRecognition` (bundled ML-Kit), and serialize each
+`TextBlock`/`TextLine`/`TextElement` as a flat region list. The Python caller receives the
+regions and applies a `min_confidence` filter.
+
+**Capability toggle:** `observe_ocr` must be `true` in the handshake's capabilities map for this
+method to be dispatched; when the toggle is off, the companion returns `ok: false` with
+`code: "capability_disabled"`.
+
+**Source precedence:** the Python `OcrProvider` tries the local `tesseract` binary first (no
+companion round trip needed); it only falls back to this method when `tesseract` is absent.
+
+---
+
+## 8. Non-goals (Plan 4.1 scope)
 
 - The **Kotlin implementation** — this spec is the design input; code is built separately.
 - **`SocketTransport`** — specified in Plan 4.3.
