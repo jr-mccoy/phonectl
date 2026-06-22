@@ -772,3 +772,31 @@ If the device is locked, `observe --json` returns an error envelope with the sam
 ```
 
 Plain-text output stays one line, e.g. `phonectl: Unlock the phone manually.` If `uiautomator` reports the transient idle-state failure after retries, the typed observation error is `screen not idle — is it asleep or locked?` rather than an XML parse traceback.
+
+## Structured extraction
+
+Read structured data from the UI — enumerate RecyclerView rows, extract form labels and values, locate the focused text field, filter elements by text pattern, or extract all visible text within a region.
+
+```bash
+# Extract all rows from a scrollable list (auto-detects the container)
+phonectl extract list --json
+
+# Extract rows from a specific container by element index
+phonectl extract list --container-i 3 --json
+
+# Extract form fields with associated labels
+phonectl extract form --json
+
+# Find elements whose text matches a regex
+phonectl find --text-regex "Total|Balance" --json
+
+# Get the currently focused text field
+phonectl get focused-field --json
+
+# Get all elements overlapping a screen region (x1 y1 x2 y2)
+phonectl get text-in-region --bounds 0 0 1080 400 --json
+```
+
+`extract form` automatically requests the UI relations graph to resolve label–field associations via sibling proximity; if no relations are available it falls back to Y-coordinate overlap. Password fields have their value replaced with `[redacted]` in all outputs.
+
+`find --text-regex` searches element text only (uses `re.search`, so no anchoring needed). For `content-desc` matching use `--selector '{"content_desc": "..."}'` with `observe` or `tap`.

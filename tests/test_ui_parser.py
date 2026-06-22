@@ -204,3 +204,174 @@ def test_parse_mdns_services_extracts_host_ports():
 def test_parse_mdns_services_empty_when_none_found():
     assert ui_parser.parse_mdns_services("List of discovered mdns services\n") == []
     assert ui_parser.parse_mdns_services("") == []
+
+
+# ── Task 1: extract_list ──────────────────────────────────────────────────────
+
+def _make_el(i, text, bounds, scrollable=False, clickable=True):
+    x1, y1, x2, y2 = bounds
+    return {
+        "i": i, "text": text, "id": "", "class": "android.view.View",
+        "content_desc": "", "clickable": clickable, "enabled": True,
+        "focused": False, "checkable": False, "checked": False,
+        "scrollable": scrollable, "long_clickable": False, "password": False,
+        "selected": False, "editable": False, "package": "",
+        "bounds": list(bounds), "center": [(x1+x2)//2, (y1+y2)//2],
+    }
+
+
+def test_extract_list_finds_children_of_scrollable_container():
+    container = _make_el(0, "", [0, 100, 1080, 900], scrollable=True, clickable=False)
+    row1 = _make_el(1, "Row A", [10, 120, 1070, 180])
+    row2 = _make_el(2, "Row B", [10, 190, 1070, 250])
+    outside = _make_el(3, "Outside", [0, 0, 1080, 90])
+    elements = [container, row1, row2, outside]
+    rows = ui_parser.extract_list(elements)
+    texts = [r["text"] for r in rows]
+    assert "Row A" in texts
+    assert "Row B" in texts
+    assert "Outside" not in texts
+    assert "" not in texts  # container itself excluded
+
+
+def test_extract_list_with_explicit_container_i():
+    container = _make_el(0, "", [0, 100, 1080, 900], scrollable=True, clickable=False)
+    row1 = _make_el(1, "Item 1", [10, 120, 1070, 180])
+    elements = [container, row1]
+    rows = ui_parser.extract_list(elements, container_i=0)
+    assert any(r["text"] == "Item 1" for r in rows)
+
+
+def test_extract_list_returns_empty_when_no_scrollable():
+    el = _make_el(0, "plain text", [0, 0, 100, 50])
+    assert ui_parser.extract_list([el]) == []
+
+
+def test_extract_list_returns_empty_for_empty_input():
+    assert ui_parser.extract_list([]) == []
+
+
+# ── Task 2: extract_form ──────────────────────────────────────────────────────
+
+def _make_edittext(i, value, bounds, password=False, focused=False, hint=""):
+    x1, y1, x2, y2 = bounds
+    el = _make_el(i, value, bounds, clickable=True)
+    el["editable"] = True
+    el["class"] = "android.widget.EditText"
+    el["password"] = password
+    el["focused"] = focused
+    if hint:
+        el["hint_text"] = hint
+    return el
+
+
+def _make_label(i, text, bounds):
+    el = _make_el(i, text, bounds, clickable=False)
+    el["editable"] = False
+    el["class"] = "android.widget.TextView"
+    return el
+
+
+def test_extract_form_finds_field_without_relations():
+    label = _make_label(0, "Username", [10, 50, 200, 90])
+    field = _make_edittext(1, "alice", [10, 100, 400, 150], hint="Enter username")
+    rows = ui_parser.extract_form([label, field])
+    assert len(rows) == 1
+    assert rows[0]["field_i"] == 1
+    assert rows[0]["value"] == "alice"
+
+
+def test_extract_form_redacts_password_fields():
+    field = _make_edittext(0, "secret", [0, 0, 100, 50], password=True)
+    rows = ui_parser.extract_form([field])
+    assert rows[0]["is_password"] is True
+    assert rows[0]["value"] == "[redacted]"
+
+
+def test_extract_form_finds_label_via_relations():
+    label = _make_label(0, "Email", [10, 50, 200, 90])
+    field = _make_edittext(1, "", [10, 100, 400, 150])
+    relations = {
+        "siblings": {0: [1], 1: [0]},
+        "parent": {0: None, 1: None},
+        "children": {0: [], 1: []},
+        "ancestors": {0: [], 1: []},
+    }
+    rows = ui_parser.extract_form([label, field], relations=relations)
+    assert rows[0]["label"] == "Email"
+
+
+def test_extract_form_marks_focused_field():
+    field = _make_edittext(0, "", [0, 0, 100, 50], focused=True)
+    rows = ui_parser.extract_form([field])
+    assert rows[0]["is_focused"] is True
+
+
+def test_extract_form_returns_empty_when_no_fields():
+    label = _make_label(0, "Title", [0, 0, 100, 30])
+    assert ui_parser.extract_form([label]) == []
+
+
+# ── Task 3: get_focused_field + find_by_text_regex ────────────────────────────
+
+def test_get_focused_field_returns_focused_editable():
+    f = _make_edittext(0, "text", [0, 0, 100, 50], focused=True)
+    other = _make_el(1, "label", [0, 60, 100, 90])
+    assert ui_parser.get_focused_field([other, f])["i"] == 0
+
+
+def test_get_focused_field_falls_back_to_any_focused():
+    el = _make_el(0, "button", [0, 0, 100, 50])
+    el["focused"] = True
+    assert ui_parser.get_focused_field([el])["i"] == 0
+
+
+def test_get_focused_field_returns_none_when_none_focused():
+    el = _make_el(0, "button", [0, 0, 100, 50])
+    assert ui_parser.get_focused_field([el]) is None
+
+
+def test_find_by_text_regex_matches_substring():
+    a = _make_el(0, "Total: $5.00", [0, 0, 100, 50])
+    b = _make_el(1, "Balance: $10.00", [0, 60, 100, 110])
+    c = _make_el(2, "No match here", [0, 120, 100, 170])
+    results = ui_parser.find_by_text_regex([a, b, c], r"\$\d+\.\d+")
+    assert len(results) == 2
+    assert any(r["i"] == 0 for r in results)
+    assert any(r["i"] == 1 for r in results)
+
+
+def test_find_by_text_regex_empty_when_no_match():
+    el = _make_el(0, "nothing", [0, 0, 100, 50])
+    assert ui_parser.find_by_text_regex([el], r"\d{4}") == []
+
+
+def test_find_by_text_regex_preserves_order():
+    els = [_make_el(i, f"Item {i}", [0, i*50, 100, i*50+40]) for i in range(5)]
+    results = ui_parser.find_by_text_regex(els, r"Item")
+    assert [r["i"] for r in results] == [0, 1, 2, 3, 4]
+
+
+# ── Task 4: get_visible_text_in_region ───────────────────────────────────────
+
+def test_get_visible_text_in_region_returns_overlapping():
+    a = _make_el(0, "In region", [10, 100, 400, 200])
+    b = _make_el(1, "Partially in", [350, 150, 600, 300])
+    c = _make_el(2, "Outside", [500, 400, 900, 500])
+    region = (0, 50, 450, 250)
+    found = ui_parser.get_visible_text_in_region([a, b, c], region)
+    ids = [e["i"] for e in found]
+    assert 0 in ids
+    assert 1 in ids
+    assert 2 not in ids
+
+
+def test_get_visible_text_in_region_returns_empty_when_none_overlap():
+    el = _make_el(0, "Far away", [800, 800, 1000, 900])
+    assert ui_parser.get_visible_text_in_region([el], (0, 0, 100, 100)) == []
+
+
+def test_get_visible_text_in_region_preserves_order():
+    els = [_make_el(i, f"el{i}", [i*50, 0, i*50+40, 50]) for i in range(4)]
+    found = ui_parser.get_visible_text_in_region(els, (0, 0, 1000, 100))
+    assert [e["i"] for e in found] == [0, 1, 2, 3]

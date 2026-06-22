@@ -353,6 +353,95 @@ def _cmd_audit(args):
     return 2
 
 
+def _cmd_extract_list(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session, tree=False, relations=False)
+    container_i = getattr(args, "container_i", None)
+    rows = ui_parser.extract_list(snap["elements"], container_i=container_i)
+    env = results.ok(capability="extraction.list",
+                     provider=getattr(backend, "last_used", None) or "adb",
+                     data={"rows": rows})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for row in rows:
+            print(row.get("text") or row.get("content_desc") or f"i={row['i']}")
+    return 0
+
+
+def _cmd_extract_form(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session, tree=False, relations=True)
+    fields = ui_parser.extract_form(snap["elements"], relations=snap.get("relations"))
+    env = results.ok(capability="extraction.form",
+                     provider=getattr(backend, "last_used", None) or "adb",
+                     data={"fields": fields})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for f in fields:
+            label = f.get("label") or ""
+            print(f"{label}={f['value']!r}")
+    return 0
+
+
+def _cmd_find(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session)
+    matches = ui_parser.find_by_text_regex(snap["elements"], args.text_regex)
+    env = results.ok(capability="extraction.find",
+                     provider=getattr(backend, "last_used", None) or "adb",
+                     data={"matches": matches})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for m in matches:
+            print(f"i={m['i']} text={m['text']!r}")
+    return 0
+
+
+def _cmd_get_focused_field(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session)
+    el = ui_parser.get_focused_field(snap["elements"])
+    env = results.ok(capability="extraction.focused_field",
+                     provider=getattr(backend, "last_used", None) or "adb",
+                     data={"element": el})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif el:
+        print(f"i={el['i']} text={el.get('text', '')!r} hint={el.get('hint_text', '')!r}")
+    else:
+        print("phonectl: no focused field")
+    return 0
+
+
+def _cmd_get_text_in_region(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    snap = observer.observe(backend, session)
+    bounds = tuple(args.bounds)
+    elements = ui_parser.get_visible_text_in_region(snap["elements"], bounds)
+    env = results.ok(capability="extraction.text_in_region",
+                     provider=getattr(backend, "last_used", None) or "adb",
+                     data={"elements": elements})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        for e in elements:
+            print(e.get("text") or e.get("content_desc") or f"i={e['i']}")
+    return 0
+
+
 def _cmd_mcp(args):
     from phonectl import mcp_server
 
@@ -715,6 +804,37 @@ def build_parser() -> argparse.ArgumentParser:
     itb.add_argument("--json", action="store_true")
     itb.set_defaults(func=_cmd_intent_broadcast)
     it.set_defaults(func=lambda args: (it.print_help(), 2)[1])
+
+    # extract subcommand group
+    ex = sub.add_parser("extract")
+    exsub = ex.add_subparsers(dest="extract_cmd")
+    exl = exsub.add_parser("list")
+    exl.add_argument("--container-i", type=int, dest="container_i", default=None)
+    exl.add_argument("--json", action="store_true")
+    exl.set_defaults(func=_cmd_extract_list)
+    exf = exsub.add_parser("form")
+    exf.add_argument("--json", action="store_true")
+    exf.set_defaults(func=_cmd_extract_form)
+    ex.set_defaults(func=lambda args: (ex.print_help(), 2)[1])
+
+    # find command
+    fi = sub.add_parser("find")
+    fi.add_argument("--text-regex", dest="text_regex", required=True)
+    fi.add_argument("--json", action="store_true")
+    fi.set_defaults(func=_cmd_find)
+
+    # get subcommand group
+    ge = sub.add_parser("get")
+    gesub = ge.add_subparsers(dest="get_cmd")
+    gef = gesub.add_parser("focused-field")
+    gef.add_argument("--json", action="store_true")
+    gef.set_defaults(func=_cmd_get_focused_field)
+    getir = gesub.add_parser("text-in-region")
+    getir.add_argument("--bounds", nargs=4, type=int, required=True,
+                       metavar=("X1", "Y1", "X2", "Y2"))
+    getir.add_argument("--json", action="store_true")
+    getir.set_defaults(func=_cmd_get_text_in_region)
+    ge.set_defaults(func=lambda args: (ge.print_help(), 2)[1])
 
     # packages subcommand group
     pk = sub.add_parser("packages")

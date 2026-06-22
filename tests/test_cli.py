@@ -373,3 +373,34 @@ def test_scroll_until_cli(tmp_path, monkeypatch, capsys):
     rc = cli.main(["scroll-until", "--text", "NotHere", "--max", "1", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0
+
+
+# ── Task 5: extraction CLI verbs ─────────────────────────────────────────────
+
+def test_extract_list_returns_ok_envelope(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["extract", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert "rows" in out["data"]
+
+
+def test_find_text_regex_returns_ok(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["find", "--text-regex", "Wi.*Fi", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert "matches" in out["data"]
+
+
+def test_get_focused_field_returns_ok(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["get", "focused-field", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
