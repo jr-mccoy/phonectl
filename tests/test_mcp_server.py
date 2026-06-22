@@ -299,6 +299,40 @@ def test_phone_packages_list_returns_list(tmp_path, monkeypatch):
     assert isinstance(env["data"]["packages"], list)
 
 
+# ── Task 6: extraction MCP tools ─────────────────────────────────────────────
+
+def test_phone_extract_list_returns_rows(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_extract_list", {}, build)
+    assert env["ok"] is True
+    assert "rows" in env["data"]
+
+
+def test_phone_extract_form_returns_fields(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_extract_form", {}, build)
+    assert env["ok"] is True
+    assert "fields" in env["data"]
+
+
+def test_phone_get_focused_field_returns_element_or_none(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_get_focused_field", {}, build)
+    assert env["ok"] is True
+    assert "element" in env["data"]
+
+
+def test_phone_find_text_returns_matches(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_find_text", {"pattern": "Wi.*Fi"}, build)
+    assert env["ok"] is True
+    assert "matches" in env["data"]
+
+
 def test_unknown_tool_still_returns_err(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     build, _ = make_build()

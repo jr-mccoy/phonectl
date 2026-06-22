@@ -267,6 +267,50 @@ def scroll(build=_default_build, *, direction, within_index=None,
     )
 
 
+def extract_list(build=_default_build, *, container_index=None) -> dict:
+    try:
+        backend, session, conn = build(config.load())
+        conn.ensure()
+        snap = observer.observe(backend, session)
+        rows = ui_parser.extract_list(snap["elements"], container_i=container_index)
+        return results.ok(capability="extraction.list", provider="adb", data={"rows": rows})
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def extract_form(build=_default_build) -> dict:
+    try:
+        backend, session, conn = build(config.load())
+        conn.ensure()
+        snap = observer.observe(backend, session, relations=True)
+        fields = ui_parser.extract_form(snap["elements"], relations=snap.get("relations"))
+        return results.ok(capability="extraction.form", provider="adb", data={"fields": fields})
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def get_focused_field(build=_default_build) -> dict:
+    try:
+        backend, session, conn = build(config.load())
+        conn.ensure()
+        snap = observer.observe(backend, session)
+        el = ui_parser.get_focused_field(snap["elements"])
+        return results.ok(capability="extraction.focused_field", provider="adb", data={"element": el})
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
+def find_text(build=_default_build, *, pattern) -> dict:
+    try:
+        backend, session, conn = build(config.load())
+        conn.ensure()
+        snap = observer.observe(backend, session)
+        matches = ui_parser.find_by_text_regex(snap["elements"], pattern)
+        return results.ok(capability="extraction.find", provider="adb", data={"matches": matches})
+    except errors.PhonectlError as e:
+        return results.err(e, **getattr(e, "lock_state", {}))
+
+
 def scroll_until_mcp(build=_default_build, *, direction="down", text=None,
                      selector=None, max_scrolls=10, within_index=None) -> dict:
     try:
@@ -365,6 +409,11 @@ TOOLS = {
     "phone_fling": {"description": "Fling in a direction with velocity-scaled speed.", "schema": _schema(direction={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": fling, "needs_build": True},
     "phone_scroll": {"description": "Scroll in a direction, optionally within a scrollable container.", "schema": _schema(direction={"type": "string"}, within_index={"type": "integer"}, distance_pct={"type": "number"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": scroll, "needs_build": True},
     "phone_scroll_until": {"description": "Scroll until text or selector appears, or max_scrolls is exhausted.", "schema": _schema(direction={"type": "string"}, text={"type": "string"}, selector={"type": "object"}, max_scrolls={"type": "integer"}, within_index={"type": "integer"}), "handler": scroll_until_mcp, "needs_build": True},
+    # Phase 3.4: structured extraction
+    "phone_extract_list": {"description": "Extract rows from a scrollable list container.", "schema": _schema(container_index={"type": "integer"}), "handler": extract_list, "needs_build": True},
+    "phone_extract_form": {"description": "Extract form fields with associated labels.", "schema": _OBJ, "handler": extract_form, "needs_build": True},
+    "phone_get_focused_field": {"description": "Return the currently focused text field, or null.", "schema": _OBJ, "handler": get_focused_field, "needs_build": True},
+    "phone_find_text": {"description": "Find elements whose text matches a regex pattern (re.search).", "schema": _schema(pattern={"type": "string"}), "handler": find_text, "needs_build": True},
 }
 
 
