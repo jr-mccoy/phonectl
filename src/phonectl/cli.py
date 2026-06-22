@@ -262,6 +262,169 @@ def _cmd_mcp(args):
         return 1
 
 
+def _cmd_clipboard_read(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    from phonectl.providers.clipboard import ClipboardProvider
+    env = ClipboardProvider(backend).read()
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif env["ok"]:
+        print(env["data"]["text"])
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_clipboard_write(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.clipboard import ClipboardProvider
+    env = ClipboardProvider(backend).write(
+        args.text, build=build_runtime, yes=getattr(args, "yes", False), cfg=cfg
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_clipboard_clear(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.clipboard import ClipboardProvider
+    env = ClipboardProvider(backend).clear(
+        build=build_runtime, yes=getattr(args, "yes", False), cfg=cfg
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_intent_start(args):
+    extras = {}
+    for kv in getattr(args, "extra", []) or []:
+        k, _, v = kv.partition("=")
+        extras[k] = v
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.intents import IntentProvider
+    env = IntentProvider(backend).start(
+        action=getattr(args, "action", None),
+        data=getattr(args, "data", None),
+        component=getattr(args, "component", None),
+        extras=extras or None,
+        build=build_runtime,
+        yes=getattr(args, "yes", False),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_intent_broadcast(args):
+    extras = {}
+    for kv in getattr(args, "extra", []) or []:
+        k, _, v = kv.partition("=")
+        extras[k] = v
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.intents import IntentProvider
+    env = IntentProvider(backend).broadcast(
+        args.action,
+        extras=extras or None,
+        build=build_runtime,
+        yes=getattr(args, "yes", False),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_packages_list(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    from phonectl.providers.packages import PackageProvider
+    env = PackageProvider(backend).list_packages(include_system=getattr(args, "all", False))
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif env["ok"]:
+        for pkg in env["data"]["packages"]:
+            print(pkg)
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_packages_resolve(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    conn.ensure()
+    from phonectl.providers.packages import PackageProvider
+    env = PackageProvider(backend).resolve(args.package)
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif env["ok"]:
+        d = env["data"]
+        print(f"{d['package']}  version={d['version_name']}  activity={d['launch_activity']}")
+    else:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_packages_launch(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.packages import PackageProvider
+    env = PackageProvider(backend).launch(
+        args.package, build=build_runtime, yes=getattr(args, "yes", False), cfg=cfg
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_packages_stop(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.packages import PackageProvider
+    env = PackageProvider(backend).stop(
+        args.package, build=build_runtime, yes=getattr(args, "yes", False), cfg=cfg
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
+def _cmd_packages_clear(args):
+    cfg = config.load()
+    backend, session, conn = build_runtime(cfg)
+    from phonectl.providers.packages import PackageProvider
+    env = PackageProvider(backend).clear(
+        args.package, build=build_runtime, yes=getattr(args, "yes", False), cfg=cfg
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    elif not env["ok"]:
+        print(f"phonectl: {env['error']['message']}")
+    return 0 if env["ok"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="phonectl")
     p.add_argument("--version", action="version", version=__version__)
@@ -361,6 +524,71 @@ def build_parser() -> argparse.ArgumentParser:
 
     mcp = sub.add_parser("mcp")
     mcp.set_defaults(func=_cmd_mcp)
+
+    # clipboard subcommand group
+    cb = sub.add_parser("clipboard")
+    cbsub = cb.add_subparsers(dest="clipboard_cmd")
+    cbr = cbsub.add_parser("read")
+    cbr.add_argument("--json", action="store_true")
+    cbr.set_defaults(func=_cmd_clipboard_read)
+    cbw = cbsub.add_parser("write")
+    cbw.add_argument("text")
+    cbw.add_argument("--yes", action="store_true")
+    cbw.add_argument("--json", action="store_true")
+    cbw.set_defaults(func=_cmd_clipboard_write)
+    cbc = cbsub.add_parser("clear")
+    cbc.add_argument("--yes", action="store_true")
+    cbc.add_argument("--json", action="store_true")
+    cbc.set_defaults(func=_cmd_clipboard_clear)
+    cb.set_defaults(func=lambda args: (cb.print_help(), 2)[1])
+
+    # intent subcommand group
+    it = sub.add_parser("intent")
+    itsub = it.add_subparsers(dest="intent_cmd")
+    its = itsub.add_parser("start")
+    its.add_argument("--action", default=None)
+    its.add_argument("--data", default=None)
+    its.add_argument("--component", default=None)
+    its.add_argument("--extra", action="append", metavar="K=V", default=[])
+    its.add_argument("--yes", action="store_true")
+    its.add_argument("--json", action="store_true")
+    its.set_defaults(func=_cmd_intent_start)
+    itb = itsub.add_parser("broadcast")
+    itb.add_argument("action")
+    itb.add_argument("--extra", action="append", metavar="K=V", default=[])
+    itb.add_argument("--yes", action="store_true")
+    itb.add_argument("--json", action="store_true")
+    itb.set_defaults(func=_cmd_intent_broadcast)
+    it.set_defaults(func=lambda args: (it.print_help(), 2)[1])
+
+    # packages subcommand group
+    pk = sub.add_parser("packages")
+    pksub = pk.add_subparsers(dest="packages_cmd")
+    pkl = pksub.add_parser("list")
+    pkl.add_argument("--all", action="store_true")
+    pkl.add_argument("--json", action="store_true")
+    pkl.set_defaults(func=_cmd_packages_list)
+    pkr = pksub.add_parser("resolve")
+    pkr.add_argument("package")
+    pkr.add_argument("--json", action="store_true")
+    pkr.set_defaults(func=_cmd_packages_resolve)
+    pkla = pksub.add_parser("launch")
+    pkla.add_argument("package")
+    pkla.add_argument("--yes", action="store_true")
+    pkla.add_argument("--json", action="store_true")
+    pkla.set_defaults(func=_cmd_packages_launch)
+    pkst = pksub.add_parser("stop")
+    pkst.add_argument("package")
+    pkst.add_argument("--yes", action="store_true")
+    pkst.add_argument("--json", action="store_true")
+    pkst.set_defaults(func=_cmd_packages_stop)
+    pkcl = pksub.add_parser("clear")
+    pkcl.add_argument("package")
+    pkcl.add_argument("--yes", action="store_true")
+    pkcl.add_argument("--json", action="store_true")
+    pkcl.set_defaults(func=_cmd_packages_clear)
+    pk.set_defaults(func=lambda args: (pk.print_help(), 2)[1])
+
     return p
 
 

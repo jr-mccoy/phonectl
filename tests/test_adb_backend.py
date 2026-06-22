@@ -118,3 +118,78 @@ def test_devices_runs_devices_l():
     out = b.devices()
     assert "127.0.0.1:41000" in out
     assert calls[0][0] == ["adb", "-s", "d", "devices", "-l"]
+
+
+def test_adb_capabilities_include_new_keys():
+    calls = []
+    caps = AdbBackend(serial="d", runner=make_runner(calls)).capabilities()
+    assert caps["write_clipboard"] is True
+    assert caps["packages_list"] is True
+    assert caps["packages_stop"] is True
+    assert caps["packages_clear"] is True
+    assert caps["intent_start"] is True
+    assert caps["intent_broadcast"] is True
+    assert caps["read_clipboard"] is False
+
+
+def test_clipboard_write_calls_service_call():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).clipboard_write("hello world")
+    assert any("service" in str(c[0]) and "clipboard" in str(c[0]) for c in calls)
+
+
+def test_clipboard_read_calls_service_call():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).clipboard_read()
+    assert any("service" in str(c[0]) and "clipboard" in str(c[0]) for c in calls)
+
+
+def test_intent_start_builds_correct_command():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_start(
+        action="android.intent.action.VIEW",
+        data="geo:0,0",
+        extras={"q": "coffee"},
+    )
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "am" in cmd and "start" in cmd
+    assert "android.intent.action.VIEW" in cmd
+    assert "geo:0,0" in cmd
+    assert "--es" in cmd and "q" in cmd and "coffee" in cmd
+
+
+def test_intent_broadcast_builds_correct_command():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_broadcast(
+        "com.example.ACTION", extras={"key": "val"}
+    )
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "broadcast" in cmd and "com.example.ACTION" in cmd
+    assert "--es" in cmd and "val" in cmd
+
+
+def test_packages_list_strips_prefix():
+    out = "package:com.example.a\npackage:com.example.b\n"
+    pkgs = AdbBackend(serial=None, runner=make_runner([], stdout=out)).packages_list()
+    assert pkgs == ["com.example.a", "com.example.b"]
+
+
+def test_packages_list_user_only_excludes_system():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_list(include_system=False)
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "-3" in cmd
+
+
+def test_packages_stop_calls_force_stop():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_stop("com.foo")
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "force-stop" in cmd and "com.foo" in cmd
+
+
+def test_packages_clear_calls_pm_clear():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_clear("com.foo")
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "pm" in cmd and "clear" in cmd and "com.foo" in cmd

@@ -253,3 +253,48 @@ def test_serve_raises_capability_unavailable_without_sdk(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(errors.CapabilityUnavailableError):
         mcp_server.serve()
+
+
+# Task 10: clipboard, intent, packages MCP tools
+
+class FakePackageBackend(FakeBackend):
+    def packages_list(self, include_system=False):
+        return ["com.example.a", "com.example.b"]
+
+    def capabilities(self):
+        return caps.make(packages_list=True, packages_stop=True, packages_clear=True,
+                         observe_ui_tree=True, act_tap=True, requires_adb=True,
+                         act_type=True, act_key=True, launch_app=True)
+
+
+def make_build_with_packages():
+    from phonectl.session import Session
+    backend = FakePackageBackend()
+
+    def build(cfg):
+        return backend, Session(), FakeConn()
+
+    return build, backend
+
+
+def test_phone_clipboard_read_returns_unavailable_without_termux(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_clipboard_read", {}, build)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "capability_unavailable"
+
+
+def test_phone_packages_list_returns_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build_with_packages()
+    env = mcp_server.call_tool("phone_packages_list", {}, build)
+    assert env["ok"] is True
+    assert isinstance(env["data"]["packages"], list)
+
+
+def test_unknown_tool_still_returns_err(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_clipboard_read_UNKNOWN", {}, build)
+    assert env["ok"] is False

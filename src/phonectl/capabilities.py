@@ -18,6 +18,12 @@ CAPABILITY_KEYS = (
     "requires_adb",
     "requires_accessibility",
     "requires_notification_listener",
+    # Phase 3.2 additions
+    "packages_list",
+    "packages_stop",
+    "packages_clear",
+    "intent_start",
+    "intent_broadcast",
 )
 
 

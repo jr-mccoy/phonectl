@@ -322,3 +322,33 @@ def test_doctor_bundle_writes_zip_when_connection_fails(tmp_path, monkeypatch, c
     assert rc == 0
     assert out_zip in capsys.readouterr().out
     assert fb.connects == []
+
+
+def test_clipboard_read_emits_unavailable(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    rc = cli.main(["clipboard", "read", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc != 0
+    assert out["ok"] is False
+    assert "capability_unavailable" == out["error"]["code"]
+
+
+def test_packages_list_emits_ok(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+
+    class FakePackageBackend(FakeBackend):
+        def packages_list(self, include_system=False):
+            return ["com.a", "com.b"]
+        def capabilities(self):
+            from phonectl import capabilities
+            return capabilities.make(packages_list=True, requires_adb=True,
+                                     act_tap=True, observe_ui_tree=True,
+                                     launch_app=True, act_type=True, act_key=True)
+
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakePackageBackend())
+    rc = cli.main(["packages", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["ok"] is True
+    assert "com.a" in out["data"]["packages"]

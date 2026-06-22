@@ -59,6 +59,70 @@ class AdbBackend:
         self._adb("shell", "monkey", "-p", package,
                   "-c", "android.intent.category.LAUNCHER", "1")
 
+    def clipboard_write(self, text: str) -> None:
+        self._adb("shell", "service", "call", "clipboard", "2", "s16", shlex.quote(text))
+
+    def clipboard_read(self) -> str:
+        return self._adb("shell", "service", "call", "clipboard", "1")
+
+    def intent_start(self, *, action=None, data=None, component=None,
+                     extras=None, flags=None) -> None:
+        cmd = ["shell", "am", "start"]
+        if action:
+            cmd += ["-a", action]
+        if data:
+            cmd += ["-d", data]
+        if component:
+            cmd += ["-n", component]
+        if flags is not None:
+            cmd += ["-f", str(flags)]
+        for key, val in (extras or {}).items():
+            cmd += ["--es", key, str(val)]
+        self._adb(*cmd)
+
+    def intent_broadcast(self, action: str, *, extras=None) -> None:
+        cmd = ["shell", "am", "broadcast", "-a", action]
+        for key, val in (extras or {}).items():
+            cmd += ["--es", key, str(val)]
+        self._adb(*cmd)
+
+    def packages_list(self, include_system: bool = False) -> list:
+        flag = [] if include_system else ["-3"]
+        out = self._adb("shell", "pm", "list", "packages", *flag)
+        return [
+            line.split("package:", 1)[-1].strip()
+            for line in out.splitlines()
+            if line.startswith("package:")
+        ]
+
+    def packages_resolve(self, package: str) -> dict:
+        out = self._adb("shell", "dumpsys", "package", package)
+        version_name = None
+        version_code = None
+        launch_activity = None
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("versionName="):
+                version_name = line.split("=", 1)[1]
+            elif line.startswith("versionCode="):
+                version_code = line.split("=", 1)[1].split()[0]
+            elif "Activity" in line and "/" in line and launch_activity is None:
+                part = line.strip().split()[-1]
+                if "/" in part:
+                    launch_activity = part
+        return {
+            "package": package,
+            "version_name": version_name,
+            "version_code": version_code,
+            "launch_activity": launch_activity,
+        }
+
+    def packages_stop(self, package: str) -> None:
+        self._adb("shell", "am", "force-stop", package)
+
+    def packages_clear(self, package: str) -> None:
+        self._adb("shell", "pm", "clear", package)
+
     def get_state(self) -> str:
         return self._adb("get-state").strip()
 
@@ -82,9 +146,11 @@ class AdbBackend:
 
 
     def capabilities(self) -> dict:
-        # ADB provides shell/intent/UI powers but not companion-app powers.
         return capabilities.make(
             observe_ui_tree=True, observe_screenshot=True,
             act_tap=True, act_type=True, act_key=True,
             launch_app=True, send_intent=True, requires_adb=True,
+            write_clipboard=True,
+            packages_list=True, packages_stop=True, packages_clear=True,
+            intent_start=True, intent_broadcast=True,
         )
