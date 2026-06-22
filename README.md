@@ -134,11 +134,59 @@ phonectl type "hello world"
 
 ### `swipe`
 
-Swipe from (X1, Y1) to (X2, Y2).
+Swipe from (X1, Y1) to (X2, Y2), or in a named direction with density-aware scaling.
 
 ```bash
-phonectl swipe 540 1600 540 400    # scroll up
+phonectl swipe 540 1600 540 400          # coordinate form: scroll up
+phonectl swipe up                        # named direction (full screen)
+phonectl swipe down --within i=3         # scroll within container element 3
+phonectl swipe left --distance-pct 0.7  # custom distance
 ```
+
+### Gestures
+
+High-level gesture verbs built on ADB's `input swipe` primitive.
+
+**Named swipe** (density-aware — coordinates computed from `wm size`):
+```bash
+phonectl swipe up|down|left|right [--within i=N] [--distance-pct 0.5]
+```
+
+**Long-press** (zero-distance swipe held for `--duration-ms`):
+```bash
+phonectl long-press --i N [--duration-ms 1000]
+phonectl long-press --x X --y Y
+```
+
+**Double-tap** (two taps separated by `--interval-ms`):
+```bash
+phonectl double-tap --i N [--interval-ms 100]
+phonectl double-tap --x X --y Y
+```
+
+**Drag** (long-duration swipe — portable ADB drag primitive; `adb shell input draganddrop` is not universally available):
+```bash
+phonectl drag --x1 X --y1 Y --x2 X --y2 Y [--duration-ms 500]
+```
+
+**Fling** (velocity-scaled fast swipe):
+```bash
+phonectl fling up|down|left|right
+```
+
+**Scroll** (container-aware; reads element bounds from snapshot when `--within` is set):
+```bash
+phonectl scroll down [--within i=N]
+phonectl scroll up --within i=5
+```
+
+**Scroll-until** (observe→scroll loop; returns the snapshot in which the target appeared, or the last snapshot if `--max` scrolls are exhausted):
+```bash
+phonectl scroll-until --text "Advanced" [--direction down] [--within i=N] [--max 10]
+phonectl scroll-until --selector '{"resource_id":"com.example:id/item"}' --max 5
+```
+
+All gesture verbs route through `runtime.run_action` (kill switch, mode, audit, risk policy all apply). Use `--json` for structured output and `--yes` in confirm mode.
 
 ### `key`
 
@@ -267,6 +315,13 @@ Tool catalog:
 | `phone_packages_launch` | Launch a package. | `package`, `dry_run`, `confirm` |
 | `phone_packages_stop` | Force-stop a package (high risk). | `package`, `dry_run`, `confirm` |
 | `phone_packages_clear` | Clear package data (critical risk; set `confirm=true`). | `package`, `confirm`, `dry_run` |
+| `phone_named_swipe` | Swipe in a named direction with density-aware scaling. | `direction`, `distance_pct`, `ms`, `within_index`, `dry_run`, `confirm` |
+| `phone_long_press` | Long-press by index, selector, or coordinates. | `index`, `selector`, `x`, `y`, `duration_ms`, `dry_run`, `confirm` |
+| `phone_double_tap` | Double-tap by index, selector, or coordinates. | `index`, `selector`, `x`, `y`, `interval_ms`, `dry_run`, `confirm` |
+| `phone_drag` | Drag from (x1,y1) to (x2,y2) via long-duration swipe. | `x1`, `y1`, `x2`, `y2`, `duration_ms`, `dry_run`, `confirm` |
+| `phone_fling` | Fling in a direction with velocity-scaled speed. | `direction`, `dry_run`, `confirm` |
+| `phone_scroll` | Scroll in a direction, optionally within a scrollable container. | `direction`, `within_index`, `distance_pct`, `dry_run`, `confirm` |
+| `phone_scroll_until` | Scroll until text or selector appears or max_scrolls is exhausted. | `direction`, `text`, `selector`, `max_scrolls`, `within_index` |
 
 Example observe envelope:
 
