@@ -166,3 +166,30 @@ def test_intent_broadcast_builds_correct_command():
     cmd = " ".join(str(a) for a in calls[-1][0])
     assert "broadcast" in cmd and "com.example.ACTION" in cmd
     assert "--es" in cmd and "val" in cmd
+
+
+def test_packages_list_strips_prefix():
+    out = "package:com.example.a\npackage:com.example.b\n"
+    pkgs = AdbBackend(serial=None, runner=make_runner([], stdout=out)).packages_list()
+    assert pkgs == ["com.example.a", "com.example.b"]
+
+
+def test_packages_list_user_only_excludes_system():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_list(include_system=False)
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "-3" in cmd
+
+
+def test_packages_stop_calls_force_stop():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_stop("com.foo")
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "force-stop" in cmd and "com.foo" in cmd
+
+
+def test_packages_clear_calls_pm_clear():
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).packages_clear("com.foo")
+    cmd = " ".join(str(a) for a in calls[-1][0])
+    assert "pm" in cmd and "clear" in cmd and "com.foo" in cmd

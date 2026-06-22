@@ -86,6 +86,43 @@ class AdbBackend:
             cmd += ["--es", key, str(val)]
         self._adb(*cmd)
 
+    def packages_list(self, include_system: bool = False) -> list:
+        flag = [] if include_system else ["-3"]
+        out = self._adb("shell", "pm", "list", "packages", *flag)
+        return [
+            line.split("package:", 1)[-1].strip()
+            for line in out.splitlines()
+            if line.startswith("package:")
+        ]
+
+    def packages_resolve(self, package: str) -> dict:
+        out = self._adb("shell", "dumpsys", "package", package)
+        version_name = None
+        version_code = None
+        launch_activity = None
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("versionName="):
+                version_name = line.split("=", 1)[1]
+            elif line.startswith("versionCode="):
+                version_code = line.split("=", 1)[1].split()[0]
+            elif "Activity" in line and "/" in line and launch_activity is None:
+                part = line.strip().split()[-1]
+                if "/" in part:
+                    launch_activity = part
+        return {
+            "package": package,
+            "version_name": version_name,
+            "version_code": version_code,
+            "launch_activity": launch_activity,
+        }
+
+    def packages_stop(self, package: str) -> None:
+        self._adb("shell", "am", "force-stop", package)
+
+    def packages_clear(self, package: str) -> None:
+        self._adb("shell", "pm", "clear", package)
+
     def get_state(self) -> str:
         return self._adb("get-state").strip()
 
