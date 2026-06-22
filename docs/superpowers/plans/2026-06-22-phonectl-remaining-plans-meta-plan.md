@@ -1,7 +1,7 @@
 # phonectl Remaining-Plans Meta-Plan
 
 **Date:** 2026-06-22
-**Status:** Authoring index for Phases 6 → 7 + cross-cutting evaluation suite (Phases 1–3 complete; all four Phase-4 plans written; Phase-5 spec + both Phase-5 plans now written)
+**Status:** Authoring index + cross-cutting evaluation suite (Phases 1–3 complete; all four Phase-4 plans written; Phase-5 spec + both Phase-5 plans written; **Phase-6 spec + all three Phase-6 plans now written; all four Phase-7 plans now written**). Only the cross-cutting evaluation suite (Phase X) remains to be turned into a full plan.
 **Reads with:** `docs/superpowers/phonectl-platform-roadmap.md` (the phase model this indexes).
 
 This document is the **instruction set for writing the remaining implementation plans**. **All four
@@ -26,9 +26,16 @@ convention — `phonectl-plan-<N.M>-<slug>.md` — so the plan number is obvious
 (`phonectl-plan-4.4-ocr-provider.md`). Phase 5 is **spec-first**: the daemon design spec
 (`docs/superpowers/specs/2026-06-22-phonectl-daemon-event-runtime-design.md`) was written first, then its
 two implementation plans — 5.1 (`phonectl-plan-5.1-daemon-process-and-rpc-api.md`) and 5.2
-(`phonectl-plan-5.2-event-bus-and-snapshot-cache.md`). Everything from Phase 6 onward is **scoped here**
-and turned into a full TDD plan when its phase begins — one plan document at a time, in roadmap order
-(Phase 6, the macro engine, is likewise spec-first).
+(`phonectl-plan-5.2-event-bus-and-snapshot-cache.md`). Phase 6 (the macro engine) is likewise
+**spec-first**: the macro-engine design spec
+(`docs/superpowers/specs/2026-06-22-phonectl-macro-engine-design.md`) was written first, then its three
+implementation plans — 6.1 (`phonectl-plan-6.1-macro-runtime-core.md`), 6.2
+(`phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md`), 6.3
+(`phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md`). Phase 7 (ecosystem & advanced providers)
+is now written too: 7.1 (`phonectl-plan-7.1-shizuku-provider.md`), 7.2
+(`phonectl-plan-7.2-optional-root-provider.md`), 7.3 (`phonectl-plan-7.3-low-latency-transport.md`), 7.4
+(`phonectl-plan-7.4-tasker-macrodroid-interop.md`). The only remaining item **scoped here** but not yet a
+full TDD plan is the cross-cutting **evaluation suite** (Phase X).
 
 ---
 
@@ -57,8 +64,16 @@ Use this table before reading commit history. "Written" means the plan document 
 | 5.0 Daemon & event runtime design spec | `specs/2026-06-22-phonectl-daemon-event-runtime-design.md` | 📝 Written (spec) | — |
 | 5.1 Daemon process + JSON-RPC/socket API | `phonectl-plan-5.1-daemon-process-and-rpc-api.md` | 📝 Written, not yet executed | — |
 | 5.2 Event bus + subscriptions + snapshot cache | `phonectl-plan-5.2-event-bus-and-snapshot-cache.md` | 📝 Written, not yet executed | — |
+| 6.0 Macro engine design spec | `specs/2026-06-22-phonectl-macro-engine-design.md` | 📝 Written (spec) | — |
+| 6.1 Macro runtime core | `phonectl-plan-6.1-macro-runtime-core.md` | 📝 Written, not yet executed | — |
+| 6.2 Triggers + scheduler + event subscriptions | `phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md` | 📝 Written, not yet executed | — |
+| 6.3 Progressive autonomy + memory/state layer | `phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md` | 📝 Written, not yet executed | — |
+| 7.1 Shizuku privileged provider | `phonectl-plan-7.1-shizuku-provider.md` | 📝 Written, not yet executed | — |
+| 7.2 Optional root provider | `phonectl-plan-7.2-optional-root-provider.md` | 📝 Written, not yet executed | — |
+| 7.3 Low-latency screen/input transport | `phonectl-plan-7.3-low-latency-transport.md` | 📝 Written, not yet executed | — |
+| 7.4 Tasker/MacroDroid interop | `phonectl-plan-7.4-tasker-macrodroid-interop.md` | 📝 Written, not yet executed | — |
 
-**Next unimplemented written plan:** Phase 4.1 AccessibilityService native provider (`phonectl-plan-4.1-accessibility-native-provider.md`) — Phase 4 executes before Phase 5; the daemon (Phase 5) depends on the Phase-4 event sources.
+**Next unimplemented written plan:** Phase 4.1 AccessibilityService native provider (`phonectl-plan-4.1-accessibility-native-provider.md`) — Phase 4 executes before Phase 5; the daemon (Phase 5) depends on the Phase-4 event sources, and Phases 6–7 depend on the daemon/event runtime. **All implementation plans through Phase 7 are now written; only the Phase-X evaluation suite remains to be authored as a full plan.**
 
 ## 1. Authoring rules (apply to every plan written from this index)
 
@@ -326,21 +341,63 @@ on `act` → snapshot invalidation + `snapshot_before`/`snapshot_after` (backfil
 Cursor-based event contract matches Plan 4.1; no threads/sockets in tests. *Strategy:* §21, §22.
 *Deps:* 5.1 (DaemonServer), 4.1 (UI events), 4.2 (notification events).
 
-### Phase 6 (macro runtime & progressive autonomy) — **spec first**
+### Phase 6 (macro runtime & progressive autonomy) — **spec first** — ✅ all written
 
-**Spec 6.0 — macro engine spec:** trigger/condition/action schema (strategy §12, §23), signed/auditable
-macro YAML, scoped variables, scheduler, policy gates, bounded-backoff retries with high-risk re-check,
-cancellation tokens, `run_id` + parent trigger event.
-**6.1** macro runtime core (control flow + variables + run records). **6.2** triggers + scheduler + event
-subscriptions. **6.3** progressive autonomy (confirm → graduated unattended) + memory/state layer (device
-profile, app profiles, selector library, user prefs, failure memory — strategy §25, narrow + user-
-controlled). *Deps:* Phase 5 (daemon/events), 2.2 (policy).
+**Spec 6.0 — macro engine spec** — ✅ **WRITTEN** as
+`docs/superpowers/specs/2026-06-22-phonectl-macro-engine-design.md`: trigger/condition/action schema
+(strategy §12, §23), signed/auditable macro doc (JSON canonical; YAML via optional `[yaml]` extra at the
+loader edge), scoped variables, scheduler, policy gates + autonomy gate, bounded-backoff retries with
+high-risk re-check, cancellation tokens, `run_id` + parent trigger event, narrow memory layer (§25). Locks
+twelve decisions and hands off to 6.1/6.2/6.3.
 
-### Phase 7 (ecosystem & advanced providers)
+**6.1 — Macro runtime core** — ✅ **WRITTEN** as `phonectl-plan-6.1-macro-runtime-core.md` (9 tasks: errors +
+package → pure `schema` parse/validate → pure scoped `variables` + interpolation → executor (sequential
+actions via `run_action`) → control flow (if/switch/for_each/loop/retry+backoff/try/confirm) → phone-verb
+`fn` mapping + JSON/optional-YAML loader → `runs.jsonl` lineage + `MacroRun` summary → daemon
+`macro_validate/run/cancel/status` RPC → CLI `macro` group + MCP `phone.macro.*`). *Deps:* 2.1/2.2, 3.1,
+1.2/3.x/4.x verb surface; opportunistic on 5.1.
 
-**7.1** Shizuku provider (opt-in privilege) · **7.2** optional root provider (strongly separated) ·
-**7.3** scrcpy/minicap-inspired low-latency transport · **7.4** Tasker/MacroDroid intent/plugin interop.
-*Strategy:* §11.3, §13.
+**6.2 — Triggers + scheduler + event subscriptions** — ✅ **WRITTEN** as
+`phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md` (7 tasks: pure trigger matcher → full
+pure condition vocabulary → pure monotonic `next_fire` scheduler → pure per-macro limits → enabled-macro
+registry → daemon `TriggerManager.step` (drain 5.2 bus → match → gate → enqueue) → daemon `Scheduler` +
+`macro_enable/disable/list` RPC/CLI). *Deps:* 6.1, 5.2 (event bus), 2.2 (`ratelimit`/`risk`), 1.2
+(`selectors`).
+
+**6.3 — Progressive autonomy + memory/state layer** — ✅ **WRITTEN** as
+`phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md` (6 tasks: pure `autonomy.decide` +
+grant-ledger replay → grant/revoke/list ops → engine per-action autonomy gate above `run_action` → five
+redacted memory stores → memory capture hooks from run records → `autonomy_*`/`memory_*` RPC + CLI;
+completes Phase 6). *Deps:* 6.1/6.2, 2.2 (`policy`/`risk`), 2.1 (`redact`).
+
+### Phase 7 (ecosystem & advanced providers) — ✅ all written
+
+These four provider plans share the Phase-3/4 provider-seam discipline: capability discovery, opt-in
+config, graceful degradation, structured results, backend isolation, and (for the native-adjacent ones) a
+companion/Android design spec alongside the Python seam.
+
+**7.1 — Shizuku privileged provider** — ✅ **WRITTEN** as `phonectl-plan-7.1-shizuku-provider.md` (6 tasks:
+privileged capability keys + `ShizukuProvider` discovery → privileged shell + secure-settings → `pm`
+grant/revoke/install/uninstall + conservative risk → opt-in `build_runtime` wiring + CLI → Shizuku bridge
+Android/authorization design spec → MCP + docs). Opt-in (`enable_shizuku`), bridge seam injectable.
+*Strategy:* §13.2.
+
+**7.2 — Optional root provider** — ✅ **WRITTEN** as `phonectl-plan-7.2-optional-root-provider.md` (4 tasks:
+default-deny `RootProvider` discovery → arm gate + critical-risk shell → opt-in `build_runtime` wiring
+(Shizuku-preferred) + CLI → loud docs). Strongly separated: distinct `enable_root_provider` flag + a
+per-session arm + critical-by-default risk; **no** MCP exposure by default. *Strategy:* §13.2.
+
+**7.3 — Low-latency screen/input transport** — ✅ **WRITTEN** as `phonectl-plan-7.3-low-latency-transport.md`
+(4 tasks: fast capability keys + `FastTransportProvider` discovery → `screencap` over the session with
+reconnect → fast input injection → capability-scoped opt-in `build_runtime` wiring + bridge design spec +
+docs). scrcpy/minicap-inspired; capability-scoped (screenshot + input only), falls back to ADB.
+*Strategy:* §11.3, §13.1.
+
+**7.4 — Tasker/MacroDroid interop** — ✅ **WRITTEN** as `phonectl-plan-7.4-tasker-macrodroid-interop.md`
+(5 tasks: interop capability keys + pure invoke-intent builder + discovery → outbound `invoke` via the 3.2
+`IntentsProvider` (high-risk) → inbound `macro.external` trigger type → daemon `interop_trigger` RPC
+(publish onto the 5.2 bus) → `build_runtime` wiring + CLI + MCP + companion design spec; completes Phase 7).
+*Strategy:* §13.3, §6.4, §12.
 
 ### Cross-cutting — Phase X: evaluation suite
 
