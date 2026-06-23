@@ -93,6 +93,16 @@ Both are invoked from the `events_poll` RPC handler after each bus drain. If eit
 
 **On-device smoke:** Because the scheduler depends on real provider events and the real clock, behavior in CI is limited to unit tests with injected fakes. On-device smoke testing (a macro that fires every 10 seconds and taps a button) should be done manually.
 
+### Bus event name normalization
+
+The event bus (`daemon/events.py`) publishes events with underscore names (`notification_posted`, `ui_changed`, etc.), while the macro trigger vocabulary uses dotted names (`notification.posted`, `ui.text_appears`, etc.) for readability. `TriggerManager.step()` normalizes bus names to dotted names before matching — you write dotted names in macro documents and the daemon handles translation transparently.
+
+**`ui_changed` granularity caveat:** The bus emits a single `ui_changed` event for all UI changes (element appears/disappears, text changes, activity/app transitions). `TriggerManager` maps `ui_changed` to the full set of UI trigger types (`ui.element_appears`, `ui.text_appears`, `ui.element_disappears`, `activity.changed`, `app.opened`, `app.closed`). A macro whose trigger is any of these will receive the event; its `filters` (e.g. `text_regex`, `selector`) are responsible for discriminating the specific change. This means a macro with `{"type": "app.opened"}` and no package filter will fire on every UI change, not just app launches.
+
+### Snapshot-dependent conditions are inert on auto-fired triggers (Plan 6.3 item)
+
+Conditions that inspect `snapshot` or `device` sub-keys — `foreground_package`, `battery_min`, `selector_exists`, `screen_contains`, `risk_below`, `device_unlocked`, `charging`, `wifi_ssid` — evaluate against the data carried inside the triggering bus envelope. The Plan-5.2 bus envelopes do **not** yet carry `snapshot` or `device` sub-keys (those fields arrive as `{}` in the event context). As a result, these conditions are currently inert on auto-fired triggers: `foreground_package` always sees `app=None`, `battery_min` always sees `battery=0`, etc. Full envelope enrichment (attaching a live snapshot and device state to each bus event) is a Plan 6.3 item. Conditions that do not touch `snapshot`/`device` — `always`, `never`, `variable`, `time_window` — work correctly today.
+
 ## Conditions
 
 The `conditions` list is evaluated before any trigger fires. All conditions must hold. Available conditions (Phase 6.2):

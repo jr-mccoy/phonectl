@@ -56,3 +56,41 @@ def test_cooldown_suppresses_second_fire(tmp_path, monkeypatch):
     mgr = TriggerManager(eng, poll=_poll_factory(events), now=lambda: 100.0)
     fired = mgr.step()
     assert fired == ["reply"]  # second event within cooldown is suppressed
+
+
+def test_real_bus_notification_envelope_fires(tmp_path, monkeypatch):
+    """Real bus envelopes use underscore names; the daemon must normalize to dotted names."""
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    registry.enable({"name": "wa_alert", "trigger": {"type": "notification.posted",
+                     "filters": {"package_in": ["com.whatsapp"]}},
+                     "actions": [{"type": "tap", "target": {"i": 0}}]})
+    eng = FakeEngine()
+    # Real bus envelope — type is "notification_posted" (underscore), not dotted
+    real_event = {
+        "seq": 1, "type": "notification_posted", "ts": 0.0,
+        "source": "notifications",
+        "data": {"package": "com.whatsapp", "title": "Mom", "text": "call me"},
+    }
+    mgr = TriggerManager(eng, poll=_poll_factory([real_event]), now=lambda: 100.0)
+    fired = mgr.step()
+    assert fired == ["wa_alert"], "macro must fire on real bus notification_posted envelope"
+    assert eng.runs == [("wa_alert", "notification.posted")]
+
+
+def test_conditions_gate_suppresses_fire(tmp_path, monkeypatch):
+    """A macro whose conditions do not hold must not fire even when the trigger matches."""
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    registry.enable({"name": "gated", "trigger": {"type": "notification.posted"},
+                     "conditions": [{"type": "never"}],
+                     "actions": [{"type": "tap", "target": {"i": 0}}]})
+    eng = FakeEngine()
+    # Real bus envelope that would match the trigger after normalization
+    real_event = {
+        "seq": 1, "type": "notification_posted", "ts": 0.0,
+        "source": "notifications",
+        "data": {"package": "com.example", "title": "hi", "text": "there"},
+    }
+    mgr = TriggerManager(eng, poll=_poll_factory([real_event]), now=lambda: 100.0)
+    fired = mgr.step()
+    assert fired == [], "conditions=never must suppress the macro"
+    assert eng.runs == [], "engine.run must not be called when conditions gate"

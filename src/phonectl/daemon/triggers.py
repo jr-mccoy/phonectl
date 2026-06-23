@@ -12,6 +12,30 @@ from phonectl.macro import scheduler as scheduler_mod
 from phonectl.macro import triggers as triggers_mod
 from phonectl.macro import variables as V
 
+# Map from bus event type (underscore) -> set of dotted trigger type(s) it satisfies.
+#
+# The event bus (daemon/events.py) uses underscore names (e.g. "notification_posted"),
+# but the macro trigger vocabulary uses dotted names (e.g. "notification.posted") so
+# that user-facing macro docs are human-readable.  TriggerManager.step() normalizes
+# bus names to dotted names before calling triggers_mod.matches().
+#
+# "ui_changed": the bus does not distinguish element/text/activity granularity, so a
+# single ui_changed event is a candidate for all UI trigger types.  The trigger's own
+# filters (text_regex, selector, …) do the actual discrimination.
+#
+# Dotted names that are ALREADY dotted (legacy test fixtures) pass through unchanged
+# via the CANDIDATES.get(bus_type, {bus_type}) fallback — so existing unit tests keep
+# working with no changes.
+_BUS_TO_DOTTED: dict[str, frozenset[str]] = {
+    "notification_posted": frozenset({"notification.posted"}),
+    "notification_removed": frozenset({"notification.removed"}),
+    "clipboard_changed": frozenset({"clipboard.changed"}),
+    "ui_changed": frozenset({
+        "ui.element_appears", "ui.text_appears", "ui.element_disappears",
+        "activity.changed", "app.opened", "app.closed",
+    }),
+}
+
 
 class TriggerManager:
     def __init__(self, engine, *, poll, registry=registry_mod, limits=limits_mod,
@@ -31,10 +55,20 @@ class TriggerManager:
         fired = []
         macros = self._registry.list_enabled()
         for event in batch.get("events", []):
+            bus_type = event.get("type", "")
+            # Resolve the set of dotted trigger-type names that this bus event can satisfy.
+            # Dotted names (legacy test fixtures) pass through unchanged via the fallback.
+            candidate_dotted = _BUS_TO_DOTTED.get(bus_type, frozenset({bus_type}))
             for macro in macros:
                 if not triggers_mod.is_event_driven(macro.trigger):
                     continue
-                if not triggers_mod.matches(macro.trigger, event):
+                trigger_type = macro.trigger.get("type")
+                if trigger_type not in candidate_dotted:
+                    continue
+                # Present the event to the pure matcher with the dotted type it expects.
+                # Use a shallow copy so we don't mutate the shared event dict.
+                normalized_event = dict(event, type=trigger_type)
+                if not triggers_mod.matches(macro.trigger, normalized_event):
                     continue
                 ctx = {"scopes": V.Scopes(macro=dict(macro.variables)),
                        "snapshot": event.get("data", {}).get("snapshot", {}),
@@ -47,7 +81,8 @@ class TriggerManager:
                 if not ok:
                     continue
                 self._limits.record(macro.name, now=now, store_path=self._history_path)
-                self._engine.run(macro, trigger=event["type"],
+                # Pass the dotted trigger type (macro-spec vocab) to the engine, not the raw bus name.
+                self._engine.run(macro, trigger=trigger_type,
                                  scopes=V.Scopes(macro=dict(macro.variables),
                                                  trigger=event.get("data", {})))
                 fired.append(macro.name)
