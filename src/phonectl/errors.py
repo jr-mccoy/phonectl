@@ -78,3 +78,12 @@ class JobTimeoutError(PhonectlError):
 class UnknownMethodError(PhonectlError):
     # The daemon received an RPC method it has no handler for.
     code = "unknown_method"
+
+
+class MacroValidationError(PhonectlError):
+    code = "macro_invalid"
+    requires_user = True
+
+
+class MacroCancelledError(PhonectlError):
+    code = "macro_cancelled"
