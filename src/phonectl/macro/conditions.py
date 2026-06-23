@@ -4,7 +4,6 @@ from __future__ import annotations
 import re
 
 from phonectl import errors
-from phonectl.macro import variables as V
 
 _OPS = {"eq": lambda a, b: a == b, "ne": lambda a, b: a != b,
         "lt": lambda a, b: a < b, "gt": lambda a, b: a > b}
@@ -60,4 +59,6 @@ def _in_window(now, after, before):
     if now is None or after is None or before is None:
         return True
     hm = now.strftime("%H:%M") if hasattr(now, "strftime") else str(now)
+    if before < after:            # window crosses midnight
+        return hm >= after or hm <= before
     return after <= hm <= before

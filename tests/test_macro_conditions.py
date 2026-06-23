@@ -1,5 +1,6 @@
 # tests/test_macro_conditions.py
 import pytest
+from datetime import datetime
 
 from phonectl import errors
 from phonectl.macro import conditions as C
@@ -41,3 +42,32 @@ def test_all_hold():
 def test_unknown_condition_raises():
     with pytest.raises(errors.TriggerError):
         C.evaluate({"type": "vibes"}, _ctx())
+
+
+def test_selector_exists():
+    elements = [{"text": "OK", "i": 0}]
+    ctx = _ctx(snapshot={"elements": elements})
+    assert C.evaluate({"type": "selector_exists", "selector": {"text": "OK"}}, ctx) is True
+    assert C.evaluate({"type": "selector_exists", "selector": {"text": "Cancel"}}, ctx) is False
+
+
+def test_risk_below():
+    # benign snapshot: no sensitive elements, no guarded package, tap verb — risk classifies "low"
+    ctx = _ctx(snapshot={"app": {"package": "com.example"}, "elements": []})
+    spec = {"type": "risk_below", "level": "high", "action": {"verb": "tap", "target": {"i": 0}}}
+    assert C.evaluate(spec, ctx) is True
+
+
+def test_time_window_overnight():
+    # 23:30 is inside the 22:00–06:00 overnight window
+    night = datetime(2024, 1, 1, 23, 30)
+    ctx_night = _ctx()
+    ctx_night["now"] = night
+    spec = {"type": "time_window", "after": "22:00", "before": "06:00"}
+    assert C.evaluate(spec, ctx_night) is True
+
+    # 12:00 is outside the overnight window
+    noon = datetime(2024, 1, 1, 12, 0)
+    ctx_noon = _ctx()
+    ctx_noon["now"] = noon
+    assert C.evaluate(spec, ctx_noon) is False
