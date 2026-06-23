@@ -501,3 +501,57 @@ def test_blocked_action_is_audited(tmp_path, monkeypatch):
     )
     rec = _json.loads((tmp_path / "actions.jsonl").read_text().strip().splitlines()[-1])
     assert rec["outcome"] == "blocked" and rec["verb"] == "tap"
+
+
+def test_idempotency_key_reexecutes_after_ttl(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    runtime._idempotency_cache.clear()
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(runtime.observer, "observe",
+                        lambda b, s, **kw: s.set_snapshot({"hash": "h"}))
+    runs = []
+
+    def fn(b, s):
+        runs.append(1)
+        return {"hash": f"after{len(runs)}"}
+
+    build = lambda cfg: (backend, sess, FakeConn())
+    clock = {"t": 1000.0}
+
+    first = runtime.run_action("tap", fn, {"x": 1}, build=build,
+                               idempotency_key="k1", gen_id=lambda: "r1",
+                               now=lambda: clock["t"])
+    assert runs == [1]
+    assert "idempotent_replay" not in first
+
+    clock["t"] = 1400.0            # 400s later, past the 300s default ttl
+    second = runtime.run_action("tap", fn, {"x": 1}, build=build,
+                                idempotency_key="k1", gen_id=lambda: "r2",
+                                now=lambda: clock["t"])
+    assert runs == [1, 1]                         # re-executed, not replayed
+    assert "idempotent_replay" not in second
+
+
+def test_idempotency_cache_sweeps_expired_on_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    runtime._idempotency_cache.clear()
+    backend = FakeBackend()
+    sess = FakeSession()
+    monkeypatch.setattr(runtime.observer, "observe",
+                        lambda b, s, **kw: s.set_snapshot({"hash": "h"}))
+
+    def fn(b, s):
+        return {"hash": "after"}
+
+    build = lambda cfg: (backend, sess, FakeConn())
+    clock = {"t": 0.0}
+
+    # 5 distinct keys, each 1000s apart -> every prior entry is expired when the next stores
+    for i in range(5):
+        clock["t"] = i * 1000.0
+        runtime.run_action("tap", fn, {"x": 1}, build=build,
+                           idempotency_key=f"k{i}", gen_id=lambda: f"r{i}",
+                           now=lambda: clock["t"])
+    assert len(runtime._idempotency_cache) == 1
+    assert "k4" in runtime._idempotency_cache
