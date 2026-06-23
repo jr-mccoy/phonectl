@@ -39,3 +39,10 @@ def test_scheduled_spec_never_matches_event():
 def test_unknown_trigger_type_raises():
     with pytest.raises(errors.TriggerError):
         T.matches({"type": "telepathy"}, _ev("notification.posted"))
+
+
+def test_min_percent_filter():
+    spec = {"type": "power.battery_level", "filters": {"min_percent": 20}}
+    assert T.matches(spec, _ev("power.battery_level", percent=15)) is True   # at/below -> fire
+    assert T.matches(spec, _ev("power.battery_level", percent=20)) is True
+    assert T.matches(spec, _ev("power.battery_level", percent=50)) is False  # above -> no fire

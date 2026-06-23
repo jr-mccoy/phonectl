@@ -22,15 +22,15 @@ def _check(spec):
     return t
 
 
-def is_event_driven(spec):
+def is_event_driven(spec) -> bool:
     return _check(spec) in EVENT_TYPES
 
 
-def is_scheduled(spec):
+def is_scheduled(spec) -> bool:
     return _check(spec) in SCHEDULE_TYPES
 
 
-def is_manual(spec):
+def is_manual(spec) -> bool:
     return _check(spec) == "manual"
 
 
@@ -48,6 +48,7 @@ def matches(spec, event) -> bool:
         return False
     if "selector" in f and data.get("selector") != f["selector"]:
         return False
+    # fires when battery percent is at or below the threshold (low-battery alert)
     if "min_percent" in f and not (data.get("percent", 0) <= f["min_percent"]):
         return False
     if "ssid" in f and data.get("ssid") != f["ssid"]:
