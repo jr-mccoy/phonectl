@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**Phases 1–5 are complete (implemented + green), plus two Phase-5 extensions.**
-555 test functions across 58 files (554 pass, 1 skipped), stdlib-only runtime (optional `mcp` extra for FastMCP transport).
+**Phases 1–6 are complete (implemented + green), plus two Phase-5 extensions.**
+579 tests pass (1 skipped), stdlib-only runtime (optional `mcp` extra for FastMCP transport).
 The core was validated on a real device (Samsung Galaxy S25 Ultra over Wireless Debugging from inside
 Termux + PRoot).
 
@@ -23,6 +23,7 @@ Termux + PRoot).
 | Phase 5 daemon | `daemon/` package: `server`, `client`, `rpc`, `discovery`, `jobs`, `events`, `snapshots`, `poller`, `records` |
 | Phase 6.1 macro | `macro/` package: `schema`, `variables`, `conditions`, `engine`, `records`, `loader` |
 | Phase 6.2 macro | `macro/` package: `triggers`, `scheduler`, `limits`, `registry` (conditions extended); `daemon/triggers.py`: `TriggerManager`, `Scheduler` |
+| Phase 6.3 macro | `macro/` package: `autonomy` (pure confirm-default `decide` + append-only grant ledger), `memory` (five redacted PHONECTL_HOME stores + capture hooks); `engine` per-action autonomy gate above `run_action`; daemon `autonomy_*`/`memory_*` RPC + CLI |
 
 **Phase statuses:**
 
@@ -34,8 +35,8 @@ Termux + PRoot).
 - **Daemon extensions** ✅ Async job model (JobRegistry, detach/poll) + idempotency-cache TTL eviction
 - **6.1** ✅ Macro runtime core (schema, variables, engine, records, loader, CLI group, MCP tools)
 - **6.2** ✅ Macro triggers + scheduler + event subscriptions (pure trigger matcher, full condition vocabulary, monotonic scheduler, per-macro limits, enabled-macro registry, daemon TriggerManager/Scheduler, `macro_enable/disable/list` RPC + CLI). Merged to master `f08ce9d`.
-- **6.3** 📝 Written, not yet executed — **Phase 6.3 is next**
-- **7.1–7.4** 📝 Written, not yet executed
+- **6.3** ✅ Progressive autonomy gate + redacted memory layer (pure `autonomy.decide` confirm-default + grant ledger; engine per-action gate above `run_action` — D10; unattended-path hard-gating for trigger/scheduler fires — D11; five redacted memory stores + capture hooks — D12; `autonomy_*`/`memory_*` RPC + CLI). **Phase 6 complete.** Merged to master `02f4e66`. Deferred: wiring `memory.capture_from_runs` into the daemon run-record path (needs action-record enrichment — selector `matched_i` + `app_version`/`locale`; folds into the deferred selector-library override work).
+- **7.1–7.4** 📝 Written, not yet executed — **Phase 7.1 (Shizuku provider) is next**
 - **Phase X** (evaluation suite) — not yet a full plan
 
 Source-of-truth documents (read spec → roadmap → plan before any code):
@@ -80,8 +81,8 @@ Phase 6–7 implementation plans (📝 written, not yet executed):
 
 - `docs/superpowers/plans/phonectl-plan-6.1-macro-runtime-core.md` — ✅ done
 - `docs/superpowers/plans/phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md` — ✅ done
-- `docs/superpowers/plans/phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md` — **NEXT UP**
-- `docs/superpowers/plans/phonectl-plan-7.1-shizuku-provider.md`
+- `docs/superpowers/plans/phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md` — ✅ done
+- `docs/superpowers/plans/phonectl-plan-7.1-shizuku-provider.md` — **NEXT UP**
 - `docs/superpowers/plans/phonectl-plan-7.2-optional-root-provider.md`
 - `docs/superpowers/plans/phonectl-plan-7.3-low-latency-transport.md`
 - `docs/superpowers/plans/phonectl-plan-7.4-tasker-macrodroid-interop.md`
@@ -144,7 +145,7 @@ There is no linter or formatter configured in the plan; do not add one unless th
 
 ## What's deferred (do not build without an explicit ask)
 
-**Execution order:** Phases 6.1 and 6.2 are ✅ done. Phase 6.3 (progressive autonomy + memory layer) is the next plan to execute.
+**Execution order:** Phase 6 is ✅ complete (6.1, 6.2, 6.3 all done). Phase 7.1 (Shizuku provider) is the next plan to execute.
 Phases 7.1–7.4 follow Phase 6. Phase X (evaluation suite) has no full plan yet.
 
 **Deferred from 6.2 → fold into 6.3:** bus-envelope `snapshot`/`device` enrichment (snapshot-dependent conditions like `foreground_package`/`battery_min` are currently inert on auto-fired triggers); DEBUG logging of swallowed trigger errors in the daemon `events_poll` loop; `Scheduler._armed` cleanup on disable; routing trigger/scheduler fires through `JobRegistry` (today they execute inline in the single-threaded `events_poll` handler).
