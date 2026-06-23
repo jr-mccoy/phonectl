@@ -45,6 +45,7 @@ class JobRegistry:
     def submit(self, method: str, params: dict) -> str:
         key = params.get("idempotency_key")
         with self._cv:
+            self._sweep_locked()
             existing = self._dedupe_locked(key)
             if existing is not None:
                 return existing
@@ -76,6 +77,18 @@ class JobRegistry:
         if job.ts_finished is not None and (self._now() - job.ts_finished) < self._ttl:
             return jid                                   # finished within ttl
         return None
+
+    def _sweep_locked(self):
+        cutoff = self._now() - self._ttl
+        expired = [jid for jid, job in self._jobs.items()
+                   if job.status in _TERMINAL
+                   and job.ts_finished is not None
+                   and job.ts_finished <= cutoff]
+        for jid in expired:
+            job = self._jobs.pop(jid, None)
+            if (job is not None and job.idempotency_key is not None
+                    and self._by_key.get(job.idempotency_key) == jid):
+                del self._by_key[job.idempotency_key]
 
     def get(self, job_id: str) -> Job | None:
         with self._cv:

@@ -122,3 +122,35 @@ def test_stop_is_idempotent_and_joins():
     reg.start()
     reg.stop()
     reg.stop()  # must not raise
+
+
+def test_submit_evicts_terminal_job_past_ttl():
+    run, calls = _counting_runner()
+    t = {"now": 1000.0}
+    reg = JobRegistry(run, idempotency_ttl=300.0, now=lambda: t["now"])
+    old = reg.submit("act", {"idempotency_key": "k1"})
+    reg.run_next()                       # k1 job -> done at t=1000
+    assert reg.get(old) is not None
+    t["now"] = 1400.0                    # 400s later, past ttl
+    new = reg.submit("act", {"idempotency_key": "k2"})  # triggers sweep
+    assert reg.get(old) is None          # evicted from _jobs
+    assert "k1" not in reg._by_key       # and from _by_key
+    assert new != old
+
+
+def test_submit_keeps_terminal_job_within_ttl():
+    reg = JobRegistry(_ok_runner, idempotency_ttl=300.0, now=lambda: 1000.0)
+    old = reg.submit("act", {"idempotency_key": "k1"})
+    reg.run_next()
+    reg.submit("act", {"idempotency_key": "k2"})   # sweep runs, same instant
+    assert reg.get(old) is not None      # within ttl -> survives
+
+
+def test_sweep_never_evicts_queued_or_running_job():
+    # A queued job has ts_finished=None and must never be swept, however old the clock.
+    t = {"now": 1000.0}
+    reg = JobRegistry(_ok_runner, idempotency_ttl=300.0, now=lambda: t["now"])
+    queued = reg.submit("act", {"idempotency_key": "k1"})   # queued, not run
+    t["now"] = 999999.0
+    reg.submit("act", {"idempotency_key": "k2"})            # triggers sweep
+    assert reg.get(queued) is not None   # queued job survives regardless of age
