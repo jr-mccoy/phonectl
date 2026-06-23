@@ -1,6 +1,6 @@
 # phonectl Macro Runtime Core Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Plan 6.1 of the platform roadmap** (`docs/superpowers/phonectl-platform-roadmap.md`). First plan of
 Phase 6. Implements the Phase-6.0 macro-engine design
@@ -97,7 +97,7 @@ tests; optional `[yaml]` extra (PyYAML) consumed **only** in `macro/loader.py`. 
 - `macro.PHONE_VERBS` (frozenset of step types that map to `run_action`) and
   `macro.CONTROL_STEPS` (frozenset of interpreted control-flow step types).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_errors.py
@@ -117,12 +117,12 @@ def test_step_kind_sets_are_disjoint_and_populated():
     assert macro.PHONE_VERBS.isdisjoint(macro.CONTROL_STEPS)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_errors.py -v`
 Expected: FAIL (`AttributeError: MacroValidationError` / `ModuleNotFoundError: phonectl.macro`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/errors.py — append
@@ -151,12 +151,12 @@ CONTROL_STEPS = frozenset({
 })
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_errors.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/errors.py src/phonectl/macro/__init__.py tests/test_macro_errors.py
@@ -181,7 +181,7 @@ git commit -m "feat: macro package skeleton + macro_invalid/macro_cancelled erro
   a normalized dict) with defaults applied (`version=1`, `permissions={}`, `variables={}`, `policy={}`,
   `limits={}`); raises `errors.MacroValidationError` (joined messages) when `validate` is non-empty.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_schema.py
@@ -233,12 +233,12 @@ def test_parse_raises_on_invalid():
         schema.parse({"actions": []})
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_schema.py -v`
 Expected: FAIL (`ModuleNotFoundError: phonectl.macro.schema`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/macro/schema.py
@@ -332,12 +332,12 @@ def parse(doc) -> Macro:
     )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_schema.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/macro/schema.py tests/test_macro_schema.py
@@ -361,7 +361,7 @@ git commit -m "feat: pure macro schema parse + recursive validation"
 - `variables.redacted_view(scopes) -> dict` — a flat merged dict for logging where every secret-scope value
   is replaced by `redact.SECRET_MASK` (reuse Plan 2.1 `redact`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_variables.py
@@ -397,12 +397,12 @@ def test_redacted_view_masks_secrets():
     assert s.is_secret("otp") is True
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_variables.py -v`
 Expected: FAIL (`ModuleNotFoundError: phonectl.macro.variables`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/macro/variables.py
@@ -461,12 +461,12 @@ def redacted_view(scopes) -> dict:
     return merged
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_variables.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/macro/variables.py tests/test_macro_variables.py
@@ -495,7 +495,7 @@ git commit -m "feat: pure scoped macro variables + interpolation + secret-redact
   writes a variable; `wait` sleeps `seconds` (injected); `stop` ends successfully; `audit_note` logs.
 - Cancellation is checked **before each step**; a cancelled run returns `results.err(MacroCancelledError)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_engine.py
@@ -564,12 +564,12 @@ def test_cancellation_before_step():
     assert rec == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_engine.py -v`
 Expected: FAIL (`ModuleNotFoundError: phonectl.macro.engine`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/macro/engine.py
@@ -702,12 +702,12 @@ class Engine:
 (`run_action` already mints a `request_id` when passed `None`; the engine passes `idempotency_key` from the
 step so a re-run is replay-safe per Plan 2.1.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_engine.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/macro/engine.py tests/test_macro_engine.py
@@ -734,7 +734,7 @@ git commit -m "feat: macro executor — sequential actions via run_action + set/
   policy before replaying a high/critical step** — D7), `race` (return when any `any` condition holds or
   `timeout`), `try` (run `do`; always run `finally`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_control_flow.py
@@ -813,12 +813,12 @@ def test_try_runs_finally_even_on_failure():
     assert ("tap", {"i": 0}) in rec  # finally ran
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_control_flow.py -v`
 Expected: FAIL (`unsupported step at runtime: 'if'` etc.).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/macro/conditions.py
@@ -919,12 +919,12 @@ def evaluate(spec, ctx) -> bool:
 (Re-checking policy on replay is automatic: every `run_action` call re-evaluates the risk policy against the
 *current* snapshot, so a high-risk replay cannot bypass the gate even if the first attempt was granted.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_engine.py tests/test_macro_control_flow.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/macro/engine.py src/phonectl/macro/conditions.py tests/test_macro_control_flow.py tests/test_macro_engine.py
@@ -948,7 +948,7 @@ git commit -m "feat: macro control flow — if/switch/for_each/loop/retry(backof
   optional `[yaml]` extra is importable, else `errors.MacroValidationError` with an actionable message
   ("install phonectl[yaml] to load YAML macros"). The pure parser never sees YAML.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_fn_for.py
@@ -995,12 +995,12 @@ def test_load_yaml_without_extra_raises(tmp_path, monkeypatch):
         loader.load(str(p))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_fn_for.py tests/test_macro_loader.py -v`
 Expected: FAIL (`AttributeError: macro_fn_for` / `ModuleNotFoundError: phonectl.macro.loader`).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/cli.py — add (reuse the existing actuator/selector helpers the CLI verbs use)
@@ -1072,12 +1072,12 @@ def load(path) -> dict:
 yaml = ["PyYAML>=6"]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_fn_for.py tests/test_macro_loader.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/cli.py src/phonectl/macro/loader.py pyproject.toml tests/test_macro_fn_for.py tests/test_macro_loader.py
@@ -1103,7 +1103,7 @@ git commit -m "feat: phone-verb->fn mapping (cli.macro_fn_for) + JSON loader wit
 - Engine: pass `parent_task_id=run_id` into each `run_action` call (so action records join the run); append
   exactly one `MacroRun` summary per `run`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_macro_records.py
@@ -1148,12 +1148,12 @@ def test_run_sets_parent_task_id_on_actions():
     assert seen["parent"] == out["data"]["run_id"]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_macro_records.py tests/test_macro_engine.py -v -k "record or parent_task"`
 Expected: FAIL (`ModuleNotFoundError` / `parent_task_id` not threaded).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/macro/records.py
@@ -1216,12 +1216,12 @@ def read(kind=None, limit=None) -> list:
 # in _exec_action(): pass parent_task_id=state["run_id"] into self._run_action(...)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_macro_records.py tests/test_macro_engine.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/macro/records.py src/phonectl/macro/engine.py tests/test_macro_records.py tests/test_macro_engine.py
@@ -1244,7 +1244,7 @@ git commit -m "feat: macro-run lineage (parent_task_id) + MacroRun summary in ru
 - `macro_cancel` — flip the token for `params["run_id"]`; `results.ok`.
 - `macro_status` — return the last/live state for a `run_id` (or recent `MacroRun` records).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_daemon_server.py — append
@@ -1276,12 +1276,12 @@ def test_macro_in_mutating_set():
     assert {"macro_run", "macro_cancel"} <= rpc.MUTATING
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_daemon_server.py -v -k "macro"`
 Expected: FAIL (`unknown_method` / `macro_run` not in MUTATING).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/phonectl/daemon/rpc.py — extend the MUTATING set
@@ -1329,12 +1329,12 @@ returns so an in-flight macro is cancellable — the engine exposes the `run_id`
 or by minting the id in the handler and passing it in. Keep the token registry on the server so
 `macro_cancel` reaches it.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_daemon_server.py -v -k "macro"`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/phonectl/daemon/rpc.py src/phonectl/daemon/server.py tests/test_daemon_server.py
@@ -1360,7 +1360,7 @@ git commit -m "feat: daemon RPC — macro_validate/run/cancel/status (run_/cance
   Plan-2.3 `TOOLS` registry, each returning the `results` envelope.
 - Run the **full suite** on this final task.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cli.py — append
@@ -1394,12 +1394,12 @@ def test_macro_tools_registered():
 
 (`_FakeConn` mirrors the existing test conn with an `ensure()` no-op; reuse the one in `tests/test_cli.py`.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli.py tests/test_mcp_server.py -v -k "macro"`
 Expected: FAIL (no `macro` subcommand / tool).
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Wire a `macro` subparser in `cli.main` whose handlers call `loader.load` → `schema.parse`/`validate` and
 route action through `_dispatch("macro_run", {"macro": doc, "yes": args.yes}, in_process, cfg=cfg)` where
@@ -1408,12 +1408,12 @@ route action through `_dispatch("macro_run", {"macro": doc, "yes": args.yes}, in
 (document the schema from spec §5, the `[yaml]` extra, the run/validate/cancel/status verbs, and the
 progressive-autonomy note pointing forward to 6.3). Add a one-line README "Macros" section.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli.py tests/test_mcp_server.py -v -k "macro"`
 Expected: PASS.
 
-- [ ] **Step 5: Run the full suite, then commit**
+- [x] **Step 5: Run the full suite, then commit**
 
 Run: `pytest -v`
 Expected: PASS (no existing test regressed; the macro engine is purely additive).
