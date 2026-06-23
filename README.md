@@ -1297,3 +1297,16 @@ phonectl macro cancel  <run_id>               # cancel (daemon only)
 ```
 
 See [docs/macros.md](docs/macros.md) for the full schema reference and control-flow step catalogue.
+
+### Autonomy grants & memory
+
+```bash
+phonectl autonomy grant <macro> --max-risk high   # allow unattended run up to high risk
+phonectl autonomy revoke <macro>                  # revoke all grants for a macro
+phonectl autonomy list                            # list live grants
+phonectl memory show [<store>]                    # inspect a memory store (or all)
+phonectl memory export [<file>]                   # export all stores
+phonectl memory delete [<store>]                  # delete a store (or all)
+```
+
+See [docs/macros.md § Progressive autonomy & memory](docs/macros.md#progressive-autonomy--memory) for the confirm-default rule, critical-risk policy, and the D12 redaction promise.

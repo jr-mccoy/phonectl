@@ -193,3 +193,44 @@ When `phonectl daemon` is running, `phonectl macro run` routes to `macro_run` RP
 ## Audit trail
 
 Every macro run appends a `macro_run` record to `runs.jsonl` with `run_id`, `macro_name`, `trigger`, `outcome`, `steps_run`, `started_at`, `ended_at`, and `cancelled`. Each action step's audit record includes `parent_task_id=run_id` for full lineage.
+
+## Progressive autonomy & memory
+
+### Autonomy grants
+
+By default every macro action prompts for confirmation (`confirm`). An autonomy grant allows the daemon to skip the prompt for actions up to a specified risk level:
+
+```bash
+phonectl autonomy grant reply --max-risk high     # allow auto-run up to high risk
+phonectl autonomy revoke reply                     # revoke all grants for macro "reply"
+phonectl autonomy list                             # show live (non-expired) grants
+```
+
+Grant records are appended to `autonomy.jsonl` in `PHONECTL_HOME`. Revoking adds a revoke record; `list` replays the ledger at the current time, filtering expired entries.
+
+**Critical-risk actions are never fully autonomous.** A grant with `max_risk=critical` still requires a one-time human approval per action (`confirm`); it does not promote to `allow`. Any action whose risk classifier returns `critical` therefore always confirms.
+
+**`require_confirm` macros.** If the macro document sets `policy.require_confirm: true`, the engine always confirms regardless of any grant.
+
+### Memory stores
+
+The memory layer is a set of narrow, redacted key-value stores for operational metadata only. Personal content (message text, contact names) is never stored. All values pass through the redactor (D12) before being written.
+
+| Store | Purpose |
+|---|---|
+| `device` | Device metadata (model, OS version) |
+| `apps` | Per-app metadata (version, locale) |
+| `prefs` | User preferences (quiet hours, etc.) |
+| `selectors` | Learned element selectors per app+version+locale |
+| `failures` | Retryable failure counts per verb+outcome |
+
+```bash
+phonectl memory show prefs               # show the prefs store
+phonectl memory show                     # show all stores
+phonectl memory export                   # dump all stores to stdout
+phonectl memory export backup.json       # write to file
+phonectl memory delete prefs             # delete the prefs store
+phonectl memory delete                   # delete all stores
+```
+
+Memory stores are populated automatically by the macro engine capture hooks (`capture_selector`, `capture_failure`) and can be inspected or cleared at any time.

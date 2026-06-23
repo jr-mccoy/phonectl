@@ -1135,6 +1135,131 @@ def _cmd_macro_list(args):
     return 0
 
 
+def _cmd_autonomy_grant(args):
+    import sys
+    import time
+    from phonectl.macro import autonomy
+    cfg = config.load()
+    env = _dispatch(
+        "autonomy_grant",
+        {"macro": args.macro, "max_risk": args.max_risk,
+         "scope": getattr(args, "scope", "all"),
+         "expires_at": getattr(args, "expires", None)},
+        lambda: results.ok(capability="autonomy.grant",
+                           data=autonomy.grant(args.macro, max_risk=args.max_risk,
+                                               scope=getattr(args, "scope", "all"),
+                                               expires_at=getattr(args, "expires", None),
+                                               now=time.time())),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        # Write grant confirmation to stderr so stdout stays clean for piped list/query commands
+        print(json.dumps(env, indent=2), file=sys.stderr)
+    else:
+        g = env.get("data", {})
+        print(f"autonomy granted: {g.get('macro')} max_risk={g.get('max_risk')} id={g.get('id')}")
+    return 0
+
+
+def _cmd_autonomy_revoke(args):
+    import time
+    from phonectl.macro import autonomy
+    cfg = config.load()
+    env = _dispatch(
+        "autonomy_revoke",
+        {"macro": args.macro},
+        lambda: (autonomy.revoke(macro=args.macro, now=time.time()),
+                 results.ok(capability="autonomy.revoke", data={"revoked": True}))[1],
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"autonomy revoked: {args.macro}")
+    return 0
+
+
+def _cmd_autonomy_list(args):
+    import time
+    from phonectl.macro import autonomy
+    cfg = config.load()
+    env = _dispatch(
+        "autonomy_list",
+        {},
+        lambda: results.ok(capability="autonomy.list",
+                           data={"grants": autonomy.list_live(now=time.time())}),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        grants = env.get("data", {}).get("grants", [])
+        if not grants:
+            print("no autonomy grants")
+        for g in grants:
+            print(f"  {g.get('macro')}  max_risk={g.get('max_risk')}")
+    return 0
+
+
+def _cmd_memory_show(args):
+    from phonectl.macro import memory
+    cfg = config.load()
+    store = getattr(args, "store", None)
+    env = _dispatch(
+        "memory_show",
+        {"store": store} if store else {},
+        lambda: results.ok(capability="memory.show",
+                           data=memory.read(store) if store else memory.export()),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(json.dumps(env.get("data", {}), indent=2))
+    return 0
+
+
+def _cmd_memory_export(args):
+    from phonectl.macro import memory
+    cfg = config.load()
+    env = _dispatch(
+        "memory_export",
+        {},
+        lambda: results.ok(capability="memory.export", data=memory.export()),
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        data = env.get("data", {})
+        file_arg = getattr(args, "file", None)
+        if file_arg:
+            import pathlib
+            pathlib.Path(file_arg).write_text(json.dumps(data))
+            print(f"exported to {file_arg}")
+        else:
+            print(json.dumps(data, indent=2))
+    return 0
+
+
+def _cmd_memory_delete(args):
+    from phonectl.macro import memory
+    cfg = config.load()
+    store = getattr(args, "store", None)
+    env = _dispatch(
+        "memory_delete",
+        {"store": store} if store else {},
+        lambda: (memory.delete(store),
+                 results.ok(capability="memory.delete", data={"deleted": True}))[1],
+        cfg=cfg,
+    )
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"memory deleted: {store or 'all'}")
+    return 0
+
+
 def _cmd_daemon(args):
     import signal
     cfg = config.load()
@@ -1556,6 +1681,43 @@ def build_parser() -> argparse.ArgumentParser:
     mcl.add_argument("--json", action="store_true")
     mcl.set_defaults(func=_cmd_macro_list)
     mc.set_defaults(func=_cmd_macro_validate)
+
+    # autonomy subcommand group (Phase 6.3)
+    at = sub.add_parser("autonomy")
+    atsub = at.add_subparsers(dest="autonomy_cmd")
+    atg = atsub.add_parser("grant")
+    atg.add_argument("macro")
+    atg.add_argument("--max-risk", required=True, dest="max_risk",
+                     choices=["low", "medium", "high", "critical"])
+    atg.add_argument("--scope", default="all")
+    atg.add_argument("--expires", type=float, default=None)
+    atg.add_argument("--json", action="store_true")
+    atg.set_defaults(func=_cmd_autonomy_grant)
+    atr = atsub.add_parser("revoke")
+    atr.add_argument("macro")
+    atr.add_argument("--json", action="store_true")
+    atr.set_defaults(func=_cmd_autonomy_revoke)
+    atl = atsub.add_parser("list")
+    atl.add_argument("--json", action="store_true")
+    atl.set_defaults(func=_cmd_autonomy_list)
+    at.set_defaults(func=_cmd_autonomy_list)
+
+    # memory subcommand group (Phase 6.3)
+    mm = sub.add_parser("memory")
+    mmsub = mm.add_subparsers(dest="memory_cmd")
+    mms = mmsub.add_parser("show")
+    mms.add_argument("store", nargs="?", default=None)
+    mms.add_argument("--json", action="store_true")
+    mms.set_defaults(func=_cmd_memory_show)
+    mme = mmsub.add_parser("export")
+    mme.add_argument("file", nargs="?", default=None)
+    mme.add_argument("--json", action="store_true")
+    mme.set_defaults(func=_cmd_memory_export)
+    mmd = mmsub.add_parser("delete")
+    mmd.add_argument("store", nargs="?", default=None)
+    mmd.add_argument("--json", action="store_true")
+    mmd.set_defaults(func=_cmd_memory_delete)
+    mm.set_defaults(func=_cmd_memory_show)
 
     # daemon subcommand group (Phase 5.1)
     dm = sub.add_parser("daemon")
