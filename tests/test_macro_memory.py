@@ -20,7 +20,7 @@ def test_values_are_redacted(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     memory.update("failures", "note", "OTP is 123456 call 555-123-4567")
     stored = memory.read("failures")["note"]
-    assert "123456" not in stored or "555-123-4567" not in stored  # redacted
+    assert "123456" not in stored and "555-123-4567" not in stored  # both redacted (D12)
 
 
 def test_export_and_delete(tmp_path, monkeypatch):
