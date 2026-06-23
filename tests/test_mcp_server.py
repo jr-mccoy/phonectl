@@ -450,3 +450,25 @@ def test_phone_ocr_screen_unavailable_returns_err(tmp_path, monkeypatch):
     env = mcp_server.call_tool("phone_ocr_screen", {}, build)
     assert env["ok"] is False
     assert env["error"]["code"] == "capability_unavailable"
+
+
+# Phase 6.1: macro tools
+def test_phone_macro_validate_tool_registered():
+    from phonectl import mcp_server
+    assert 'phone_macro_validate' in mcp_server.TOOLS
+    assert 'phone_macro_run' in mcp_server.TOOLS
+    assert 'phone_macro_status' in mcp_server.TOOLS
+
+
+def test_phone_macro_validate_valid(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_macro_validate", {"macro": {"name": "m", "actions": []}}, build)
+    assert env["ok"] is True and env["data"]["valid"] is True
+
+
+def test_phone_macro_status_empty(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    build, _ = make_build()
+    env = mcp_server.call_tool("phone_macro_status", {}, build)
+    assert env["ok"] is True and env["data"]["runs"] == []

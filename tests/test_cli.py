@@ -746,3 +746,44 @@ def test_daemon_stop_calls_shutdown_rpc(tmp_path, monkeypatch, capsys):
     rc = cli.main(["daemon", "stop"])
     assert rc == 0
     assert any(c[0] == "call" and c[1] == "shutdown" for c in fake.calls)
+
+
+# ── Task 9: phonectl macro CLI group ──────────────────────────────────────
+
+def test_macro_validate_valid(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    macro_path = tmp_path / "m.json"
+    macro_path.write_text(json.dumps({"name": "m", "actions": []}))
+    rc = cli.main(["macro", "validate", str(macro_path), "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and out["data"]["valid"] is True
+
+
+def test_macro_validate_invalid(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    macro_path = tmp_path / "bad.json"
+    macro_path.write_text(json.dumps({"actions": []}))
+    rc = cli.main(["macro", "validate", str(macro_path), "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["data"]["valid"] is False and out["data"]["errors"]
+
+
+def test_macro_run_in_process(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
+    macro_path = tmp_path / "m.json"
+    macro_path.write_text(json.dumps({"name": "m", "actions": []}))
+    rc = cli.main(["macro", "run", str(macro_path), "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+
+
+def test_macro_status_empty(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    rc = cli.main(["macro", "status", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and out["data"]["runs"] == []

@@ -1283,3 +1283,17 @@ In-process primitives (`observe`, `tap`, `type`, etc.) work exactly as they alwa
 ### Termux:Boot autostart (seam only)
 
 `daemon_autostart` config key exists and `phonectl daemon start` runs foreground. Autostart via Termux:Boot and companion foreground-service hosting are noted as seams; they land in Phase 5.2+.
+
+
+## Macros
+
+Macros are declarative JSON documents that run a sequence of phone actions, control-flow steps, and variable interpolations through the standard safety funnel (`runtime.run_action`). Every action is kill-switch-gated, rate-limited, policy-checked, and appended to `actions.jsonl` with `parent_task_id` linking it to the macro run.
+
+```bash
+phonectl macro validate path/to/macro.json   # lint
+phonectl macro run     path/to/macro.json     # execute
+phonectl macro status                         # list recent runs
+phonectl macro cancel  <run_id>               # cancel (daemon only)
+```
+
+See [docs/macros.md](docs/macros.md) for the full schema reference and control-flow step catalogue.

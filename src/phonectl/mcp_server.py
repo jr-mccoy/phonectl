@@ -459,6 +459,27 @@ def _schema(**props):
     return {"type": "object", "properties": props}
 
 
+def _macro_validate_mcp(macro, **_):
+    from phonectl.macro import schema as _ms
+    errs = _ms.validate(macro)
+    return results.ok(capability="macro.validate", data={"valid": not errs, "errors": errs})
+
+
+def _macro_run_mcp(macro, *, build, yes=False, **_):
+    from phonectl.macro import schema as _ms
+    from phonectl.macro.engine import Engine
+    from phonectl.cli import macro_fn_for
+    macro_obj = _ms.parse(macro)
+    eng = Engine(build=build, fn_for=macro_fn_for)
+    return eng.run(macro_obj, yes=yes)
+
+
+def _macro_status_mcp(limit=10, **_):
+    from phonectl.macro import records as _mrec
+    return results.ok(capability="macro.status",
+                      data={"runs": _mrec.read(kind="macro_run", limit=limit)})
+
+
 _OBJ = {"type": "object", "properties": {}}
 _TARGET_PROPS = {
     "index": {"type": "integer"},
@@ -526,6 +547,10 @@ TOOLS = {
     "phone_extract_form": {"description": "Extract form fields with associated labels.", "schema": _OBJ, "handler": extract_form, "needs_build": True},
     "phone_get_focused_field": {"description": "Return the currently focused text field, or null.", "schema": _OBJ, "handler": get_focused_field, "needs_build": True},
     "phone_find_text": {"description": "Find elements whose text matches a regex pattern (re.search).", "schema": _schema(pattern={"type": "string"}), "handler": find_text, "needs_build": True},
+    # Phase 6.1: macro engine
+    "phone_macro_validate": {"description": "Validate a macro document; returns {valid, errors}.", "schema": _schema(macro={"type": "object"}), "handler": _macro_validate_mcp, "needs_build": False},
+    "phone_macro_run": {"description": "Run a declarative macro document; returns run envelope.", "schema": _schema(macro={"type": "object"}, yes={"type": "boolean"}), "handler": _macro_run_mcp, "needs_build": True},
+    "phone_macro_status": {"description": "List recent macro runs from runs.jsonl.", "schema": _schema(limit={"type": "integer"}), "handler": _macro_status_mcp, "needs_build": False},
 }
 
 

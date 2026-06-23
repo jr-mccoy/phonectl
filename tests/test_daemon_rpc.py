@@ -55,4 +55,6 @@ def test_duplicate_registration_raises():
 
 def test_mutating_set_contains_stop_resume():
     # act is no longer in MUTATING: its submit is fast; the worker acquires the lock during execution
-    assert rpc.MUTATING == {"stop", "resume"}
+    # macro_run/cancel are also MUTATING (Phase 6.1)
+    assert {"stop", "resume"} <= rpc.MUTATING
+    assert {"macro_run", "macro_cancel"} <= rpc.MUTATING

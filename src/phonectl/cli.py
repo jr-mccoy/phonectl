@@ -1024,6 +1024,79 @@ def _cmd_notifications_dismiss(args):
     return 1
 
 
+def _cmd_macro_validate(args):
+    from phonectl.macro import loader, schema
+    cfg = config.load()
+    if not hasattr(args, "path") or args.path is None:
+        print("usage: phonectl macro validate <path>")
+        return 1
+    doc = loader.load(args.path)
+    errs = schema.validate(doc)
+    env = results.ok(capability="macro.validate", data={"valid": not errs, "errors": errs})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        if errs:
+            for e in errs:
+                print(f"  error: {e}")
+            return 1
+        print(f"macro valid: {doc.get('name', '?')}")
+    return 0
+
+
+def _cmd_macro_run(args):
+    from phonectl.macro import loader, schema
+    from phonectl.macro.engine import Engine, CancellationToken
+    cfg = config.load()
+    doc = loader.load(args.path)
+    client = _daemon_client(cfg)
+    if client is not None:
+        env = client.call("macro_run", {"macro": doc, "yes": bool(getattr(args, "yes", False))})
+    else:
+        macro = schema.parse(doc)
+        eng = Engine(build=build_runtime, cfg=cfg, fn_for=macro_fn_for)
+        env = eng.run(macro, yes=bool(getattr(args, "yes", False)))
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        if env.get("ok"):
+            d = env.get("data", {})
+            print(f"macro run {d.get('run_id', '?')}: {d.get('outcome', 'ok')} ({d.get('steps_run', 0)} steps)")
+        else:
+            print(f"macro failed: {env.get('error', {}).get('message', '?')}")
+    return 0 if env.get("ok") else 1
+
+
+def _cmd_macro_status(args):
+    cfg = config.load()
+    from phonectl.macro import records as _mrec
+    runs = _mrec.read(kind="macro_run", limit=10)
+    env = results.ok(capability="macro.status", data={"runs": runs})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        if not runs:
+            print("no macro runs recorded")
+        for r in runs:
+            print(f"  {r['run_id']} {r.get('macro_name')} {r.get('outcome')}")
+    return 0
+
+
+def _cmd_macro_cancel(args):
+    cfg = config.load()
+    client = _daemon_client(cfg)
+    if client is None:
+        print("phonectl: no running daemon (cancel has no effect)")
+        return 0
+    env = client.call("macro_cancel", {"run_id": args.run_id})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        c = env.get("data", {}).get("cancelled", False)
+        print("cancelled" if c else "run not found")
+    return 0
+
+
 def _cmd_daemon(args):
     import signal
     cfg = config.load()
@@ -1413,6 +1486,27 @@ def build_parser() -> argparse.ArgumentParser:
     jb.add_argument("--wait", action="store_true", help="block until the job is terminal")
     jb.add_argument("--json", action="store_true")
     jb.set_defaults(func=_cmd_job)
+
+    # macro subcommand group (Phase 6.1)
+    mc = sub.add_parser("macro")
+    mcsub = mc.add_subparsers(dest="macro_cmd")
+    mcv = mcsub.add_parser("validate")
+    mcv.add_argument("path")
+    mcv.add_argument("--json", action="store_true")
+    mcv.set_defaults(func=_cmd_macro_validate)
+    mcr = mcsub.add_parser("run")
+    mcr.add_argument("path")
+    mcr.add_argument("--yes", action="store_true")
+    mcr.add_argument("--json", action="store_true")
+    mcr.set_defaults(func=_cmd_macro_run)
+    mcs = mcsub.add_parser("status")
+    mcs.add_argument("--json", action="store_true")
+    mcs.set_defaults(func=_cmd_macro_status)
+    mcc = mcsub.add_parser("cancel")
+    mcc.add_argument("run_id")
+    mcc.add_argument("--json", action="store_true")
+    mcc.set_defaults(func=_cmd_macro_cancel)
+    mc.set_defaults(func=_cmd_macro_validate)
 
     # daemon subcommand group (Phase 5.1)
     dm = sub.add_parser("daemon")
