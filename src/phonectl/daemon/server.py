@@ -43,6 +43,7 @@ class DaemonServer:
         )
         # poller is built lazily on first events_poll call (avoids eager triple build)
         self.poller = None
+        self._macro_tokens = {}
         self._register_builtins()
 
     # ── warm provider lifecycle ─────────────────────────────────────────────
@@ -141,6 +142,40 @@ class DaemonServer:
                 capability="daemon.job_poll",
                 data={"status": job.status, "result": job.result_env},
             )
+
+        from phonectl.macro import schema as _mschema
+        from phonectl.macro.engine import Engine as _Engine, CancellationToken as _Token
+
+        @self.registry.register("macro_validate")
+        def _macro_validate(params, ctx):
+            errs = _mschema.validate(params["macro"])
+            return results.ok(capability="macro.validate",
+                              data={"valid": not errs, "errors": errs})
+
+        @self.registry.register("macro_run")
+        def _macro_run(params, ctx):
+            macro = _mschema.parse(params["macro"])
+            token = _Token()
+            eng = _Engine(build=lambda cfg: self._warm_triple(), cfg=self._cfg)
+            env = eng.run(macro, token=token, yes=bool(params.get("yes", False)))
+            rid = env.get("data", {}).get("run_id")
+            if rid:
+                self._macro_tokens.pop(rid, None)
+            return env
+
+        @self.registry.register("macro_cancel")
+        def _macro_cancel(params, ctx):
+            tok = self._macro_tokens.get(params.get("run_id"))
+            if tok is not None:
+                tok.cancel()
+            return results.ok(capability="macro.cancel", data={"cancelled": tok is not None})
+
+        @self.registry.register("macro_status")
+        def _macro_status(params, ctx):
+            from phonectl.macro import records as _records
+            return results.ok(capability="macro.status",
+                              data={"runs": _records.read(kind="macro_run",
+                                                          limit=params.get("limit", 10))})
 
         @self.registry.register("events_poll")
         def _events_poll(params, ctx):

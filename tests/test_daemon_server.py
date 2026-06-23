@@ -429,3 +429,33 @@ def test_shutdown_in_methods_list(tmp_path, monkeypatch):
     resp = json.loads(srv.handle_line(_req("status")))
     assert "shutdown" in resp["data"]["methods"]
     assert "job_poll" in resp["data"]["methods"]
+
+
+# ── Task 8: macro RPC handlers ────────────────────────────────────────────
+
+def test_macro_validate_method(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("macro_validate",
+        {"macro": {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}}]}})))
+    assert resp["ok"] is True and resp["data"]["valid"] is True
+
+
+def test_macro_validate_reports_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("macro_validate", {"macro": {"actions": []}})))
+    assert resp["ok"] is True and resp["data"]["valid"] is False and resp["data"]["errors"]
+
+
+def test_macro_run_executes_actions(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("macro_run",
+        {"macro": {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}, "i": 0}]}})))
+    assert resp["ok"] is True and resp["data"]["run_id"].startswith("run_")
+
+
+def test_macro_in_mutating_set():
+    from phonectl.daemon import rpc
+    assert {"macro_run", "macro_cancel"} <= rpc.MUTATING
