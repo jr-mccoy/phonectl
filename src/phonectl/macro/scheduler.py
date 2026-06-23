@@ -19,6 +19,9 @@ def validate(spec) -> list:
             _parse_hm(spec.get("at", ""))
         except (ValueError, AttributeError):
             return [f"invalid schedule.time 'at': {spec.get('at')!r}"]
+        wd = spec.get("weekdays")
+        if wd is not None and (not isinstance(wd, list) or any(not isinstance(d, int) or d < 0 or d > 6 for d in wd)):
+            return ["schedule.time 'weekdays' must be integers 0..6"]
         return []
     if t == "schedule.interval":
         if not isinstance(spec.get("every_seconds"), (int, float)) or spec["every_seconds"] <= 0:
