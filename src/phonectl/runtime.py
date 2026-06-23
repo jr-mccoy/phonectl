@@ -9,7 +9,15 @@ import uuid
 from phonectl import audit, config, errors, observer, policy, ratelimit, results
 
 _action_lock = threading.Lock()
-_idempotency_cache: dict = {}
+_idempotency_cache: dict = {}   # key -> (ts, env)
+
+
+def _sweep_idempotency_cache(now_ts, ttl):
+    expired = [k for k, (ts, _env) in _idempotency_cache.items() if now_ts - ts >= ttl]
+    for k in expired:
+        del _idempotency_cache[k]
+
+
 DEFAULT_LIMITS = {
     "tap": 120,
     "type": 30,
@@ -59,12 +67,15 @@ def run_action(
     now=time.time,
     companion_transport=None,
 ) -> dict:
-    if idempotency_key is not None and idempotency_key in _idempotency_cache:
-        replay = dict(_idempotency_cache[idempotency_key])
-        replay["idempotent_replay"] = True
-        return replay
-
     cfg = config.load() if cfg is None else cfg
+    ttl = cfg.get("idempotency_ttl", 300.0)
+    if idempotency_key is not None and idempotency_key in _idempotency_cache:
+        ts, cached = _idempotency_cache[idempotency_key]
+        if now() - ts < ttl:
+            replay = dict(cached)
+            replay["idempotent_replay"] = True
+            return replay
+        del _idempotency_cache[idempotency_key]   # expired -> fall through and re-execute
     rid = request_id or gen_id()
     base = {"verb": verb, "target": target, "request_id": rid}
 
@@ -88,7 +99,9 @@ def run_action(
         now=now,
     )
     if idempotency_key is not None:
-        _idempotency_cache[idempotency_key] = dict(env)
+        ts_now = now()
+        _sweep_idempotency_cache(ts_now, ttl)
+        _idempotency_cache[idempotency_key] = (ts_now, dict(env))
     return env
 
 
