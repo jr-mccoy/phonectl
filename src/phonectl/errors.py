@@ -87,3 +87,8 @@ class MacroValidationError(PhonectlError):
 
 class MacroCancelledError(PhonectlError):
     code = "macro_cancelled"
+
+
+class TriggerError(PhonectlError):
+    code = "trigger_invalid"
+    requires_user = True
