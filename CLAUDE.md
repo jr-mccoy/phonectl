@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Current state
 
 **Phases 1–5 are complete (implemented + green), plus two Phase-5 extensions.**
-470 test functions across 43 files, stdlib-only runtime (optional `mcp` extra for FastMCP transport).
+555 test functions across 58 files (554 pass, 1 skipped), stdlib-only runtime (optional `mcp` extra for FastMCP transport).
 The core was validated on a real device (Samsung Galaxy S25 Ultra over Wireless Debugging from inside
 Termux + PRoot).
 
@@ -22,6 +22,7 @@ Termux + PRoot).
 | Phase 4 support | `trust`, `native_tree`, `ocr` (pure TSV parser) |
 | Phase 5 daemon | `daemon/` package: `server`, `client`, `rpc`, `discovery`, `jobs`, `events`, `snapshots`, `poller`, `records` |
 | Phase 6.1 macro | `macro/` package: `schema`, `variables`, `conditions`, `engine`, `records`, `loader` |
+| Phase 6.2 macro | `macro/` package: `triggers`, `scheduler`, `limits`, `registry` (conditions extended); `daemon/triggers.py`: `TriggerManager`, `Scheduler` |
 
 **Phase statuses:**
 
@@ -32,7 +33,8 @@ Termux + PRoot).
 - **5.1–5.2** ✅ Daemon process + JSON-RPC/socket API, event bus + snapshot cache
 - **Daemon extensions** ✅ Async job model (JobRegistry, detach/poll) + idempotency-cache TTL eviction
 - **6.1** ✅ Macro runtime core (schema, variables, engine, records, loader, CLI group, MCP tools)
-- **6.2–6.3** 📝 Written, not yet executed — **Phase 6.2 is next**
+- **6.2** ✅ Macro triggers + scheduler + event subscriptions (pure trigger matcher, full condition vocabulary, monotonic scheduler, per-macro limits, enabled-macro registry, daemon TriggerManager/Scheduler, `macro_enable/disable/list` RPC + CLI). Merged to master `f08ce9d`.
+- **6.3** 📝 Written, not yet executed — **Phase 6.3 is next**
 - **7.1–7.4** 📝 Written, not yet executed
 - **Phase X** (evaluation suite) — not yet a full plan
 
@@ -77,8 +79,8 @@ Design specs (read before writing Phase 5+ plans):
 Phase 6–7 implementation plans (📝 written, not yet executed):
 
 - `docs/superpowers/plans/phonectl-plan-6.1-macro-runtime-core.md` — ✅ done
-- `docs/superpowers/plans/phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md` — **NEXT UP**
-- `docs/superpowers/plans/phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md`
+- `docs/superpowers/plans/phonectl-plan-6.2-triggers-scheduler-and-event-subscriptions.md` — ✅ done
+- `docs/superpowers/plans/phonectl-plan-6.3-progressive-autonomy-and-memory-layer.md` — **NEXT UP**
 - `docs/superpowers/plans/phonectl-plan-7.1-shizuku-provider.md`
 - `docs/superpowers/plans/phonectl-plan-7.2-optional-root-provider.md`
 - `docs/superpowers/plans/phonectl-plan-7.3-low-latency-transport.md`
@@ -104,7 +106,7 @@ A Python CLI that lets an AI agent observe the host Android phone as structured 
 ```bash
 pip install -e .           # install the package + console-script `phonectl`
 pip install -e ".[mcp]"    # also install the optional FastMCP transport
-pytest -v                  # full suite (470 tests, ~43 files)
+pytest -v                  # full suite (555 tests, ~58 files)
 pytest tests/test_ui_parser.py -v          # one file
 pytest tests/test_ui_parser.py::test_parse_bounds -v   # one test
 ```
@@ -142,8 +144,10 @@ There is no linter or formatter configured in the plan; do not add one unless th
 
 ## What's deferred (do not build without an explicit ask)
 
-**Execution order:** Phase 6.1 is ✅ done. Phase 6.2 (triggers + scheduler + event subscriptions) is the next plan to execute, then 6.3.
+**Execution order:** Phases 6.1 and 6.2 are ✅ done. Phase 6.3 (progressive autonomy + memory layer) is the next plan to execute.
 Phases 7.1–7.4 follow Phase 6. Phase X (evaluation suite) has no full plan yet.
+
+**Deferred from 6.2 → fold into 6.3:** bus-envelope `snapshot`/`device` enrichment (snapshot-dependent conditions like `foreground_package`/`battery_min` are currently inert on auto-fired triggers); DEBUG logging of swallowed trigger errors in the daemon `events_poll` loop; `Scheduler._armed` cleanup on disable; routing trigger/scheduler fires through `JobRegistry` (today they execute inline in the single-threaded `events_poll` handler).
 
 Do not pull work forward across plan boundaries and do not bolt platform concepts onto ad-hoc commands.
 
