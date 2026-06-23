@@ -23,7 +23,8 @@ class _Stop(Exception):
 
 class Engine:
     def __init__(self, *, build=None, run_action=None, now=time.time,
-                 sleep=lambda s: None, confirm=lambda msg: False, fn_for=None, cfg=None):
+                 sleep=lambda s: None, confirm=lambda msg: False, fn_for=None, cfg=None,
+                 gate=None):
         if build is None:
             from phonectl import cli
             build = cli.build_runtime
@@ -37,12 +38,36 @@ class Engine:
         self._confirm = confirm
         self._fn_for = fn_for or self._default_fn_for
         self._cfg = cfg
+        self._gate = gate or self._default_gate
 
     def _default_fn_for(self, step, scopes):
         from phonectl import cli
         return cli.macro_fn_for(step, scopes)
 
-    def run(self, macro, *, scopes=None, token=None, trigger="manual", yes=False) -> dict:
+    def _default_gate(self, step, scopes, *, unattended):
+        from phonectl import policy
+        from phonectl.macro import autonomy
+        import time as _t
+        snap = scopes.get("__snapshot__") or {}
+        try:
+            risk = policy.explain(snap, step["type"], dict(step.get("target", {})),
+                                  self._cfg or {}).get("risk_level", "low")
+        except Exception:
+            risk = "low"
+        now = _t.time()
+        verdict = autonomy.decide(self._macro, risk, autonomy.list_live(now=now), now=now)
+        # Compatible-evolution invariant (D10/D11): the autonomy gate hard-gates the UNATTENDED
+        # path only. In attended runs, runtime.run_action remains the single mode-gating chokepoint,
+        # so a bare "confirm" (no grant configured) defers to run_action rather than double-gating.
+        # Unattended "confirm" still blocks (D11); "deny" (critical w/o explicit grant) always blocks.
+        if verdict == "confirm" and not unattended:
+            return "allow"
+        return verdict
+
+    def run(self, macro, *, scopes=None, token=None, trigger="manual", yes=False,
+            unattended=False) -> dict:
+        self._unattended = unattended
+        self._macro = macro
         scopes = scopes or V.Scopes(macro=dict(macro.variables))
         token = token or CancellationToken()
         run_id = "run_" + uuid.uuid4().hex
@@ -152,6 +177,21 @@ class Engine:
 
     def _exec_action(self, step, scopes, state, yes):
         verb = step["type"]
+        decision = self._gate(step, scopes, unattended=self._unattended)
+        if decision == "deny":
+            state["ok"] = False
+            state["outcome"] = "guarded_action"
+            raise _Stop()
+        if decision == "confirm":
+            if self._unattended:
+                state["ok"] = False
+                state["outcome"] = "confirmation_required"
+                raise _Stop()
+            if not self._confirm(f"Run {self._macro.name}: {step['type']}?"):
+                state["ok"] = False
+                state["outcome"] = "confirmation_required"
+                raise _Stop()
+        # decision == "allow" → fall through to run_action (unchanged below)
         target = self._resolve_target(step, scopes)
         fn = self._fn_for(step, scopes)
         env = self._run_action(verb, fn, target, build=self._build, yes=yes,
