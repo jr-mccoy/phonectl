@@ -157,3 +157,10 @@ planning artifacts:
 
 `[ ]` task step pending · one commit per task · each task ends green (`pytest -v`) · manual/device-gated
 steps are explicitly flagged and never run in CI.
+
+## 9. Phase 6 deferred notes
+
+- **Capture hooks not yet wired into the daemon run-record path.** `memory.capture_from_runs` (and
+  `capture_selector` / `capture_failure`) are implemented and tested but not yet wired into the daemon
+  run-record path; activation requires action-record enrichment (selector `matched_i` + `app_version`/`locale`
+  context) and is deferred with the selector-library override work (Phase 7+).

@@ -1153,8 +1153,7 @@ def _cmd_autonomy_grant(args):
         cfg=cfg,
     )
     if getattr(args, "json", False):
-        # Write grant confirmation to stderr so stdout stays clean for piped list/query commands
-        print(json.dumps(env, indent=2), file=sys.stderr)
+        print(json.dumps(env, indent=2))
     else:
         g = env.get("data", {})
         print(f"autonomy granted: {g.get('macro')} max_risk={g.get('max_risk')} id={g.get('id')}")

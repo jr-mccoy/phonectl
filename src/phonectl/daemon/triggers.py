@@ -82,7 +82,8 @@ class TriggerManager:
                     continue
                 self._limits.record(macro.name, now=now, store_path=self._history_path)
                 # Pass the dotted trigger type (macro-spec vocab) to the engine, not the raw bus name.
-                self._engine.run(macro, trigger=trigger_type,
+                # unattended=True: auto-fired macros must stay gated (D11) — no grant → confirmation_required.
+                self._engine.run(macro, trigger=trigger_type, unattended=True,
                                  scopes=V.Scopes(macro=dict(macro.variables),
                                                  trigger=event.get("data", {})))
                 fired.append(macro.name)
@@ -116,7 +117,8 @@ class Scheduler:
                 self._armed[macro.name] = target
                 continue
             if now_dt.timestamp() >= armed:
-                self._engine.run(macro, trigger=macro.trigger["type"])
+                # unattended=True: scheduler fires must stay gated (D11) — no grant → confirmation_required.
+                self._engine.run(macro, trigger=macro.trigger["type"], unattended=True)
                 self._armed[macro.name] = now_dt.timestamp() + (delay or 0)
                 fired.append(macro.name)
         return fired

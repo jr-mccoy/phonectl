@@ -206,7 +206,7 @@ phonectl autonomy revoke reply                     # revoke all grants for macro
 phonectl autonomy list                             # show live (non-expired) grants
 ```
 
-Grant records are appended to `autonomy.jsonl` in `PHONECTL_HOME`. Revoking adds a revoke record; `list` replays the ledger at the current time, filtering expired entries.
+Grant records are appended to `autonomy.jsonl` in `PHONECTL_HOME`. Revoking adds a revoke record; `list` replays the ledger at the current time, filtering expired entries. The grant ledger stores only operator-supplied identifiers (macro name, max_risk, scope, timestamps) — no device-captured content — so it is not redacted; the redaction guarantee (D12) applies to the `memory/` stores, which hold device-derived metadata.
 
 **Critical-risk actions are never fully autonomous.** A grant with `max_risk=critical` still requires a one-time human approval per action (`confirm`); it does not promote to `allow`. Any action whose risk classifier returns `critical` therefore always confirms.
 
@@ -233,4 +233,4 @@ phonectl memory delete prefs             # delete the prefs store
 phonectl memory delete                   # delete all stores
 ```
 
-Memory stores are populated automatically by the macro engine capture hooks (`capture_selector`, `capture_failure`) and can be inspected or cleared at any time.
+The memory stores and capture hooks (`capture_selector`, `capture_failure`, `capture_from_runs`) exist and are tested; automatic population from run records is a planned follow-up — currently memory is populated only via explicit writes/RPC. The capture hooks are not yet wired into the daemon run-record path; activation requires action-record enrichment (`matched_i`, `app_version`, `locale` context) and is deferred with the selector-library work.

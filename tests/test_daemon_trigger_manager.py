@@ -6,9 +6,11 @@ from phonectl.macro import registry
 class FakeEngine:
     def __init__(self):
         self.runs = []
+        self.kws = []  # parallel list of full kwargs dicts for each run call
 
     def run(self, macro, **kw):
         self.runs.append((macro.name, kw.get("trigger")))
+        self.kws.append(kw)
         return {"ok": True, "data": {"run_id": "run_x"}}
 
 
@@ -94,3 +96,17 @@ def test_conditions_gate_suppresses_fire(tmp_path, monkeypatch):
     fired = mgr.step()
     assert fired == [], "conditions=never must suppress the macro"
     assert eng.runs == [], "engine.run must not be called when conditions gate"
+
+
+def test_trigger_fire_passes_unattended_true(tmp_path, monkeypatch):
+    """TriggerManager must pass unattended=True to the engine so auto-fired macros stay gated (D11)."""
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    registry.enable({"name": "ua_test", "trigger": {"type": "clipboard.changed"},
+                     "actions": [{"type": "tap", "target": {"i": 0}}]})
+    eng = FakeEngine()
+    mgr = TriggerManager(eng, poll=_poll_factory([_ev(1, "clipboard.changed")]),
+                         now=lambda: 100.0)
+    fired = mgr.step()
+    assert fired == ["ua_test"]
+    assert eng.kws and eng.kws[0].get("unattended") is True, \
+        "TriggerManager must pass unattended=True to engine.run for auto-fired macros"

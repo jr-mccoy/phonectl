@@ -41,3 +41,17 @@ def test_confirm_interactive_proceeds_on_yes():
     m = schema.parse({"name": "m", "actions": [{"type": "tap", "target": {"i": 0}}]})
     out = _eng(["confirm"], rec, unattended_confirm=True).run(m, unattended=False)
     assert out["ok"] is True and rec == ["tap"]
+
+
+def test_unattended_default_gate_blocks_without_grant(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))   # empty ledger -> no grants
+    rec = []
+    def ra(verb, fn, target, **kw):
+        rec.append(verb); return {"ok": True, "data": {}}
+    from phonectl.macro.engine import Engine
+    from phonectl.macro import schema as _schema
+    eng = Engine(build=lambda cfg: (None, None, None), run_action=ra,
+                 fn_for=lambda step, scopes: (lambda b, s: None))   # NOTE: no gate= -> default gate
+    m = _schema.parse({"name": "m", "actions": [{"type": "tap", "target": {"i": 0}}]})
+    out = eng.run(m, unattended=True)
+    assert out["ok"] is False and out["data"]["outcome"] == "confirmation_required" and rec == []
