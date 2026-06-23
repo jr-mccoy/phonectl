@@ -53,5 +53,6 @@ def test_duplicate_registration_raises():
         pass
 
 
-def test_mutating_set_contains_act_stop_resume():
-    assert rpc.MUTATING == {"act", "stop", "resume"}
+def test_mutating_set_contains_stop_resume():
+    # act is no longer in MUTATING: its submit is fast; the worker acquires the lock during execution
+    assert rpc.MUTATING == {"stop", "resume"}

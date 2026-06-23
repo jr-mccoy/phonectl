@@ -67,6 +67,14 @@ class DaemonUnreachableError(PhonectlError):
     retryable = True
 
 
+class JobTimeoutError(PhonectlError):
+    # block-and-poll exceeded act_timeout; the job keeps running server-side.
+    # NOT auto-retryable: re-running could double-execute. Reattach via the job id.
+    code = "job_timeout"
+    retryable = False
+    requires_user = True
+
+
 class UnknownMethodError(PhonectlError):
     # The daemon received an RPC method it has no handler for.
     code = "unknown_method"

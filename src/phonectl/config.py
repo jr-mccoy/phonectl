@@ -8,6 +8,12 @@ DEFAULTS: dict = {
     "companion_timeout": 2.0,
     "daemon_host": "127.0.0.1",
     "daemon_autostart": False,
+    # async job model (daemon)
+    "act_timeout": 60.0,        # block-and-poll wall-clock cap for async jobs
+    "sync_timeout": 15.0,       # client timeout for fast synchronous RPCs
+    "poll_interval": 0.5,       # job_poll cadence
+    "job_queue_max": 8,         # pending-job FIFO depth; over -> BusyError
+    "idempotency_ttl": 300.0,   # how long a finished job stays dedupe-eligible
 }
 
 

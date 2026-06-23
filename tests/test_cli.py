@@ -677,3 +677,72 @@ def test_daemon_status_reports_not_running(tmp_path, monkeypatch, capsys):
     rc = cli.main(["daemon", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["ok"] is True and out["data"]["running"] is False
+
+
+# ── Task 8: async routing, idempotency key, --detach, job command, shutdown RPC ──
+
+import json as _json
+
+
+class _FakeClient:
+    def __init__(self, **scripted):
+        self.scripted = scripted
+        self.calls = []
+
+    def submit_and_wait(self, method, params=None, *, overall_timeout,
+                        poll_interval=0.5):
+        self.calls.append(("submit_and_wait", method, params))
+        return self.scripted["submit_and_wait"]
+
+    def call(self, method, params=None, *, timeout=5.0):
+        self.calls.append(("call", method, params))
+        return self.scripted.get(method, {"ok": True, "data": {}})
+
+
+def test_act_routes_through_submit_and_wait(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient(submit_and_wait={"ok": True, "data": {"tapped": True},
+                                        "capability": "ui.act"})
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    rc = cli.main(["tap", "--xy", "10", "20", "--json"])
+    assert rc == 0
+    assert any(c[0] == "submit_and_wait" and c[1] == "act" for c in fake.calls)
+    out = _json.loads(capsys.readouterr().out)
+    assert out["data"]["tapped"] is True
+
+
+def test_act_params_autogenerates_idempotency_key():
+    import argparse
+    args = argparse.Namespace(yes=False, request_id=None, idempotency_key=None)
+    p = cli._act_params(args, "tap", {"x": 1, "y": 2})
+    assert isinstance(p["idempotency_key"], str) and p["idempotency_key"]
+    assert isinstance(p["request_id"], str) and p["request_id"]
+
+
+def test_detach_prints_job_id(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient(act={"ok": True, "data": {"job_id": "JID42", "status": "accepted"}})
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    rc = cli.main(["tap", "--xy", "10", "20", "--detach"])
+    assert rc == 0
+    assert "JID42" in capsys.readouterr().out
+
+
+def test_job_command_polls_and_prints(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient(job_poll={"ok": True, "data": {"status": "done",
+                                "result": {"ok": True, "data": {"done": True}}}})
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    rc = cli.main(["job", "JID42", "--json"])
+    assert rc == 0
+    out = _json.loads(capsys.readouterr().out)
+    assert out["data"]["status"] == "done"
+
+
+def test_daemon_stop_calls_shutdown_rpc(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient(shutdown={"ok": True, "data": {"stopping": True}})
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    rc = cli.main(["daemon", "stop"])
+    assert rc == 0
+    assert any(c[0] == "call" and c[1] == "shutdown" for c in fake.calls)

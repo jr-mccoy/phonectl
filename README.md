@@ -1181,8 +1181,31 @@ Once a daemon is running, every `phonectl` CLI command (and the MCP server) **tr
 ```bash
 phonectl daemon start          # run daemon in foreground (Ctrl-C to stop)
 phonectl daemon status --json  # check if a daemon is running and its state
-phonectl daemon stop           # signal the daemon to stop (sets STOP sentinel)
+phonectl daemon stop           # send the shutdown RPC and terminate the daemon
 ```
+
+`phonectl daemon stop` calls the daemon's `shutdown` RPC and waits for it to exit cleanly. This is **distinct** from the emergency kill-switch: the `stop`/`resume` sentinel (`STOP` file or companion flag) still interrupts individual actions regardless of daemon state.
+
+### Async job model
+
+When a daemon is running, `act`, `observe`, and `find` verbs are dispatched as **async jobs** on the daemon. The CLI **block-and-polls** by default — it submits the job, then polls `job_poll` until the job is terminal, timing out after `act_timeout` seconds (default 60 s). A slow-but-healthy daemon no longer falsely reports `daemon_unreachable`.
+
+**`--detach`** on any action verb returns immediately with a job id instead of waiting:
+
+```bash
+phonectl tap --index 3 --detach
+# phonectl: job job_abc123 (use: phonectl job job_abc123)
+```
+
+**`phonectl job <id> [--wait] [--json]`** queries or waits on a job:
+
+```bash
+phonectl job job_abc123           # print current status
+phonectl job job_abc123 --wait    # block until terminal (cap = act_timeout)
+phonectl job job_abc123 --json    # structured job envelope
+```
+
+Job statuses: `accepted` (queued), `running`, `done`, `error`.
 
 ### Loopback-only
 
@@ -1194,13 +1217,21 @@ The daemon binds and listens on **`127.0.0.1` exclusively**. `daemon_host` is va
 |---|---|---|
 | `daemon_host` | `"127.0.0.1"` | Loopback address to bind on (loopback-only, non-loopback is rejected) |
 | `daemon_autostart` | `false` | Reserved for Termux:Boot autostart (not yet wired) |
+| `act_timeout` | `60.0` | Wall-clock cap (seconds) for CLI block-and-poll on async jobs |
+| `sync_timeout` | `15.0` | Client timeout for fast synchronous RPCs (status, shutdown, etc.) |
+| `poll_interval` | `0.5` | Cadence (seconds) for `job_poll` during block-and-poll and `phonectl job --wait` |
+| `job_queue_max` | `8` | Maximum pending-job FIFO depth; excess submissions return a `busy` error |
+| `idempotency_ttl` | `300.0` | How long (seconds) a finished job stays eligible for idempotency deduplication |
 
 Set via `$PHONECTL_HOME/config.json`:
 
 ```json
 {
   "daemon_host": "127.0.0.1",
-  "daemon_autostart": false
+  "daemon_autostart": false,
+  "act_timeout": 60.0,
+  "poll_interval": 0.5,
+  "job_queue_max": 8
 }
 ```
 

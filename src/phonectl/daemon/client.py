@@ -1,6 +1,9 @@
 """DaemonClient: frontend RPC over the Plan-4.3 SocketTransport."""
 from __future__ import annotations
 
+import socket
+import time
+
 from phonectl import errors, results
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.providers.transport import SocketTransport, next_request_id
@@ -20,8 +23,10 @@ class DaemonClient:
         rid = next_request_id()
         try:
             resp = self._transport.request(method, params or {}, request_id=rid, timeout=timeout)
-        except Exception:
-            return results.err(errors.DaemonUnreachableError(f"daemon call {method!r} failed"))
+        except (socket.timeout, TimeoutError):
+            return results.err(("timeout", f"daemon call {method!r} timed out"))
+        except (ConnectionError, OSError):
+            return results.err(errors.DaemonUnreachableError(f"daemon {method!r} unreachable"))
         if not isinstance(resp, dict) or resp.get("request_id") not in (rid, None):
             return results.err(errors.DaemonUnreachableError("no matching daemon response"))
         if resp.get("ok") is None and "error" not in resp:
@@ -30,3 +35,25 @@ class DaemonClient:
 
     def is_running(self) -> bool:
         return bool(self.call("ping", {}, timeout=1.0).get("ok"))
+
+    def submit_and_wait(self, method, params=None, *, overall_timeout,
+                        poll_interval=0.5, sleep=time.sleep, now=time.monotonic) -> dict:
+        acc = self.call(method, params)
+        if not acc.get("ok"):
+            return acc                                   # unreachable / busy / timeout
+        job_id = acc["data"]["job_id"]
+        deadline = now() + overall_timeout
+        while now() < deadline:
+            polled = self.call("job_poll", {"job_id": job_id})
+            if not polled.get("ok"):
+                return polled
+            data = polled["data"]
+            if data["status"] in ("done", "error"):
+                return data["result"]
+            sleep(poll_interval)
+        return results.err(
+            errors.JobTimeoutError(
+                f"job {job_id} still running after {overall_timeout}s"),
+            user_action=f"The action is still running. Query it with: phonectl job {job_id}",
+            job_id=job_id,
+        )
