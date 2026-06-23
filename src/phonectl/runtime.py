@@ -16,6 +16,8 @@ def _sweep_idempotency_cache(now_ts, ttl):
     expired = [k for k, (ts, _env) in _idempotency_cache.items() if now_ts - ts >= ttl]
     for k in expired:
         del _idempotency_cache[k]
+
+
 DEFAULT_LIMITS = {
     "tap": 120,
     "type": 30,
@@ -97,8 +99,9 @@ def run_action(
         now=now,
     )
     if idempotency_key is not None:
-        _sweep_idempotency_cache(now(), ttl)
-        _idempotency_cache[idempotency_key] = (now(), dict(env))
+        ts_now = now()
+        _sweep_idempotency_cache(ts_now, ttl)
+        _idempotency_cache[idempotency_key] = (ts_now, dict(env))
     return env
 
 
