@@ -103,7 +103,7 @@ is scoped in the meta-plan and written when its phase begins.
 | **3** | Practical automation primitives (provider graph) | **3.1** Provider/capability graph refactor · **3.2** Clipboard + intent + app/package providers · **3.3** Scroll-until + gestures · **3.4** Structured extraction APIs · **3.5** Termux:API provider | old *polish* (named swipe); strategy §4.3, §5.4, §6, §13.2 |
 | **4** | Companion APK event providers | **4.1** AccessibilityService native tree/events/gestures/set-text · **4.2** NotificationListenerService provider · **4.3** Foreground-service transport + emergency-stop + trust UX · **4.4** Optional OCR provider | old *accessibility-backend*; strategy §8.4, §11, §19 |
 | **5** | Daemon & event runtime (north-star core) | **Spec 5.0** daemon brainstorm→spec · **5.1** daemon process + JSON-RPC/socket API · **5.2** event bus + subscriptions + snapshot cache | strategy §22 (currently-unplanned daemon) |
-| **6** | Macro runtime & progressive autonomy | **Spec 6.0** macro engine spec · ✅ **6.1** macro runtime core (done) · **6.2** triggers + scheduler · **6.3** progressive autonomy + memory/state layer | strategy §12, §18, §23, §25 |
+| **6** | Macro runtime & progressive autonomy | **Spec 6.0** macro engine spec · ✅ **6.1** macro runtime core (done) · ✅ **6.2** triggers + scheduler + macro_enable/disable/list (done) · **6.3** progressive autonomy + memory/state layer | strategy §12, §18, §23, §25 |
 | **7** | Ecosystem & advanced providers | **7.1** Shizuku · **7.2** optional root · **7.3** scrcpy/minicap low-latency transport · **7.4** Tasker/MacroDroid interop | strategy §11.3, §13 |
 | **X** | Cross-cutting: evaluation suite | Eval harness + fake-provider simulator (introduced in Phase 1, grows each phase) | strategy §26, §27#7 |
 

@@ -1097,6 +1097,44 @@ def _cmd_macro_cancel(args):
     return 0
 
 
+def _cmd_macro_enable(args):
+    from phonectl.macro import loader, registry
+    doc = loader.load(args.path)
+    registry.enable(doc)
+    env = results.ok(capability="macro.enable", data={"name": doc.get("name")})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"macro enabled: {doc.get('name', '?')}")
+    return 0
+
+
+def _cmd_macro_disable(args):
+    from phonectl.macro import registry
+    registry.disable(args.name)
+    env = results.ok(capability="macro.disable", data={"name": args.name})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print(f"macro disabled: {args.name}")
+    return 0
+
+
+def _cmd_macro_list(args):
+    from phonectl.macro import registry
+    macros = registry.all()
+    env = results.ok(capability="macro.list", data={"macros": macros})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        if not macros:
+            print("no macros registered")
+        for m in macros:
+            state = "enabled" if m.get("enabled") else "disabled"
+            print(f"  {m.get('name', '?')}  [{state}]")
+    return 0
+
+
 def _cmd_daemon(args):
     import signal
     cfg = config.load()
@@ -1506,6 +1544,17 @@ def build_parser() -> argparse.ArgumentParser:
     mcc.add_argument("run_id")
     mcc.add_argument("--json", action="store_true")
     mcc.set_defaults(func=_cmd_macro_cancel)
+    mce = mcsub.add_parser("enable")
+    mce.add_argument("path")
+    mce.add_argument("--json", action="store_true")
+    mce.set_defaults(func=_cmd_macro_enable)
+    mcd = mcsub.add_parser("disable")
+    mcd.add_argument("name")
+    mcd.add_argument("--json", action="store_true")
+    mcd.set_defaults(func=_cmd_macro_disable)
+    mcl = mcsub.add_parser("list")
+    mcl.add_argument("--json", action="store_true")
+    mcl.set_defaults(func=_cmd_macro_list)
     mc.set_defaults(func=_cmd_macro_validate)
 
     # daemon subcommand group (Phase 5.1)

@@ -787,3 +787,53 @@ def test_macro_status_empty(tmp_path, monkeypatch, capsys):
     rc = cli.main(["macro", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["ok"] is True and out["data"]["runs"] == []
+
+
+# ── Task 7: macro enable / disable / list CLI ────────────────────────────────
+
+def test_macro_enable_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    macro_path = tmp_path / "tick.json"
+    macro_path.write_text(json.dumps({
+        "name": "tick",
+        "trigger": {"type": "schedule.interval", "every_seconds": 60},
+        "actions": [{"type": "tap", "target": {"i": 0}}],
+    }))
+    rc = cli.main(["macro", "enable", str(macro_path), "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and out["data"]["name"] == "tick"
+
+
+def test_macro_list_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    macro_path = tmp_path / "tick.json"
+    macro_path.write_text(json.dumps({
+        "name": "tick",
+        "trigger": {"type": "schedule.interval", "every_seconds": 60},
+        "actions": [{"type": "tap", "target": {"i": 0}}],
+    }))
+    cli.main(["macro", "enable", str(macro_path)])
+    capsys.readouterr()  # discard enable output
+    rc = cli.main(["macro", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True
+    names = [m["name"] for m in out["data"]["macros"]]
+    assert "tick" in names
+
+
+def test_macro_disable_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    macro_path = tmp_path / "tick.json"
+    macro_path.write_text(json.dumps({
+        "name": "tick",
+        "trigger": {"type": "schedule.interval", "every_seconds": 60},
+        "actions": [{"type": "tap", "target": {"i": 0}}],
+    }))
+    cli.main(["macro", "enable", str(macro_path)])
+    capsys.readouterr()  # discard enable output
+    rc = cli.main(["macro", "disable", "tick", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0 and out["ok"] is True and out["data"]["name"] == "tick"

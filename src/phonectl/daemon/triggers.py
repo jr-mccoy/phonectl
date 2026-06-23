@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 from phonectl.config import config_dir
 from phonectl.macro import conditions as conditions_mod
 from phonectl.macro import limits as limits_mod
 from phonectl.macro import registry as registry_mod
+from phonectl.macro import scheduler as scheduler_mod
 from phonectl.macro import triggers as triggers_mod
 from phonectl.macro import variables as V
 
@@ -48,5 +50,38 @@ class TriggerManager:
                 self._engine.run(macro, trigger=event["type"],
                                  scopes=V.Scopes(macro=dict(macro.variables),
                                                  trigger=event.get("data", {})))
+                fired.append(macro.name)
+        return fired
+
+
+class Scheduler:
+    """Fire scheduled macros (schedule.interval, schedule.time) when due."""
+
+    def __init__(self, engine, *, registry=registry_mod, next_fire=scheduler_mod.next_fire,
+                 now=datetime.now):
+        self._engine = engine
+        self._registry = registry
+        self._next_fire = next_fire
+        self._now = now
+        self._armed = {}  # name -> absolute fire time (seconds timestamp)
+
+    def due(self, now_dt=None) -> list:
+        now_dt = now_dt or self._now()
+        fired = []
+        for macro in self._registry.list_enabled():
+            if not (macro.trigger and macro.trigger.get("type", "").startswith("schedule")):
+                continue
+            delay = self._next_fire(macro.trigger, now=now_dt)
+            if delay is None:
+                continue
+            armed = self._armed.get(macro.name)
+            target = now_dt.timestamp() + delay
+            if armed is None:
+                # First call: arm the macro (set the fire time)
+                self._armed[macro.name] = target
+                continue
+            if now_dt.timestamp() >= armed:
+                self._engine.run(macro, trigger=macro.trigger["type"])
+                self._armed[macro.name] = now_dt.timestamp() + (delay or 0)
                 fired.append(macro.name)
         return fired

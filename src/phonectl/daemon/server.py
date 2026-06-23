@@ -177,6 +177,22 @@ class DaemonServer:
                               data={"runs": _records.read(kind="macro_run",
                                                           limit=params.get("limit", 10))})
 
+        from phonectl.macro import registry as _mreg
+
+        @self.registry.register("macro_enable")
+        def _macro_enable(params, ctx):
+            _mreg.enable(params["macro"])
+            return results.ok(capability="macro.enable", data={"enabled": True})
+
+        @self.registry.register("macro_disable")
+        def _macro_disable(params, ctx):
+            _mreg.disable(params["name"])
+            return results.ok(capability="macro.disable", data={"enabled": False})
+
+        @self.registry.register("macro_list")
+        def _macro_list(params, ctx):
+            return results.ok(capability="macro.list", data={"macros": _mreg.all()})
+
         @self.registry.register("events_poll")
         def _events_poll(params, ctx):
             # Build the poller lazily on first call
@@ -187,6 +203,18 @@ class DaemonServer:
                 notif_src = pr.for_capability("observe_notifications") if hasattr(pr, "for_capability") else None
                 self.poller = EventPoller(self.events, ui_source=ui_src, notif_source=notif_src)
             self.poller.drain_once()
+            try:
+                if getattr(self, "_trigger_mgr", None) is None:
+                    from phonectl.daemon.triggers import TriggerManager, Scheduler
+                    from phonectl.macro.engine import Engine as _Eng
+                    eng = _Eng(build=lambda cfg: self._warm_triple(), cfg=self._cfg)
+                    self._trigger_mgr = TriggerManager(
+                        eng, poll=lambda since, mx: self.events.poll(since, max=mx))
+                    self._scheduler = Scheduler(eng)
+                self._trigger_mgr.step()
+                self._scheduler.due()
+            except Exception:
+                pass
             since = int(params.get("since", 0))
             max_n = int(params.get("max", 100))
             return results.ok(
