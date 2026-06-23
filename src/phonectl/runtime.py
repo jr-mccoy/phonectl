@@ -61,6 +61,7 @@ def run_action(
     cfg=None,
     request_id=None,
     idempotency_key=None,
+    parent_task_id=None,
     gen_id=_new_request_id,
     kill_switch=audit.kill_switch_active,
     log=audit.log_action,
