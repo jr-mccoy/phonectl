@@ -43,3 +43,24 @@ def test_live_grants_drops_expired_and_revoked():
     ]
     live = autonomy.live_grants(records, now=10.0)
     assert live == []  # g1 expired, g2 revoked
+
+
+def test_regrant_after_revoke_is_live():
+    records = [
+        {"kind": "grant", "id": "g1", "macro": "m", "max_risk": "high", "expires_at": None},
+        {"kind": "revoke", "macro": "m", "revoked_at": 5.0},
+        {"kind": "grant", "id": "g2", "macro": "m", "max_risk": "high", "expires_at": None},
+    ]
+    live = autonomy.live_grants(records, now=10.0)
+    assert len(live) == 1
+    assert live[0]["id"] == "g2"
+
+
+def test_revoke_by_id_drops_only_that_grant():
+    records = [
+        {"kind": "grant", "id": "g1", "macro": "m", "max_risk": "high", "expires_at": None},
+        {"kind": "grant", "id": "g2", "macro": "m", "max_risk": "high", "expires_at": None},
+        {"kind": "revoke", "id": "g1", "revoked_at": 5.0},
+    ]
+    live = autonomy.live_grants(records, now=10.0)
+    assert [g["id"] for g in live] == ["g2"]

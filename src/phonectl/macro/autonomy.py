@@ -14,26 +14,18 @@ def _rank(level):
 
 
 def live_grants(records, *, now) -> list:
-    grants = {}
-    revoked_macros = set()
-    revoked_ids = set()
+    state = {}  # id -> grant, updated in ledger order
     for r in records:
         if r.get("kind") == "grant":
-            grants[r["id"]] = r
+            state[r["id"]] = r
         elif r.get("kind") == "revoke":
             if r.get("id"):
-                revoked_ids.add(r["id"])
+                state.pop(r["id"], None)
             if r.get("macro"):
-                revoked_macros.add(r["macro"])
-    out = []
-    for gid, g in grants.items():
-        if gid in revoked_ids or g.get("macro") in revoked_macros:
-            continue
-        exp = g.get("expires_at")
-        if exp is not None and exp <= now:
-            continue
-        out.append(g)
-    return out
+                state = {gid: g for gid, g in state.items()
+                         if g.get("macro") != r["macro"]}
+    return [g for g in state.values()
+            if not (g.get("expires_at") is not None and g["expires_at"] <= now)]
 
 
 def decide(macro, action_risk, grants, *, now) -> str:
