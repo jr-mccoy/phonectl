@@ -837,3 +837,14 @@ def test_macro_disable_cli(tmp_path, monkeypatch, capsys):
     rc = cli.main(["macro", "disable", "tick", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["ok"] is True and out["data"]["name"] == "tick"
+
+
+def test_autonomy_grant_cli(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "high", "--json"])
+    assert rc == 0
+    capsys.readouterr()  # drain the grant envelope
+    rc = cli.main(["autonomy", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert any(g["macro"] == "reply" for g in out["data"]["grants"])

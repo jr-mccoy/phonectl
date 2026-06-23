@@ -472,3 +472,25 @@ def test_macro_enable_disable_list(tmp_path, monkeypatch):
     listed = json.loads(srv.handle_line(_req("macro_list")))
     assert any(m["name"] == "m" and m["enabled"] for m in listed["data"]["macros"])
     assert json.loads(srv.handle_line(_req("macro_disable", {"name": "m"})))["ok"] is True
+
+
+# ── Task 9: autonomy + memory RPC handlers ────────────────────────────────
+
+def test_autonomy_grant_list_revoke(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    g = json.loads(srv.handle_line(_req("autonomy_grant", {"macro": "reply", "max_risk": "high"})))
+    assert g["ok"] is True
+    listed = json.loads(srv.handle_line(_req("autonomy_list")))
+    assert any(x["macro"] == "reply" for x in listed["data"]["grants"])
+    assert json.loads(srv.handle_line(_req("autonomy_revoke", {"macro": "reply"})))["ok"] is True
+
+
+def test_memory_show_export_delete(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.macro import memory
+    memory.write("prefs", {"quiet_hours": "22:00-08:00"})
+    srv = _srv(tmp_path)
+    shown = json.loads(srv.handle_line(_req("memory_show", {"store": "prefs"})))
+    assert shown["data"]["quiet_hours"] == "22:00-08:00"
+    assert json.loads(srv.handle_line(_req("memory_delete", {"store": "prefs"})))["ok"] is True

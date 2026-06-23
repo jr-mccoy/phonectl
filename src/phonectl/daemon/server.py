@@ -193,6 +193,41 @@ class DaemonServer:
         def _macro_list(params, ctx):
             return results.ok(capability="macro.list", data={"macros": _mreg.all()})
 
+        from phonectl.macro import autonomy as _aut
+        from phonectl.macro import memory as _mem
+        import time as _t
+
+        @self.registry.register("autonomy_grant")
+        def _autonomy_grant(params, ctx):
+            g = _aut.grant(params["macro"], max_risk=params["max_risk"],
+                           scope=params.get("scope", "all"),
+                           expires_at=params.get("expires_at"), now=_t.time())
+            return results.ok(capability="autonomy.grant", data=g)
+
+        @self.registry.register("autonomy_revoke")
+        def _autonomy_revoke(params, ctx):
+            _aut.revoke(macro=params.get("macro"), grant_id=params.get("grant_id"), now=_t.time())
+            return results.ok(capability="autonomy.revoke", data={"revoked": True})
+
+        @self.registry.register("autonomy_list")
+        def _autonomy_list(params, ctx):
+            return results.ok(capability="autonomy.list", data={"grants": _aut.list_live(now=_t.time())})
+
+        @self.registry.register("memory_show")
+        def _memory_show(params, ctx):
+            store = params.get("store")
+            return results.ok(capability="memory.show",
+                              data=_mem.read(store) if store else _mem.export())
+
+        @self.registry.register("memory_export")
+        def _memory_export(params, ctx):
+            return results.ok(capability="memory.export", data=_mem.export())
+
+        @self.registry.register("memory_delete")
+        def _memory_delete(params, ctx):
+            _mem.delete(params.get("store"))
+            return results.ok(capability="memory.delete", data={"deleted": True})
+
         @self.registry.register("events_poll")
         def _events_poll(params, ctx):
             # Build the poller lazily on first call
