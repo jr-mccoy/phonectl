@@ -30,6 +30,37 @@ from phonectl.daemon import discovery as _daemon_discovery
 from phonectl.daemon.client import DaemonClient
 
 
+def macro_fn_for(step, scopes):
+    from phonectl import actuator, errors
+    from phonectl.macro import variables as _mvars
+
+    def _interp(v):
+        return _mvars.interpolate(v, scopes) if isinstance(v, str) else v
+
+    verb = step["type"]
+    target = dict(step.get("target", {}))
+    if verb == "tap":
+        if "i" in target:
+            i = target["i"]
+            return lambda b, s: actuator.tap(b, s, i=i)
+        if "selector" in target:
+            sel = target["selector"]
+            return lambda b, s: actuator.tap(b, s, selector=sel)
+        return lambda b, s: actuator.tap(b, s, x=target["x"], y=target["y"])
+    if verb in ("type", "set_text"):
+        text = _interp(step.get("text", target.get("text", "")))
+        return lambda b, s: actuator.type_text(b, s, text)
+    if verb == "launch":
+        pkg = _interp(step["package"])
+        return lambda b, s: actuator.launch(b, s, pkg)
+    if verb == "key":
+        kc = step["keycode"]
+        return lambda b, s: actuator.key(b, s, kc)
+    if verb == "swipe":
+        return lambda b, s: actuator.swipe(b, s, **target)
+    raise errors.MacroValidationError(f"no macro fn mapping for verb {verb!r}")
+
+
 def _daemon_client(cfg):
     def _ping(host, port):
         return DaemonClient(host, port).is_running()

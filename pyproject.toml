@@ -10,6 +10,7 @@ requires-python = ">=3.9"
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]
+yaml = ["PyYAML>=6"]
 
 [project.scripts]
 phonectl = "phonectl.cli:main"
