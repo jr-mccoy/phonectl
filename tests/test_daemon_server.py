@@ -459,3 +459,16 @@ def test_macro_run_executes_actions(tmp_path, monkeypatch):
 def test_macro_in_mutating_set():
     from phonectl.daemon import rpc
     assert {"macro_run", "macro_cancel"} <= rpc.MUTATING
+
+
+# ── Task 7: macro_enable / macro_disable / macro_list RPC ────────────────────
+
+def test_macro_enable_disable_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _srv(tmp_path)
+    doc = {"name": "m", "trigger": {"type": "clipboard.changed"},
+           "actions": [{"type": "tap", "target": {"i": 0}}]}
+    assert json.loads(srv.handle_line(_req("macro_enable", {"macro": doc})))["ok"] is True
+    listed = json.loads(srv.handle_line(_req("macro_list")))
+    assert any(m["name"] == "m" and m["enabled"] for m in listed["data"]["macros"])
+    assert json.loads(srv.handle_line(_req("macro_disable", {"name": "m"})))["ok"] is True

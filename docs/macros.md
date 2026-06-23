@@ -28,7 +28,106 @@ Macros are declarative JSON documents that drive the `observe→act→observe` l
 | `description` | no | Human-readable purpose |
 | `version` | no | Semver or free-form string |
 | `variables` | no | Default variable values (macro scope) |
+| `trigger` | no | Automatic trigger specification (see below) |
+| `conditions` | no | List of conditions that must hold before the macro fires |
+| `limits` | no | Per-macro rate-limiting configuration |
 | `actions` | yes | List of steps (may be empty) |
+
+## Trigger vocabulary (Phase 6.2)
+
+A `trigger` block makes a macro fire automatically — either on a schedule or in response to a device event. Macros without a `trigger` are manual-only (run via CLI/MCP).
+
+### Schedule triggers
+
+**`schedule.interval`** — fires every N seconds (no alignment; first fire is N seconds after arming).
+
+```json
+{ "type": "schedule.interval", "every_seconds": 300 }
+```
+
+**`schedule.time`** — fires once per day at a specific wall-clock time, optionally filtered to specific weekdays (0 = Monday, 6 = Sunday).
+
+```json
+{ "type": "schedule.time", "at": "07:30", "weekdays": [0, 1, 2, 3, 4] }
+```
+
+### Event triggers
+
+**`clipboard.changed`** — fires when the clipboard content changes.
+
+```json
+{ "type": "clipboard.changed" }
+```
+
+**`notification.posted`** — fires when a notification is posted, optionally filtered by package.
+
+```json
+{ "type": "notification.posted", "package": "com.example.app" }
+```
+
+**`notification.dismissed`** — fires when a notification is dismissed.
+
+```json
+{ "type": "notification.dismissed", "package": "com.example.app" }
+```
+
+**`ui.foreground_changed`** — fires when the foreground app changes.
+
+```json
+{ "type": "ui.foreground_changed" }
+```
+
+**`manual`** — never fires automatically; always requires explicit invocation.
+
+```json
+{ "type": "manual" }
+```
+
+### Daemon scheduler
+
+The `Scheduler` class in `phonectl.daemon.triggers` arms each enabled scheduled macro on its first `due()` call and fires it once the wall-clock time reaches the armed target. It uses only injected time (`datetime.now`) — no real clock in tests.
+
+The `TriggerManager` class drains the event bus on each `step()` call and fires any event-driven macros whose triggers match and whose conditions all hold.
+
+Both are invoked from the `events_poll` RPC handler after each bus drain. If either raises an exception, the error is swallowed silently so the daemon event loop is never wedged.
+
+**On-device smoke:** Because the scheduler depends on real provider events and the real clock, behavior in CI is limited to unit tests with injected fakes. On-device smoke testing (a macro that fires every 10 seconds and taps a button) should be done manually.
+
+### Bus event name normalization
+
+The event bus (`daemon/events.py`) publishes events with underscore names (`notification_posted`, `ui_changed`, etc.), while the macro trigger vocabulary uses dotted names (`notification.posted`, `ui.text_appears`, etc.) for readability. `TriggerManager.step()` normalizes bus names to dotted names before matching — you write dotted names in macro documents and the daemon handles translation transparently.
+
+**`ui_changed` granularity caveat:** The bus emits a single `ui_changed` event for all UI changes (element appears/disappears, text changes, activity/app transitions). `TriggerManager` maps `ui_changed` to the full set of UI trigger types (`ui.element_appears`, `ui.text_appears`, `ui.element_disappears`, `activity.changed`, `app.opened`, `app.closed`). A macro whose trigger is any of these will receive the event; its `filters` (e.g. `text_regex`, `selector`) are responsible for discriminating the specific change. This means a macro with `{"type": "app.opened"}` and no package filter will fire on every UI change, not just app launches.
+
+### Snapshot-dependent conditions are inert on auto-fired triggers (Plan 6.3 item)
+
+Conditions that inspect `snapshot` or `device` sub-keys — `foreground_package`, `battery_min`, `selector_exists`, `screen_contains`, `risk_below`, `device_unlocked`, `charging`, `wifi_ssid` — evaluate against the data carried inside the triggering bus envelope. The Plan-5.2 bus envelopes do **not** yet carry `snapshot` or `device` sub-keys (those fields arrive as `{}` in the event context). As a result, these conditions are currently inert on auto-fired triggers: `foreground_package` always sees `app=None`, `battery_min` always sees `battery=0`, etc. Full envelope enrichment (attaching a live snapshot and device state to each bus event) is a Plan 6.3 item. Conditions that do not touch `snapshot`/`device` — `always`, `never`, `variable`, `time_window` — work correctly today.
+
+## Conditions
+
+The `conditions` list is evaluated before any trigger fires. All conditions must hold. Available conditions (Phase 6.2):
+
+| Condition type | Checks |
+|---|---|
+| `selector_exists` | At least one UI element matches the given selector |
+| `risk_below` | Estimated risk of the next action is below the threshold |
+| `variable_equals` | A named variable equals the given value |
+| `time_between` | Current wall-clock time is between `start` and `end` (HH:MM) |
+
+## Per-macro rate limits
+
+The `limits` block prevents a macro from running too often. All fields are optional.
+
+```json
+{
+  "max_per_minute": 4,
+  "max_per_hour": 20,
+  "max_per_day": 100,
+  "cooldown_seconds": 15
+}
+```
+
+Rate-limit history is stored in `$PHONECTL_HOME/macro_runs_history.json`.
 
 ## Phone verbs (action steps)
 
@@ -72,7 +171,12 @@ phonectl macro run     path/to/macro.json     # execute
 phonectl macro run     path/to/macro.json --yes  # skip confirm steps
 phonectl macro status                         # list recent runs
 phonectl macro cancel  <run_id>               # cancel (daemon only)
+phonectl macro enable  path/to/macro.json     # register + enable a macro
+phonectl macro disable <name>                 # disable a macro by name
+phonectl macro list                           # list all registered macros and their enabled state
 ```
+
+`enable`, `disable`, and `list` run in-process (they only touch the registry store; no daemon required). The `--json` flag is supported for all three.
 
 ## MCP tools
 
