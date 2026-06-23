@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 from phonectl.config import config_dir
 
@@ -53,3 +54,21 @@ def read_ledger() -> list:
 def append(record) -> None:
     with open(_path(), "a") as f:
         f.write(json.dumps(record) + "\n")
+
+
+def grant(macro_name, *, max_risk, scope="all", expires_at=None, now, gen_id=None) -> dict:
+    if max_risk not in _ORDER:
+        raise ValueError(f"bad max_risk {max_risk!r}")
+    rec = {"kind": "grant", "id": (gen_id or (lambda: "g_" + uuid.uuid4().hex))(),
+           "macro": macro_name, "max_risk": max_risk, "scope": scope,
+           "granted_at": now, "expires_at": expires_at}
+    append(rec)
+    return rec
+
+
+def revoke(*, macro=None, grant_id=None, now) -> None:
+    append({"kind": "revoke", "id": grant_id, "macro": macro, "revoked_at": now})
+
+
+def list_live(*, now) -> list:
+    return live_grants(read_ledger(), now=now)

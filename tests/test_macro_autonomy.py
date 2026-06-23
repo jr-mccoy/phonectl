@@ -64,3 +64,12 @@ def test_revoke_by_id_drops_only_that_grant():
     ]
     live = autonomy.live_grants(records, now=10.0)
     assert [g["id"] for g in live] == ["g2"]
+
+
+def test_grant_then_list_then_revoke(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    g = autonomy.grant("reply", max_risk="high", now=10.0)
+    assert g["macro"] == "reply" and g["max_risk"] == "high"
+    assert [x["macro"] for x in autonomy.list_live(now=11.0)] == ["reply"]
+    autonomy.revoke(macro="reply", now=12.0)
+    assert autonomy.list_live(now=13.0) == []
