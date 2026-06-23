@@ -66,3 +66,34 @@ def delete(store=None) -> None:
         p = _dir() / f"{s}.json"
         if p.exists():
             p.unlink()
+
+
+_RETRYABLE = {"busy", "rate_limited", "observe_failed", "stale_snapshot"}
+
+
+def capture_selector(record) -> None:
+    if record.get("outcome") != "ok":
+        return
+    target = record.get("target") or {}
+    sel = target.get("selector")
+    if not sel or "matched_i" not in target:
+        return
+    ctx = record.get("context") or {}
+    key = f"{ctx.get('package', '?')}|{ctx.get('app_version', '?')}|{ctx.get('locale', '?')}"
+    update("selectors", key, {"selector": sel, "matched_i": target["matched_i"]})
+
+
+def capture_failure(record) -> None:
+    if record.get("outcome") not in _RETRYABLE:
+        return
+    key = f"{record.get('verb', '?')}|{record.get('outcome')}"
+    failures = read("failures")
+    failures[key] = failures.get(key, 0) + 1
+    write("failures", failures)
+
+
+def capture_from_runs(records) -> None:
+    for r in records:
+        if r.get("kind") == "action":
+            capture_selector(r)
+            capture_failure(r)
