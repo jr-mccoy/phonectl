@@ -91,6 +91,7 @@ Android APK design specs (companion app, not yet built):
 
 - `android/accessibility-companion/SPEC.md` — AccessibilityService + companion APK
 - `android/foreground-service/SPEC.md` — foreground service transport + emergency-stop UX
+- `docs/superpowers/plans/phonectl-plan-4.5-accessibility-companion-apk-mvp.md` — 📝 native Kotlin build plan executing the two specs above (MVP: transport + emergency-stop/trust + AccessibilityService; notifications 4.2 / OCR 4.4 deferred); GitHub Actions build
 
 Superseded plans (traceability only — do not execute):
 
