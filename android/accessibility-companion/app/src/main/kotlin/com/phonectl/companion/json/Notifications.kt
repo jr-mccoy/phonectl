@@ -74,4 +74,13 @@ object Notifications {
         if (idx < 0) throw MethodException("no_remote_input", "notification has no inline-reply action")
         return idx
     }
+
+    /**
+     * Guard for `notifications_dismiss`: raise `not_found` when no active notification has [key].
+     * The dismiss itself (`cancelNotification`) is Android-only; this keeps the error contract pure.
+     */
+    fun requireActive(items: List<NotifData>, key: String) {
+        if (items.none { it.key == key })
+            throw MethodException("not_found", "no active notification for the given key")
+    }
 }

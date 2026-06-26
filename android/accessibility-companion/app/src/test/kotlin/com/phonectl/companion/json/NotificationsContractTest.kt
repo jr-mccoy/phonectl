@@ -103,4 +103,18 @@ class NotificationsContractTest {
         assertTrue("$e", e is MethodException)
         assertEquals("no_remote_input", (e as MethodException).code)
     }
+
+    // --- notifications_dismiss resolver (Task 4) ---
+
+    @Test
+    fun requireActivePassesWhenKeyPresent() {
+        Notifications.requireActive(listOf(alice), alice.key) // no throw
+    }
+
+    @Test
+    fun requireActiveNotFoundWhenKeyAbsent() {
+        val e = runCatching { Notifications.requireActive(listOf(alice), "gone") }.exceptionOrNull()
+        assertTrue("$e", e is MethodException)
+        assertEquals("not_found", (e as MethodException).code)
+    }
 }

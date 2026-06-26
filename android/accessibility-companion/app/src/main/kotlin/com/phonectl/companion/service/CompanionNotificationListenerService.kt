@@ -93,6 +93,15 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         return JSONObject().put("sent", true)
     }
 
+    // --- notifications_dismiss ---
+
+    private fun dismiss(params: JSONObject): JSONObject {
+        val key = params.optString("key", "")
+        Notifications.requireActive(activeNotificationsSafe().map { toNotifData(it) }, key)
+        cancelNotification(key)
+        return JSONObject().put("dismissed", true)
+    }
+
     companion object {
         @Volatile
         var instance: CompanionNotificationListenerService? = null
@@ -112,6 +121,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
             return mapOf(
                 "notifications_list" to { _ -> svc().notificationsList() },
                 "notifications_reply" to { p -> svc().reply(p) },
+                "notifications_dismiss" to { p -> svc().dismiss(p) },
             )
         }
 
