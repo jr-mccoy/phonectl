@@ -1,0 +1,53 @@
+package com.phonectl.companion.state
+
+import org.json.JSONObject
+
+/**
+ * The capability keys this MVP companion advertises in `handshake.capabilities`.
+ *
+ * These are exactly the keys the Python side recognizes (src/phonectl/capabilities.py) for the
+ * AccessibilityService companion. Notification (4.2) and OCR (4.4) keys are intentionally omitted
+ * this cut — their Python providers degrade cleanly when the keys are absent.
+ *
+ * Pure (no Android dependency) so the handshake shape is exercised by JVM contract tests against
+ * the foreground-service SPEC §3 example and tests/test_trust.py.
+ */
+object Capabilities {
+
+    val MVP_KEYS: List<String> = listOf(
+        "observe_ui_native",
+        "observe_ui_events",
+        "act_gesture_native",
+        "act_set_text_native",
+        "act_semantic_action",
+    )
+
+    /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
+    const val DEFAULT_ENABLED = true
+
+    /**
+     * Build the `handshake` response data:
+     *   {version:1, capabilities:{<key>:bool, ...}, stopped:<bool>}
+     *
+     * @param enabled the user-enabled toggle set; keys absent here default to DEFAULT_ENABLED.
+     */
+    fun handshakeData(enabled: Map<String, Boolean>, stopped: Boolean): JSONObject {
+        val caps = JSONObject()
+        for (key in MVP_KEYS) {
+            caps.put(key, enabled[key] ?: DEFAULT_ENABLED)
+        }
+        return JSONObject()
+            .put("version", 1)
+            .put("capabilities", caps)
+            .put("stopped", stopped)
+    }
+}
+
+/**
+ * STOP-sentinel parity (foreground-service SPEC §4): the emergency stop is engaged when EITHER the
+ * in-app flag is set OR the `$PHONECTL_HOME/STOP` sentinel file exists. The file is the hard
+ * guarantee (survives APK crashes); the in-app flag is the low-latency path for the running session.
+ */
+object StopSentinel {
+    fun stopped(inAppFlag: Boolean, stopFileExists: Boolean): Boolean = inAppFlag || stopFileExists
+}

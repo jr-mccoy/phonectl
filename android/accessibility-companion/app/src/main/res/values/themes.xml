@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppCompat theme carrying preferenceTheme so PreferenceFragmentCompat inflates correctly. -->
+    <style name="Theme.PhonectlCompanion" parent="Theme.AppCompat.DayNight">
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+    </style>
+</resources>

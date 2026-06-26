@@ -1,0 +1,41 @@
+name: Android companion APK
+
+on:
+  push:
+    paths:
+      - "android/accessibility-companion/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/accessibility-companion/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: android/accessibility-companion
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build + unit tests
+        run: ./gradlew assembleDebug test --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonectl-companion-debug
+          path: android/accessibility-companion/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

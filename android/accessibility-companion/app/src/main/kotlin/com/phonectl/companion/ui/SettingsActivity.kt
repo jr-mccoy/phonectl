@@ -1,0 +1,117 @@
+package com.phonectl.companion.ui
+
+import android.content.Context
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.Preference
+import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
+import com.phonectl.companion.R
+import com.phonectl.companion.service.CompanionForegroundService
+import com.phonectl.companion.state.SharedPrefsTrustState
+
+/**
+ * Per-capability toggles (foreground-service SPEC §6) + the emergency-stop control + a Trust &
+ * Safety text section (foreground-service SPEC §7). Switch preferences persist into the same
+ * SharedPreferences file [SharedPrefsTrustState] reads, with keys matching its `cap_<key>` /
+ * `stopped` scheme, so the handshake reflects the UI immediately.
+ */
+class SettingsActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) {
+            supportFragmentManager.beginTransaction()
+                .replace(android.R.id.content, SettingsFragment())
+                .commit()
+        }
+    }
+
+    class SettingsFragment : PreferenceFragmentCompat() {
+
+        override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            val ctx = preferenceManager.context
+            preferenceManager.sharedPreferencesName = SharedPrefsTrustState.PREFS
+            preferenceManager.sharedPreferencesMode = Context.MODE_PRIVATE
+
+            val screen = preferenceManager.createPreferenceScreen(ctx)
+
+            // --- Capabilities (default-enabled per SPEC §6) ---
+            val capabilities = PreferenceCategory(ctx).apply {
+                title = getString(R.string.prefs_capabilities_title)
+            }
+            screen.addPreference(capabilities)
+            for ((key, labelRes) in CAPABILITY_LABELS) {
+                capabilities.addPreference(
+                    SwitchPreferenceCompat(ctx).apply {
+                        this.key = "cap_$key"
+                        title = getString(labelRes)
+                        setDefaultValue(true)
+                    }
+                )
+            }
+
+            // --- Emergency stop ---
+            val control = PreferenceCategory(ctx).apply {
+                title = getString(R.string.prefs_control_title)
+            }
+            screen.addPreference(control)
+            control.addPreference(
+                SwitchPreferenceCompat(ctx).apply {
+                    key = SharedPrefsTrustState.KEY_STOPPED
+                    title = getString(R.string.pref_stopped_title)
+                    summaryOn = getString(R.string.pref_stopped_on)
+                    summaryOff = getString(R.string.pref_stopped_off)
+                    setDefaultValue(false)
+                    setOnPreferenceChangeListener { _, newValue ->
+                        val stopped = newValue as Boolean
+                        CompanionForegroundService.send(
+                            ctx,
+                            if (stopped) CompanionForegroundService.ACTION_STOP
+                            else CompanionForegroundService.ACTION_RESUME,
+                        )
+                        true
+                    }
+                }
+            )
+
+            // --- Trust & Safety (read-only text) ---
+            val trust = PreferenceCategory(ctx).apply {
+                title = getString(R.string.prefs_trust_title)
+            }
+            screen.addPreference(trust)
+            for ((titleRes, summaryRes) in TRUST_SECTIONS) {
+                trust.addPreference(
+                    Preference(ctx).apply {
+                        title = getString(titleRes)
+                        summary = getString(summaryRes)
+                        isSelectable = false
+                        isPersistent = false
+                    }
+                )
+            }
+
+            preferenceScreen = screen
+        }
+
+        companion object {
+            // Order mirrors foreground-service SPEC §6 / Capabilities.MVP_KEYS.
+            private val CAPABILITY_LABELS = listOf(
+                "observe_ui_native" to R.string.cap_observe_ui_native,
+                "observe_ui_events" to R.string.cap_observe_ui_events,
+                "act_gesture_native" to R.string.cap_act_gesture_native,
+                "act_set_text_native" to R.string.cap_act_set_text_native,
+                "act_semantic_action" to R.string.cap_act_semantic_action,
+            )
+
+            private val TRUST_SECTIONS = listOf(
+                R.string.trust_read_title to R.string.trust_read_summary,
+                R.string.trust_control_title to R.string.trust_control_summary,
+                R.string.trust_local_title to R.string.trust_local_summary,
+                R.string.trust_audit_title to R.string.trust_audit_summary,
+                R.string.trust_warn_title to R.string.trust_warn_summary,
+            )
+        }
+    }
+}
