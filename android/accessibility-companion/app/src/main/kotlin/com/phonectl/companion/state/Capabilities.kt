@@ -74,6 +74,7 @@ object Capabilities {
         "notifications_list" to "observe_notifications",
         "notifications_reply" to "notifications_reply",
         "notifications_dismiss" to "notifications_dismiss",
+        "ocr_image" to "observe_ocr",
     )
 
     /**

@@ -1,7 +1,12 @@
 package com.phonectl.companion.json
 
+import com.phonectl.companion.state.Capabilities
+import com.phonectl.companion.state.TrustStateStub
+import com.phonectl.companion.transport.Dispatcher
+import com.phonectl.companion.transport.Method
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,5 +60,30 @@ class OcrContractTest {
         val arr = data.getJSONArray("regions")
         assertEquals(2, arr.length())
         assertEquals(0.01, arr.getJSONObject(1).getDouble("confidence"), 1e-9)
+    }
+
+    // --- observe_ocr gate (Task 3) ---
+
+    private val ocrMethods = mapOf<String, Method>(
+        "ocr_image" to { _ -> JSONObject().put("regions", org.json.JSONArray()) }
+    )
+
+    private fun request(method: String): String = JSONObject()
+        .put("version", 1).put("request_id", "rid1")
+        .put("method", method).put("params", JSONObject()).toString()
+
+    @Test
+    fun disabledObserveOcrYieldsCapabilityDisabled() {
+        val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf("observe_ocr")))
+        val resp = JSONObject(Dispatcher(ocrMethods, gate).handleLine(request("ocr_image"))!!)
+        assertFalse(resp.getBoolean("ok"))
+        assertEquals("capability_disabled", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun enabledObserveOcrPassesThroughGate() {
+        val gate = Capabilities.methodGate(TrustStateStub())
+        val resp = JSONObject(Dispatcher(ocrMethods, gate).handleLine(request("ocr_image"))!!)
+        assertTrue(resp.getBoolean("ok"))
     }
 }
