@@ -2,8 +2,11 @@ package com.phonectl.companion.service
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.app.RemoteInput
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.phonectl.companion.json.NotifAction
@@ -11,6 +14,7 @@ import com.phonectl.companion.json.NotifData
 import com.phonectl.companion.json.Notifications
 import com.phonectl.companion.state.TrustState
 import com.phonectl.companion.transport.Method
+import com.phonectl.companion.transport.MethodException
 import org.json.JSONObject
 
 /**
@@ -69,6 +73,26 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         )
     }
 
+    // --- notifications_reply ---
+
+    private fun reply(params: JSONObject): JSONObject {
+        val key = params.optString("key", "")
+        val text = params.optString("text", "")
+        val sbns = activeNotificationsSafe()
+        // Validate (not_found / no_remote_input) against the pure, JVM-tested resolver, then fire
+        // the matching live Action — actions[idx] aligns with the serialized order.
+        val idx = Notifications.replyActionIndex(sbns.map { toNotifData(it) }, key)
+        val action = sbns.first { it.key == key }.notification.actions[idx]
+        val remoteInputs = action.remoteInputs
+            ?: throw MethodException("no_remote_input", "notification has no inline-reply action")
+        val results = Bundle()
+        for (ri in remoteInputs) results.putCharSequence(ri.resultKey, text)
+        val intent = Intent()
+        RemoteInput.addResultsToIntent(remoteInputs, intent, results)
+        action.actionIntent.send(this, 0, intent)
+        return JSONObject().put("sent", true)
+    }
+
     companion object {
         @Volatile
         var instance: CompanionNotificationListenerService? = null
@@ -87,6 +111,7 @@ class CompanionNotificationListenerService : NotificationListenerService() {
                 instance ?: throw IllegalStateException("notification listener not connected")
             return mapOf(
                 "notifications_list" to { _ -> svc().notificationsList() },
+                "notifications_reply" to { p -> svc().reply(p) },
             )
         }
 

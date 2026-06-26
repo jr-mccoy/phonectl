@@ -1,5 +1,6 @@
 package com.phonectl.companion.json
 
+import com.phonectl.companion.transport.MethodException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -70,5 +71,36 @@ class NotificationsContractTest {
     fun postTimeSerializesAsLongEpochMs() {
         val n = Notifications.notification(alice)
         assertEquals(1718900000000L, n.getLong("post_time"))
+    }
+
+    // --- notifications_reply resolver (Task 3) ---
+
+    @Test
+    fun replyActionIndexFindsFirstRemoteInputAction() {
+        // Mark-read precedes a second reply-capable action to prove "first with RemoteInput" wins.
+        val twoReplies = alice.copy(
+            actions = listOf(
+                NotifAction("Mark read", remoteInput = false),
+                NotifAction("Reply", remoteInput = true),
+            )
+        )
+        assertEquals(1, Notifications.replyActionIndex(listOf(alice, twoReplies), twoReplies.key))
+        assertEquals(0, Notifications.replyActionIndex(listOf(alice), alice.key))
+    }
+
+    @Test
+    fun replyActionIndexNotFoundForUnknownKey() {
+        val e = runCatching { Notifications.replyActionIndex(listOf(alice), "nope") }.exceptionOrNull()
+        assertTrue("$e", e is MethodException)
+        assertEquals("not_found", (e as MethodException).code)
+    }
+
+    @Test
+    fun replyActionIndexNoRemoteInputWhenNoActionHasIt() {
+        val noReply = alice.copy(actions = listOf(NotifAction("Mark read", remoteInput = false)))
+        val e = runCatching { Notifications.replyActionIndex(listOf(noReply), noReply.key) }
+            .exceptionOrNull()
+        assertTrue("$e", e is MethodException)
+        assertEquals("no_remote_input", (e as MethodException).code)
     }
 }

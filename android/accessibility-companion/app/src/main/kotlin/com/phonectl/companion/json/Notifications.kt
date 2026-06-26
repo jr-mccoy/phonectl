@@ -1,5 +1,6 @@
 package com.phonectl.companion.json
 
+import com.phonectl.companion.transport.MethodException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -56,5 +57,21 @@ object Notifications {
         val arr = JSONArray()
         for (n in items) arr.put(notification(n))
         return JSONObject().put("notifications", arr)
+    }
+
+    /**
+     * Resolve the index (within the notification's action list) of the first action carrying a
+     * `RemoteInput`, for `notifications_reply`. Pure so the error contract is JVM-tested:
+     *   - `not_found`        — no active notification has [key].
+     *   - `no_remote_input`  — the notification has no inline-reply action.
+     * The returned index aligns with the live `Notification.actions` array (same order), so the
+     * service can fire the corresponding `Action.actionIntent`.
+     */
+    fun replyActionIndex(items: List<NotifData>, key: String): Int {
+        val n = items.firstOrNull { it.key == key }
+            ?: throw MethodException("not_found", "no active notification for the given key")
+        val idx = n.actions.indexOfFirst { it.remoteInput }
+        if (idx < 0) throw MethodException("no_remote_input", "notification has no inline-reply action")
+        return idx
     }
 }
