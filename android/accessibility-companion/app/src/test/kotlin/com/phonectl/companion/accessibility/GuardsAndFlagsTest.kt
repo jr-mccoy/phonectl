@@ -1,5 +1,7 @@
 package com.phonectl.companion.accessibility
 
+import com.phonectl.companion.json.NotifData
+import com.phonectl.companion.json.Notifications
 import com.phonectl.companion.state.ActionGate
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,6 +24,32 @@ class GuardsAndFlagsTest {
         assertFalse(ActionGate.isGuarded(null, guarded))
         assertFalse(ActionGate.isGuarded("", guarded))
         assertFalse(ActionGate.isGuarded("com.bank.app", emptySet()))
+    }
+
+    @Test
+    fun launchTargetPackageIsGuarded() {
+        // `launch` refuses when the *target* package (the one being opened) is guarded — the same
+        // decision as the foreground guard, applied to the requested package (Plan 4.8 Task 1).
+        val guarded = setOf("com.bank.app")
+        assertTrue(ActionGate.isGuarded("com.bank.app", guarded))
+        assertFalse(ActionGate.isGuarded("com.example.notes", guarded))
+    }
+
+    @Test
+    fun replyNotificationPackageDrivesGuardedRefusal() {
+        // `notifications_reply` resolves the notification's source package via packageForKey, then
+        // refuses through the same gate when that package is guarded (Plan 4.8 Task 1).
+        val items = listOf(
+            NotifData(key = "k-bank", pkg = "com.bank.app", title = "", text = "",
+                category = null, postTime = 0L, actions = emptyList()),
+            NotifData(key = "k-chat", pkg = "com.chat.app", title = "", text = "",
+                category = null, postTime = 0L, actions = emptyList()),
+        )
+        val guarded = setOf("com.bank.app")
+        assertTrue(ActionGate.isGuarded(Notifications.packageForKey(items, "k-bank"), guarded))
+        assertFalse(ActionGate.isGuarded(Notifications.packageForKey(items, "k-chat"), guarded))
+        // Unknown key resolves to null → not guarded (falls through to the not_found resolver).
+        assertFalse(ActionGate.isGuarded(Notifications.packageForKey(items, "nope"), guarded))
     }
 
     @Test
