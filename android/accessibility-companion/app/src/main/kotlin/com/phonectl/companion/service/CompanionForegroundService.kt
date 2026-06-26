@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.phonectl.companion.R
+import com.phonectl.companion.state.Capabilities
 import com.phonectl.companion.state.SharedPrefsTrustState
 import com.phonectl.companion.transport.CoreHandlers
 import com.phonectl.companion.transport.Dispatcher
@@ -65,7 +66,8 @@ class CompanionForegroundService : Service() {
         methods.putAll(CompanionAccessibilityService.methods(state))
         // NotificationListenerService methods (Plan 4.6) over the same loopback transport.
         methods.putAll(CompanionNotificationListenerService.methods(state))
-        val srv = Server(port = port, dispatcher = Dispatcher(methods))
+        // Per-capability gate refuses a method whose toggle the user switched off.
+        val srv = Server(port = port, dispatcher = Dispatcher(methods, Capabilities.methodGate(state)))
         runCatching { srv.start() }.onSuccess { server = srv }
     }
 

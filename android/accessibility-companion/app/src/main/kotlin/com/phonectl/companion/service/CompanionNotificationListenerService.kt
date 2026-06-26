@@ -82,7 +82,10 @@ class CompanionNotificationListenerService : NotificationListenerService() {
         // Validate (not_found / no_remote_input) against the pure, JVM-tested resolver, then fire
         // the matching live Action — actions[idx] aligns with the serialized order.
         val idx = Notifications.replyActionIndex(sbns.map { toNotifData(it) }, key)
-        val action = sbns.first { it.key == key }.notification.actions[idx]
+        // replyActionIndex guarantees a reply-capable action exists at [idx]; re-guard for nullable.
+        val actions = sbns.first { it.key == key }.notification.actions
+            ?: throw MethodException("no_remote_input", "notification has no inline-reply action")
+        val action = actions[idx]
         val remoteInputs = action.remoteInputs
             ?: throw MethodException("no_remote_input", "notification has no inline-reply action")
         val results = Bundle()

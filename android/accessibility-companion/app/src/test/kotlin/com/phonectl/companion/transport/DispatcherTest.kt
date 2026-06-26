@@ -1,5 +1,7 @@
 package com.phonectl.companion.transport
 
+import com.phonectl.companion.state.Capabilities
+import com.phonectl.companion.state.TrustStateStub
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -88,6 +90,34 @@ class DispatcherTest {
         assertNull(Dispatcher(emptyMap()).handleLine("not json at all"))
         assertNull(Dispatcher(emptyMap()).handleLine(""))
         assertNull(Dispatcher(emptyMap()).handleLine("[1,2,3]")) // JSON, but not an object
+    }
+
+    private val replyMethods = mapOf<String, Method>(
+        "notifications_reply" to { _ -> JSONObject().put("sent", true) }
+    )
+
+    @Test
+    fun disabledCapabilityYieldsCapabilityDisabled() {
+        val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf("notifications_reply")))
+        val resp = JSONObject(Dispatcher(replyMethods, gate).handleLine(request("notifications_reply"))!!)
+        assertFalse(resp.getBoolean("ok"))
+        assertEquals("capability_disabled", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun enabledCapabilityPassesThroughGate() {
+        val gate = Capabilities.methodGate(TrustStateStub())
+        val resp = JSONObject(Dispatcher(replyMethods, gate).handleLine(request("notifications_reply"))!!)
+        assertTrue(resp.getBoolean("ok"))
+        assertTrue(resp.getJSONObject("data").getBoolean("sent"))
+    }
+
+    @Test
+    fun unknownMethodTakesPrecedenceOverGate() {
+        // No handler -> unknown_method wins even though the (would-be) capability is disabled.
+        val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf("notifications_reply")))
+        val resp = JSONObject(Dispatcher(emptyMap(), gate).handleLine(request("notifications_reply"))!!)
+        assertEquals("unknown_method", resp.getJSONObject("error").getString("code"))
     }
 
     // A bare RuntimeException helper so the test reads like the Python `raise RuntimeError`.

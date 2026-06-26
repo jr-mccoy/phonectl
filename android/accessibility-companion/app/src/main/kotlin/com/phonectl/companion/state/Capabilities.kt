@@ -55,6 +55,27 @@ object Capabilities {
             .put("capabilities", caps)
             .put("stopped", stopped)
     }
+
+    /**
+     * Transport methods whose per-capability toggle gates them on the device side (Plan 4.6 Task 5).
+     * A method maps to the capability key the user can switch off; when off, the dispatcher refuses
+     * the call with `capability_disabled` (defence in depth — the Python side also drops the grant).
+     */
+    val METHOD_CAPABILITY: Map<String, String> = mapOf(
+        "notifications_list" to "observe_notifications",
+        "notifications_reply" to "notifications_reply",
+        "notifications_dismiss" to "notifications_dismiss",
+    )
+
+    /**
+     * A per-method gate for [com.phonectl.companion.transport.Dispatcher]: returns
+     * `"capability_disabled"` when the method's controlling toggle is off, else null (allowed).
+     * Methods absent from [METHOD_CAPABILITY] are always allowed.
+     */
+    fun methodGate(state: TrustState): (String) -> String? = gate@{ method ->
+        val key = METHOD_CAPABILITY[method] ?: return@gate null
+        if (state.isCapabilityEnabled(key)) null else "capability_disabled"
+    }
 }
 
 /**

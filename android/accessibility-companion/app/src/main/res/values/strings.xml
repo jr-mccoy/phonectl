@@ -20,6 +20,16 @@
     <string name="cap_act_gesture_native">Perform touch gestures</string>
     <string name="cap_act_set_text_native">Fill text fields</string>
     <string name="cap_act_semantic_action">Trigger semantic accessibility actions</string>
+    <string name="cap_observe_notifications">Read active notifications</string>
+    <string name="cap_notifications_wait">Wait for a matching notification</string>
+    <string name="cap_notifications_reply">Reply to inline-reply notifications</string>
+    <string name="cap_notifications_dismiss">Dismiss notifications</string>
+
+    <!-- Settings: notification-listener access -->
+    <string name="prefs_notif_setup_title">Notification access</string>
+    <string name="pref_notif_access_title">Grant notification access</string>
+    <string name="pref_notif_access_granted">Granted — phonectl can read, reply to, and dismiss notifications. Tap to review.</string>
+    <string name="pref_notif_access_missing">Not granted. Tap to open Settings → Notifications → Device &amp; app notifications → phonectl companion → Allow.</string>
 
     <!-- Settings: emergency stop -->
     <string name="prefs_control_title">Control</string>
@@ -33,6 +43,8 @@
     <string name="trust_read_summary">The on-screen UI tree (element text, resource IDs, bounds, clickability). Passwords are never read from password fields.</string>
     <string name="trust_control_title">What is controlled</string>
     <string name="trust_control_summary">Touch gestures and text insertion — only on behalf of phonectl CLI/MCP commands, never autonomously.</string>
+    <string name="trust_notif_title">Notifications</string>
+    <string name="trust_notif_summary">Notifications read: title, text, and action labels of active notifications; replies are sent only on behalf of phonectl commands.</string>
     <string name="trust_local_title">Local only</string>
     <string name="trust_local_summary">The transport server binds 127.0.0.1 only. No data leaves the device over the network.</string>
     <string name="trust_audit_title">Audit visibility</string>
