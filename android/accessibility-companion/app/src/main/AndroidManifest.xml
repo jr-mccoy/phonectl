@@ -59,5 +59,16 @@
             </intent-filter>
         </service>
 
+        <!-- Lifecycle seam (foreground-service SPEC §8): the Phase-5 daemon sends start/stop via
+             `adb shell am broadcast`. Exported so `am broadcast` can reach it; no daemon wiring. -->
+        <receiver
+            android:name=".service.LifecycleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.phonectl.companion.action.START_SERVICE" />
+                <action android:name="com.phonectl.companion.action.STOP_SERVICE" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>
