@@ -172,7 +172,7 @@ class CompanionAccessibilityService : AccessibilityService() {
     private fun dispatchGestureBlocking(description: GestureDescription): Boolean {
         val latch = CountDownLatch(1)
         val completed = AtomicBoolean(false)
-        val callback = object : GestureResultCallback() {
+        val callback = object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 completed.set(true); latch.countDown()
             }
@@ -272,8 +272,8 @@ class CompanionAccessibilityService : AccessibilityService() {
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
             { it.run() },
-            object : TakeScreenshotCallback {
-                override fun onSuccess(result: ScreenshotResult) {
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
                     try {
                         val bitmap = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
                             ?: return
