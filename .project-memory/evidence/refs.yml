@@ -1,0 +1,15 @@
+# evidence/refs.yml — pointers to commits, tests, docs, issues, PRs.
+# Records reference these by id. Each entry is a pointer, not a copy.
+#
+# Example entries (delete these once you add real ones):
+# refs:
+#   - id: ref_npm_test
+#     type: command
+#     ref: npm test
+#   - id: ref_pr_42
+#     type: pr
+#     ref: "#42"
+#   - id: ref_auth_commit
+#     type: commit
+#     ref: <short-sha>
+refs: []

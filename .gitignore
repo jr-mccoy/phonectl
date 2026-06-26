@@ -4,3 +4,11 @@ __pycache__/
 *.egg-info/
 *.log
 snap-*.png
+
+# >>> breadcrumbs managed block (managed by `crumb init`) >>>
+.project-memory/private/**
+.project-memory/index/**
+!.project-memory/index/README.md
+.project-memory/generated/*.local.md
+.project-memory/generated/*.tmp
+# <<< breadcrumbs managed block <<<
