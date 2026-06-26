@@ -65,6 +65,30 @@ Commit: `docs(companion): record on-device smoke-matrix results (Plan 4.8 Task 3
 - The index status table → all phases ✅.
 Commit: `docs(companion): mark Phase 4 companion APK complete + cross-reference plans`.
 
+## On-device smoke-matrix results (Task 3)
+
+**Status: ⏳ NOT RUN — no device access.** Tasks 1, 2, and 4 (code + docs) were implemented and the
+JVM/Python suites cover them, but the Task 3 matrix is **ROM-specific and requires the physical
+Galaxy S25 Ultra** with the AccessibilityService enabled, notification access granted, the
+foreground service running, and `companion_port` set in `~/.config/phonectl/config.json`. Per
+CLAUDE.md discipline ("do not claim device behavior unless it was actually run on the device"), the
+results below are left as a **pending checklist** to be filled in by whoever runs the smoke on
+hardware. No PASS/FAIL is asserted here because none was observed in this environment.
+
+Setup before the matrix: build + install the CI debug APK (`assembleDebug` artifact), enable the
+AccessibilityService (Settings → Accessibility), grant notification access (Settings →
+Notifications → Device & app notifications → phonectl companion → Allow), start the foreground
+service, and set `companion_port` in `~/.config/phonectl/config.json`.
+
+| # | Check | Expected | Result | Notes |
+|---|---|---|---|---|
+| 1 | `phonectl doctor` | companion reachable; `AccessibilityProvider` wins `observe_ui_tree`/`act_*` ahead of ADB | ⏳ NOT RUN | |
+| 2 | `observe → tap → observe` loop | post-action `screen_hash` changes over the **companion** path (not ADB) | ⏳ NOT RUN | |
+| 3 | Notifications `list → reply → dismiss` | round-trips against a real messaging notification; `can_reply` reflects `RemoteInput` presence | ⏳ NOT RUN | |
+| 4 | `ocr_image` of a captured screen | with `tesseract` absent → ML-Kit regions; with it present → companion path not taken (precedence) | ⏳ NOT RUN | |
+| 5 | "Stop phonectl" notification + Quick-Settings tile | blocks the next `phonectl` action via `audit.kill_switch_active`; Resume clears it | ⏳ NOT RUN | |
+| 6 | Password field / guarded app | password field → `password:true` with **no** `text`; guarded app → `guarded_action` | ⏳ NOT RUN | |
+
 ## Verification
 
 1. **CI / unit** — `./gradlew assembleDebug test` green with the Task 1–2 hardening tests added.
