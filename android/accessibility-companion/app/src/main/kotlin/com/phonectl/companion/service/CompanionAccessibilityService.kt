@@ -17,9 +17,11 @@ import com.phonectl.companion.accessibility.EventRing
 import com.phonectl.companion.accessibility.NativeTreeJson
 import com.phonectl.companion.accessibility.NodeData
 import com.phonectl.companion.accessibility.NodeId
+import com.phonectl.companion.accessibility.ObserveFlags
 import com.phonectl.companion.accessibility.PasswordGuard
 import com.phonectl.companion.accessibility.SemanticActions
 import com.phonectl.companion.accessibility.WindowData
+import com.phonectl.companion.state.ActionGate
 import com.phonectl.companion.state.TrustState
 import com.phonectl.companion.transport.Method
 import com.phonectl.companion.transport.MethodException
@@ -78,11 +80,29 @@ class CompanionAccessibilityService : AccessibilityService() {
             root.recycle()
         }
         val dm = resources.displayMetrics
+        // Attach password/payment flags (trust SPEC §7) for the Python policy layer. Additive
+        // `flags` key — native_tree.to_compat_xml ignores it.
         return NativeTreeJson.tree(windows, dm.widthPixels, dm.heightPixels)
+            .put("flags", ObserveFlags.compute(windows))
     }
 
     private fun safeWindows(): List<AccessibilityWindowInfo> =
         try { windows ?: emptyList() } catch (e: Exception) { emptyList() }
+
+    /** Refuse gesture/text actions in guarded apps (foreground-service SPEC §7.6). */
+    private fun requireUnguarded(state: TrustState) {
+        val pkg = currentPackage()
+        if (ActionGate.isGuarded(pkg, state.guardedPackages())) {
+            throw MethodException("guarded_action", "actions are refused in '$pkg'")
+        }
+    }
+
+    private fun currentPackage(): String? {
+        val root = rootInActiveWindow ?: return null
+        val pkg = root.packageName?.toString()
+        root.recycle()
+        return pkg
+    }
 
     private fun walk(node: AccessibilityNodeInfo, windowId: Int, path: List<Int>, out: MutableList<NodeData>) {
         val data = serialize(node, windowId, path)
@@ -329,10 +349,10 @@ class CompanionAccessibilityService : AccessibilityService() {
                 instance ?: throw IllegalStateException("accessibility service not connected")
             return mapOf(
                 "observe_native" to { _ -> svc().observeNative() },
-                "gesture" to { p -> svc().gesture(p); JSONObject().put("applied", true) },
-                "key" to { p -> svc().key(p); JSONObject().put("applied", true) },
-                "set_text" to { p -> svc().setText(p); JSONObject().put("applied", true) },
-                "semantic" to { p -> svc().semantic(p) },
+                "gesture" to { p -> svc().run { requireUnguarded(state); gesture(p) }; JSONObject().put("applied", true) },
+                "key" to { p -> svc().run { requireUnguarded(state); key(p) }; JSONObject().put("applied", true) },
+                "set_text" to { p -> svc().run { requireUnguarded(state); setText(p) }; JSONObject().put("applied", true) },
+                "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().launch(p); JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p) },
                 "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
