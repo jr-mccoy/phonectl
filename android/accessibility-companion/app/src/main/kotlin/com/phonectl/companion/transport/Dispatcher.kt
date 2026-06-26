@@ -13,12 +13,19 @@ typealias Method = (JSONObject) -> JSONObject
  * - Non-JSON / non-object lines are silently dropped (returns null — no response emitted).
  * - Unknown major `version` -> {ok:false, error:{code:"version_mismatch"}}.
  * - Unknown method -> {ok:false, error:{code:"unknown_method"}}.
+ * - Method gated off by [gate] -> {ok:false, error:{code:"capability_disabled"}}.
  * - MethodException -> {ok:false, error:{code:<typed>}}.
  * - Any other throwable -> {ok:false, error:{code:"handler_error"}}.
  *
- * Pure (no Android dependency) so it is exercised by JVM contract tests.
+ * [gate] maps a method name to a blocking error code (or null to allow); it lets the trust layer
+ * refuse a method whose per-capability toggle is off (Plan 4.6 / foreground-service SPEC §6)
+ * without each handler re-checking. Defaults to ungated. Pure (no Android dependency) so it is
+ * exercised by JVM contract tests.
  */
-class Dispatcher(private val methods: Map<String, Method>) {
+class Dispatcher(
+    private val methods: Map<String, Method>,
+    private val gate: (String) -> String? = { null },
+) {
 
     /** Returns the response line to write back, or null if the line should be silently dropped. */
     fun handleLine(line: String): String? {
@@ -43,6 +50,11 @@ class Dispatcher(private val methods: Map<String, Method>) {
         val handler = methods[method]
             ?: return Envelope.error(requestId, "unknown_method", "no handler for '$method'")
                 .toString()
+
+        gate(method)?.let { code ->
+            return Envelope.error(requestId, code, "'$method' is disabled in the companion settings")
+                .toString()
+        }
 
         val params = req.optJSONObject("params") ?: JSONObject()
 

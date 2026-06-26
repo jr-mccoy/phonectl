@@ -73,13 +73,13 @@ class ContractParityTest {
     }
 
     @Test
-    fun handshakeAdvertisesExactlyTheMvpKeys() {
+    fun handshakeAdvertisesExactlyTheAdvertisedKeys() {
         val methods: Map<String, Method> = CoreHandlers.methods(TrustStateStub())
         val line = JSONObject().put("version", 1).put("request_id", "c1")
             .put("method", "handshake").put("params", JSONObject()).toString()
         val data = JSONObject(Dispatcher(methods).handleLine(line)).getJSONObject("data")
         val keys = data.getJSONObject("capabilities").keys().asSequence().toSet()
-        assertEquals(Capabilities.MVP_KEYS.toSet(), keys)
+        assertEquals(Capabilities.ALL_KEYS.toSet(), keys)
     }
 
     // --- faithful Kotlin port of src/phonectl/native_tree.py::to_compat_xml ---

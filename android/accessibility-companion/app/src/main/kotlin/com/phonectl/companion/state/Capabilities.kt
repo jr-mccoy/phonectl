@@ -22,6 +22,20 @@ object Capabilities {
         "act_semantic_action",
     )
 
+    /**
+     * NotificationListenerService capability keys (Plan 4.6 / foreground-service SPEC §6). Default
+     * on like the MVP keys; the Python side intersects them with the technically-supported set.
+     */
+    val NOTIFICATION_KEYS: List<String> = listOf(
+        "observe_notifications",
+        "notifications_wait",
+        "notifications_reply",
+        "notifications_dismiss",
+    )
+
+    /** Every capability key the companion advertises in `handshake.capabilities`. */
+    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS
+
     /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
     const val DEFAULT_ENABLED = true
 
@@ -33,13 +47,34 @@ object Capabilities {
      */
     fun handshakeData(enabled: Map<String, Boolean>, stopped: Boolean): JSONObject {
         val caps = JSONObject()
-        for (key in MVP_KEYS) {
+        for (key in ALL_KEYS) {
             caps.put(key, enabled[key] ?: DEFAULT_ENABLED)
         }
         return JSONObject()
             .put("version", 1)
             .put("capabilities", caps)
             .put("stopped", stopped)
+    }
+
+    /**
+     * Transport methods whose per-capability toggle gates them on the device side (Plan 4.6 Task 5).
+     * A method maps to the capability key the user can switch off; when off, the dispatcher refuses
+     * the call with `capability_disabled` (defence in depth — the Python side also drops the grant).
+     */
+    val METHOD_CAPABILITY: Map<String, String> = mapOf(
+        "notifications_list" to "observe_notifications",
+        "notifications_reply" to "notifications_reply",
+        "notifications_dismiss" to "notifications_dismiss",
+    )
+
+    /**
+     * A per-method gate for [com.phonectl.companion.transport.Dispatcher]: returns
+     * `"capability_disabled"` when the method's controlling toggle is off, else null (allowed).
+     * Methods absent from [METHOD_CAPABILITY] are always allowed.
+     */
+    fun methodGate(state: TrustState): (String) -> String? = gate@{ method ->
+        val key = METHOD_CAPABILITY[method] ?: return@gate null
+        if (state.isCapabilityEnabled(key)) null else "capability_disabled"
     }
 }
 

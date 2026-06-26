@@ -35,7 +35,7 @@ class HandshakeTest {
     }
 
     @Test
-    fun handshakeAdvertisesAllMvpKeysEnabledByDefault() {
+    fun handshakeAdvertisesAllKeysEnabledByDefault() {
         val data = handshake(FakeTrustState())
         assertEquals(1, data.getInt("version"))
         assertFalse(data.getBoolean("stopped"))
@@ -43,9 +43,28 @@ class HandshakeTest {
         val expected = setOf(
             "observe_ui_native", "observe_ui_events", "act_gesture_native",
             "act_set_text_native", "act_semantic_action",
+            "observe_notifications", "notifications_wait", "notifications_reply",
+            "notifications_dismiss",
         )
         assertEquals(expected, caps.keys().asSequence().toSet())
         for (key in expected) assertTrue("$key should default enabled", caps.getBoolean(key))
+    }
+
+    @Test
+    fun handshakeAdvertisesTheFourNotificationKeysEnabledByDefault() {
+        val caps = handshake(FakeTrustState()).getJSONObject("capabilities")
+        for (key in Capabilities.NOTIFICATION_KEYS) {
+            assertTrue("$key should be present", caps.has(key))
+            assertTrue("$key should default enabled", caps.getBoolean(key))
+        }
+    }
+
+    @Test
+    fun disabledNotificationToggleFlipsHandshakeBool() {
+        val data = handshake(FakeTrustState(disabled = setOf("notifications_reply")))
+        val caps = data.getJSONObject("capabilities")
+        assertFalse(caps.getBoolean("notifications_reply"))
+        assertTrue(caps.getBoolean("observe_notifications"))
     }
 
     @Test

@@ -1,7 +1,9 @@
 package com.phonectl.companion.ui
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.provider.Settings
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
@@ -9,6 +11,7 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
 import com.phonectl.companion.R
 import com.phonectl.companion.service.CompanionForegroundService
+import com.phonectl.companion.service.CompanionNotificationListenerService
 import com.phonectl.companion.state.SharedPrefsTrustState
 
 /**
@@ -29,6 +32,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     class SettingsFragment : PreferenceFragmentCompat() {
+
+        /** The notification-access hint, refreshed in onResume after the user returns from Settings. */
+        private var notifAccessPref: Preference? = null
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             val ctx = preferenceManager.context
@@ -51,6 +57,23 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 )
             }
+
+            // --- Notification access (grant guidance) ---
+            val notifSetup = PreferenceCategory(ctx).apply {
+                title = getString(R.string.prefs_notif_setup_title)
+            }
+            screen.addPreference(notifSetup)
+            notifAccessPref = Preference(ctx).apply {
+                title = getString(R.string.pref_notif_access_title)
+                isPersistent = false
+                setOnPreferenceClickListener {
+                    runCatching {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }
+                    true
+                }
+            }
+            notifSetup.addPreference(notifAccessPref!!)
 
             // --- Emergency stop ---
             val control = PreferenceCategory(ctx).apply {
@@ -95,19 +118,35 @@ class SettingsActivity : AppCompatActivity() {
             preferenceScreen = screen
         }
 
+        override fun onResume() {
+            super.onResume()
+            // Grant state can change while the user is in system Settings — refresh on return.
+            notifAccessPref?.summary = getString(
+                if (CompanionNotificationListenerService.isAccessGranted(requireContext()))
+                    R.string.pref_notif_access_granted
+                else
+                    R.string.pref_notif_access_missing
+            )
+        }
+
         companion object {
-            // Order mirrors foreground-service SPEC §6 / Capabilities.MVP_KEYS.
+            // Order mirrors foreground-service SPEC §6 / Capabilities.ALL_KEYS.
             private val CAPABILITY_LABELS = listOf(
                 "observe_ui_native" to R.string.cap_observe_ui_native,
                 "observe_ui_events" to R.string.cap_observe_ui_events,
                 "act_gesture_native" to R.string.cap_act_gesture_native,
                 "act_set_text_native" to R.string.cap_act_set_text_native,
                 "act_semantic_action" to R.string.cap_act_semantic_action,
+                "observe_notifications" to R.string.cap_observe_notifications,
+                "notifications_wait" to R.string.cap_notifications_wait,
+                "notifications_reply" to R.string.cap_notifications_reply,
+                "notifications_dismiss" to R.string.cap_notifications_dismiss,
             )
 
             private val TRUST_SECTIONS = listOf(
                 R.string.trust_read_title to R.string.trust_read_summary,
                 R.string.trust_control_title to R.string.trust_control_summary,
+                R.string.trust_notif_title to R.string.trust_notif_summary,
                 R.string.trust_local_title to R.string.trust_local_summary,
                 R.string.trust_audit_title to R.string.trust_audit_summary,
                 R.string.trust_warn_title to R.string.trust_warn_summary,
