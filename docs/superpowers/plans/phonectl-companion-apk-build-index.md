@@ -28,14 +28,16 @@ UX. Distribution is a **CI debug-APK artifact only** — no signed-release/Play 
 
 | Phase | Plan | Scope | Status |
 |---|---|---|---|
-| 1 | `phonectl-plan-4.5-accessibility-companion-apk-mvp.md` | Gradle/CI scaffold, loopback transport, emergency-stop/trust, AccessibilityService | 📝 written |
-| 2 | `phonectl-plan-4.6-notification-listener-companion.md` | NotificationListenerService methods + gating + toggles | 📝 written |
-| 3 | `phonectl-plan-4.7-ocr-companion.md` | ML-Kit OCR `ocr_image` + `observe_ocr` gate | 📝 written |
-| 4 | `phonectl-plan-4.8-companion-integration-and-validation.md` | Guarded-app/payment hardening, lifecycle hardening, on-device smoke, docs | 📝 written |
+| 1 | `phonectl-plan-4.5-accessibility-companion-apk-mvp.md` | Gradle/CI scaffold, loopback transport, emergency-stop/trust, AccessibilityService | ✅ done |
+| 2 | `phonectl-plan-4.6-notification-listener-companion.md` | NotificationListenerService methods + gating + toggles | ✅ done |
+| 3 | `phonectl-plan-4.7-ocr-companion.md` | ML-Kit OCR `ocr_image` + `observe_ocr` gate | ✅ done |
+| 4 | `phonectl-plan-4.8-companion-integration-and-validation.md` | Guarded-app/payment hardening, lifecycle hardening, on-device smoke, docs | ✅ done (code + docs; on-device smoke ⏳ NOT RUN — needs hardware) |
 
 Phase 1 (Plan 4.5) already existed and is **kept unchanged** — it is the MVP loop. Phases 2–4 are the
-follow-on cuts that complete the app. Execute 1 → 2 → 3 → 4; each phase keeps CI green and the Python
-suite green before the next begins.
+follow-on cuts that complete the app. Executed 1 → 2 → 3 → 4; each phase kept CI green and the Python
+suite green before the next began. The companion APK is **shipped** (CI debug-APK artifact); the only
+outstanding item is the ROM-specific on-device smoke matrix in Plan 4.8 Task 3, which requires the
+physical device and has not been run.
 
 ## Shared toolchain & layout decisions (apply to every phase)
 

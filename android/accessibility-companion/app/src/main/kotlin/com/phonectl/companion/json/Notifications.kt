@@ -83,4 +83,13 @@ object Notifications {
         if (items.none { it.key == key })
             throw MethodException("not_found", "no active notification for the given key")
     }
+
+    /**
+     * The source package of the active notification with [key], or null if none matches. The
+     * service feeds this to [com.phonectl.companion.state.ActionGate] so `notifications_reply` is
+     * refused (`guarded_action`) when the notification belongs to a guarded app (SPEC §7.6). Pure
+     * so the guarded-reply contract is JVM-tested.
+     */
+    fun packageForKey(items: List<NotifData>, key: String): String? =
+        items.firstOrNull { it.key == key }?.pkg
 }

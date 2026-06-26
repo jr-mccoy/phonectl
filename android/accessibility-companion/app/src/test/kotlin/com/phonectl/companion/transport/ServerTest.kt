@@ -106,4 +106,23 @@ class ServerTest {
         val server = Server(port = 0, dispatcher = Dispatcher(emptyMap()), host = "10.0.0.5")
         assertThrows(IllegalArgumentException::class.java) { server.start() }
     }
+
+    @Test
+    fun idleConnectionIsClosedAfterTimeout() {
+        // SPEC §9: an idle connection is closed after idleTimeoutMs. Drive a short timeout and
+        // assert the server-side EOF (readLine -> null) arrives without the client sending anything.
+        val server = Server(port = 0, dispatcher = Dispatcher(emptyMap()), idleTimeoutMs = 300)
+        server.start()
+        try {
+            Socket().use { sock ->
+                sock.connect(InetSocketAddress("127.0.0.1", server.boundPort), 2000)
+                sock.soTimeout = 4000 // client read timeout well past the 300ms server idle close
+                val reader = BufferedReader(InputStreamReader(sock.getInputStream(), Charsets.UTF_8))
+                // Send nothing — the server should time out, close the socket, and the client sees EOF.
+                assertNull(reader.readLine())
+            }
+        } finally {
+            server.stop()
+        }
+    }
 }

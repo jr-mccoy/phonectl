@@ -12,6 +12,7 @@ import android.service.notification.StatusBarNotification
 import com.phonectl.companion.json.NotifAction
 import com.phonectl.companion.json.NotifData
 import com.phonectl.companion.json.Notifications
+import com.phonectl.companion.state.ActionGate
 import com.phonectl.companion.state.TrustState
 import com.phonectl.companion.transport.Method
 import com.phonectl.companion.transport.MethodException
@@ -75,13 +76,21 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
     // --- notifications_reply ---
 
-    private fun reply(params: JSONObject): JSONObject {
+    private fun reply(params: JSONObject, state: TrustState): JSONObject {
         val key = params.optString("key", "")
         val text = params.optString("text", "")
         val sbns = activeNotificationsSafe()
+        val datas = sbns.map { toNotifData(it) }
+        // Guarded-app refusal (foreground-service SPEC §7.6): refuse replying to a notification that
+        // belongs to a guarded app. Checked before the resolver so a guarded match returns
+        // guarded_action; an unknown key still falls through to not_found below.
+        val source = Notifications.packageForKey(datas, key)
+        if (ActionGate.isGuarded(source, state.guardedPackages())) {
+            throw MethodException("guarded_action", "reply refused for guarded app '$source'")
+        }
         // Validate (not_found / no_remote_input) against the pure, JVM-tested resolver, then fire
         // the matching live Action — actions[idx] aligns with the serialized order.
-        val idx = Notifications.replyActionIndex(sbns.map { toNotifData(it) }, key)
+        val idx = Notifications.replyActionIndex(datas, key)
         // replyActionIndex guarantees a reply-capable action exists at [idx]; re-guard for nullable.
         val actions = sbns.first { it.key == key }.notification.actions
             ?: throw MethodException("no_remote_input", "notification has no inline-reply action")
@@ -114,16 +123,15 @@ class CompanionNotificationListenerService : NotificationListenerService() {
          * NotificationListenerService-backed method handlers, plugged into the foreground service's
          * dispatcher. Each resolves [instance] lazily; if the listener is not connected the handler
          * raises (becomes a handler_error envelope). Per-method capability gating is applied in the
-         * dispatcher (Plan 4.6 Task 5), not here. [state] is unused today but kept symmetric with
-         * the AccessibilityService factory for future per-handler checks.
+         * dispatcher (Plan 4.6 Task 5); [state] is threaded into `reply` for the guarded-app
+         * refusal (Plan 4.8 / foreground-service SPEC §7.6).
          */
-        @Suppress("UNUSED_PARAMETER")
         fun methods(state: TrustState): Map<String, Method> {
             fun svc(): CompanionNotificationListenerService =
                 instance ?: throw IllegalStateException("notification listener not connected")
             return mapOf(
                 "notifications_list" to { _ -> svc().notificationsList() },
-                "notifications_reply" to { p -> svc().reply(p) },
+                "notifications_reply" to { p -> svc().reply(p, state) },
                 "notifications_dismiss" to { p -> svc().dismiss(p) },
             )
         }

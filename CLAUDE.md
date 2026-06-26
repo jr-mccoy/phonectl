@@ -87,11 +87,15 @@ Phase 6–7 implementation plans (📝 written, not yet executed):
 - `docs/superpowers/plans/phonectl-plan-7.3-low-latency-transport.md`
 - `docs/superpowers/plans/phonectl-plan-7.4-tasker-macrodroid-interop.md`
 
-Android APK design specs (companion app, not yet built):
+Companion APK (Kotlin — `android/accessibility-companion/`) — ✅ **SHIPPED** (CI debug-APK artifact via `.github/workflows/android.yml`; built by Plans 4.5–4.8). `com.phonectl.companion`: loopback NDJSON transport + handshake, AccessibilityService (observe_native/gesture/key/set_text/semantic/launch/screencap/events), NotificationListenerService (list/reply/dismiss), bundled ML-Kit OCR (`ocr_image`), foreground-service + emergency-stop/Quick-Settings tile + per-capability trust UI, guarded-app refusal + password/payment flags, method+outcome-only audit logging. Capability keys advertised in the handshake: `observe_ui_native, observe_ui_events, act_gesture_native, act_set_text_native, act_semantic_action, observe_notifications, notifications_wait, notifications_reply, notifications_dismiss, observe_ocr`. The Python providers degrade cleanly when the APK is absent.
 
-- `android/accessibility-companion/SPEC.md` — AccessibilityService + companion APK
-- `android/foreground-service/SPEC.md` — foreground service transport + emergency-stop UX
-- `docs/superpowers/plans/phonectl-plan-4.5-accessibility-companion-apk-mvp.md` — 📝 native Kotlin build plan executing the two specs above (MVP: transport + emergency-stop/trust + AccessibilityService; notifications 4.2 / OCR 4.4 deferred); GitHub Actions build
+- `docs/superpowers/plans/phonectl-companion-apk-build-index.md` — **build index** (read first); ties the four phase plans to the two specs.
+- `android/accessibility-companion/SPEC.md` — AccessibilityService + Notifications + OCR message contract (design input; code now shipped).
+- `android/foreground-service/SPEC.md` — foreground-service transport + emergency-stop UX (design input; code now shipped).
+- `docs/superpowers/plans/phonectl-plan-4.5-accessibility-companion-apk-mvp.md` — ✅ Phase 1: scaffold/transport/trust/AccessibilityService.
+- `docs/superpowers/plans/phonectl-plan-4.6-notification-listener-companion.md` — ✅ Phase 2: NotificationListenerService.
+- `docs/superpowers/plans/phonectl-plan-4.7-ocr-companion.md` — ✅ Phase 3: bundled ML-Kit OCR.
+- `docs/superpowers/plans/phonectl-plan-4.8-companion-integration-and-validation.md` — ✅ Phase 4: guarded-app/lifecycle hardening + docs (on-device smoke matrix Task 3 ⏳ NOT RUN — needs the physical device).
 
 Superseded plans (traceability only — do not execute):
 
@@ -134,7 +138,7 @@ There is no linter or formatter configured in the plan; do not add one unless th
 
 - The agent lives inside a **PRoot-Distro** inside **Termux** on an **unrooted Android 11+** device. `uid 0` in the distro is proot-root, not device root — assume no root anywhere.
 - ADB connects over **Wireless Debugging** on `127.0.0.1:<port>`. PRoot shares Termux's (and Android's) loopback, so `adb` runs inside the distro and dials adbd directly. If PRoot blocks the connection, the fallback is a thin shim to host Termux's `adb`; the interface above is unchanged.
-- The optional companion APK (not yet built; see `android/`) will communicate over a loopback `SocketTransport` (`providers/transport.py`). The transport degrades cleanly when the APK is absent.
+- The optional companion APK (✅ shipped, Kotlin `com.phonectl.companion`; see `android/`) communicates over a loopback `SocketTransport` (`providers/transport.py`). The transport degrades cleanly when the APK is absent.
 - `PHONECTL_HOME` overrides the config dir (default `~/.config/phonectl`). `daemon.json` is written there by the daemon on startup and used for port discovery.
 
 ## Plan-execution discipline
@@ -153,4 +157,4 @@ Phases 7.1–7.4 follow Phase 6. Phase X (evaluation suite) has no full plan yet
 
 Do not pull work forward across plan boundaries and do not bolt platform concepts onto ad-hoc commands.
 
-The companion **APK itself** (Kotlin — AccessibilityService + foreground service) is a separate native effort scoped by `android/accessibility-companion/SPEC.md` and `android/foreground-service/SPEC.md`; Phase 4 ships only the Python-side provider seam against those specs.
+The companion **APK itself** (Kotlin — AccessibilityService + foreground service) was a separate native effort scoped by `android/accessibility-companion/SPEC.md` and `android/foreground-service/SPEC.md`; it is now ✅ **shipped** (Plans 4.5–4.8, `com.phonectl.companion`, CI debug-APK artifact). Phase 4's Python-side provider seam talks to it over the loopback transport.

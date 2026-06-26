@@ -33,8 +33,17 @@ object Capabilities {
         "notifications_dismiss",
     )
 
+    /**
+     * OCR capability key (Plan 4.7 / accessibility-companion SPEC §7). Default on like the other
+     * keys; gates the `ocr_image` method. The Python OcrProvider is tesseract-first, so this is the
+     * fallback path only — the companion returns *all* regions and Python applies `min_confidence`.
+     */
+    val OCR_KEYS: List<String> = listOf(
+        "observe_ocr",
+    )
+
     /** Every capability key the companion advertises in `handshake.capabilities`. */
-    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS
+    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS + OCR_KEYS
 
     /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
     const val DEFAULT_ENABLED = true
@@ -65,6 +74,7 @@ object Capabilities {
         "notifications_list" to "observe_notifications",
         "notifications_reply" to "notifications_reply",
         "notifications_dismiss" to "notifications_dismiss",
+        "ocr_image" to "observe_ocr",
     )
 
     /**

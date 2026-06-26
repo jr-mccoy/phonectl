@@ -141,12 +141,14 @@ class SettingsActivity : AppCompatActivity() {
                 "notifications_wait" to R.string.cap_notifications_wait,
                 "notifications_reply" to R.string.cap_notifications_reply,
                 "notifications_dismiss" to R.string.cap_notifications_dismiss,
+                "observe_ocr" to R.string.cap_observe_ocr,
             )
 
             private val TRUST_SECTIONS = listOf(
                 R.string.trust_read_title to R.string.trust_read_summary,
                 R.string.trust_control_title to R.string.trust_control_summary,
                 R.string.trust_notif_title to R.string.trust_notif_summary,
+                R.string.trust_ocr_title to R.string.trust_ocr_summary,
                 R.string.trust_local_title to R.string.trust_local_summary,
                 R.string.trust_audit_title to R.string.trust_audit_summary,
                 R.string.trust_warn_title to R.string.trust_warn_summary,

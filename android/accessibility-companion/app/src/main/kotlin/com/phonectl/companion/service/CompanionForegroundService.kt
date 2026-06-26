@@ -66,8 +66,14 @@ class CompanionForegroundService : Service() {
         methods.putAll(CompanionAccessibilityService.methods(state))
         // NotificationListenerService methods (Plan 4.6) over the same loopback transport.
         methods.putAll(CompanionNotificationListenerService.methods(state))
-        // Per-capability gate refuses a method whose toggle the user switched off.
-        val srv = Server(port = port, dispatcher = Dispatcher(methods, Capabilities.methodGate(state)))
+        // Bundled ML-Kit OCR fallback (Plan 4.7) — no service instance needed.
+        methods.putAll(OcrHandler.methods())
+        // Per-capability gate refuses a method whose toggle the user switched off. The audit log
+        // sink records method + outcome only — never request payloads (SPEC §9).
+        val dispatcher = Dispatcher(methods, Capabilities.methodGate(state)) { line ->
+            android.util.Log.i(TRANSPORT_LOG_TAG, line)
+        }
+        val srv = Server(port = port, dispatcher = dispatcher)
         runCatching { srv.start() }.onSuccess { server = srv }
     }
 
@@ -133,6 +139,9 @@ class CompanionForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "phonectl_automation"
         const val NOTIF_ID = 0x9C7 // arbitrary stable id
+
+        /** Logcat tag for the transport audit line (method + outcome only — never payloads). */
+        const val TRANSPORT_LOG_TAG = "phonectl-companion"
 
         const val ACTION_START = "com.phonectl.companion.action.START"
         const val ACTION_STOP = "com.phonectl.companion.action.STOP"

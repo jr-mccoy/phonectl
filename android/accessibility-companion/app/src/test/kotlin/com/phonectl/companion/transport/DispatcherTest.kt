@@ -120,6 +120,50 @@ class DispatcherTest {
         assertEquals("unknown_method", resp.getJSONObject("error").getString("code"))
     }
 
+    // --- no-payload logging (Plan 4.8 Task 2 / SPEC §9) ---
+
+    @Test
+    fun logRecordsMethodAndOkOutcomeWithoutPayload() {
+        val logs = mutableListOf<String>()
+        val methods = mapOf<String, Method>(
+            "set_text" to { _ -> JSONObject().put("applied", true) }
+        )
+        val d = Dispatcher(methods, log = { logs.add(it) })
+        // The typed text must never reach the log; only method + outcome do.
+        d.handleLine(request("set_text", JSONObject().put("text", "hunter2-secret")))
+        assertTrue("expected a method=set_text outcome=ok line, got $logs",
+            logs.any { it.contains("method=set_text") && it.contains("outcome=ok") })
+        assertFalse("payload leaked into log: $logs", logs.any { it.contains("hunter2-secret") })
+    }
+
+    @Test
+    fun logRecordsErrorOutcomeAndCodeWithoutPayload() {
+        val logs = mutableListOf<String>()
+        val methods = mapOf<String, Method>(
+            "notifications_reply" to { _ -> throw MethodException("guarded_action", "refused") }
+        )
+        val d = Dispatcher(methods, log = { logs.add(it) })
+        d.handleLine(request("notifications_reply", JSONObject().put("text", "topsecret-reply")))
+        assertTrue("expected outcome=err code=guarded_action, got $logs",
+            logs.any {
+                it.contains("method=notifications_reply") && it.contains("outcome=err") &&
+                    it.contains("code=guarded_action")
+            })
+        assertFalse("payload leaked into log: $logs", logs.any { it.contains("topsecret-reply") })
+    }
+
+    @Test
+    fun unknownMethodAndVersionMismatchAreLoggedAsErrors() {
+        val logs = mutableListOf<String>()
+        val d = Dispatcher(emptyMap(), log = { logs.add(it) })
+        d.handleLine(request("nope"))
+        assertTrue(logs.any { it.contains("outcome=err") && it.contains("code=unknown_method") })
+        val v2 = JSONObject().put("version", 2).put("request_id", "v2")
+            .put("method", "ping").put("params", JSONObject()).toString()
+        d.handleLine(v2)
+        assertTrue(logs.any { it.contains("outcome=err") && it.contains("code=version_mismatch") })
+    }
+
     // A bare RuntimeException helper so the test reads like the Python `raise RuntimeError`.
     private class RuntimeError(message: String) : RuntimeException(message)
 }

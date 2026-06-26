@@ -24,6 +24,7 @@
     <string name="cap_notifications_wait">Wait for a matching notification</string>
     <string name="cap_notifications_reply">Reply to inline-reply notifications</string>
     <string name="cap_notifications_dismiss">Dismiss notifications</string>
+    <string name="cap_observe_ocr">Read text from screenshots (on-device OCR)</string>
 
     <!-- Settings: notification-listener access -->
     <string name="prefs_notif_setup_title">Notification access</string>
@@ -45,6 +46,8 @@
     <string name="trust_control_summary">Touch gestures and text insertion — only on behalf of phonectl CLI/MCP commands, never autonomously.</string>
     <string name="trust_notif_title">Notifications</string>
     <string name="trust_notif_summary">Notifications read: title, text, and action labels of active notifications; replies are sent only on behalf of phonectl commands.</string>
+    <string name="trust_ocr_title">OCR</string>
+    <string name="trust_ocr_summary">OCR reads text from a screenshot you captured; images never leave the device (on-device ML-Kit). Used only as a fallback when the Tesseract binary is not installed.</string>
     <string name="trust_local_title">Local only</string>
     <string name="trust_local_summary">The transport server binds 127.0.0.1 only. No data leaves the device over the network.</string>
     <string name="trust_audit_title">Audit visibility</string>

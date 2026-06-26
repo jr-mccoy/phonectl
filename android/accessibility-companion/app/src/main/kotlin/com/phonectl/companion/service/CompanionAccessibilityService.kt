@@ -97,6 +97,18 @@ class CompanionAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Refuse `launch` when the *target* package is guarded (foreground-service SPEC §7.6). Unlike
+     * [requireUnguarded], the guarded package here is the one the request asks to open, not the
+     * current foreground app — launching a guarded app is itself an action we refuse.
+     */
+    private fun requireUnguardedTarget(params: JSONObject, state: TrustState) {
+        val pkg = params.optString("package", "")
+        if (ActionGate.isGuarded(pkg, state.guardedPackages())) {
+            throw MethodException("guarded_action", "launch refused for guarded app '$pkg'")
+        }
+    }
+
     private fun currentPackage(): String? {
         val root = rootInActiveWindow ?: return null
         val pkg = root.packageName?.toString()
@@ -353,7 +365,7 @@ class CompanionAccessibilityService : AccessibilityService() {
                 "key" to { p -> svc().run { requireUnguarded(state); key(p) }; JSONObject().put("applied", true) },
                 "set_text" to { p -> svc().run { requireUnguarded(state); setText(p) }; JSONObject().put("applied", true) },
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
-                "launch" to { p -> svc().launch(p); JSONObject().put("launched", true) },
+                "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p) },
                 "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
             )

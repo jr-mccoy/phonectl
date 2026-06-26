@@ -19,12 +19,18 @@ typealias Method = (JSONObject) -> JSONObject
  *
  * [gate] maps a method name to a blocking error code (or null to allow); it lets the trust layer
  * refuse a method whose per-capability toggle is off (Plan 4.6 / foreground-service SPEC §6)
- * without each handler re-checking. Defaults to ungated. Pure (no Android dependency) so it is
- * exercised by JVM contract tests.
+ * without each handler re-checking. Defaults to ungated.
+ *
+ * [log] receives a one-line audit record per request: the method name and outcome **only** —
+ * `method=<name> outcome=ok` or `method=<name> outcome=err code=<code>`. It is NEVER passed the
+ * request `params` or the response `data`, so typed text / reply bodies cannot reach the log
+ * (foreground-service SPEC §9 / index invariant 5). Defaults to a no-op; the foreground service
+ * wires an `android.util.Log` sink. Pure (no Android dependency) so it is JVM-tested.
  */
 class Dispatcher(
     private val methods: Map<String, Method>,
     private val gate: (String) -> String? = { null },
+    private val log: (String) -> Unit = {},
 ) {
 
     /** Returns the response line to write back, or null if the line should be silently dropped. */
@@ -39,32 +45,38 @@ class Dispatcher(
         }
 
         val requestId = req.opt("request_id")
+        val method = req.optString("method", "")
 
         val version = req.optInt("version", -1)
         if (version != Envelope.VERSION) {
-            return Envelope.error(requestId, "version_mismatch", "unsupported version: $version")
-                .toString()
+            return fail(requestId, method, "version_mismatch", "unsupported version: $version")
         }
 
-        val method = req.optString("method", "")
         val handler = methods[method]
-            ?: return Envelope.error(requestId, "unknown_method", "no handler for '$method'")
-                .toString()
+            ?: return fail(requestId, method, "unknown_method", "no handler for '$method'")
 
         gate(method)?.let { code ->
-            return Envelope.error(requestId, code, "'$method' is disabled in the companion settings")
-                .toString()
+            return fail(requestId, method, code, "'$method' is disabled in the companion settings")
         }
 
         val params = req.optJSONObject("params") ?: JSONObject()
 
         return try {
-            Envelope.success(requestId, handler(params)).toString()
+            val response = Envelope.success(requestId, handler(params)).toString()
+            log("method=$method outcome=ok")
+            response
         } catch (e: MethodException) {
-            Envelope.error(requestId, e.code, e.message ?: e.code).toString()
+            fail(requestId, method, e.code, e.message ?: e.code)
         } catch (e: Throwable) {
-            // Security note (foreground-service SPEC §9): never log request payloads.
-            Envelope.error(requestId, "handler_error", e.message ?: e.toString()).toString()
+            // Security note (foreground-service SPEC §9): the log line carries the code only — never
+            // the exception message, which could echo payload-derived text.
+            fail(requestId, method, "handler_error", e.message ?: e.toString())
         }
+    }
+
+    /** Build an error envelope and emit the method+outcome+code audit line (no payload). */
+    private fun fail(requestId: Any?, method: String, code: String, message: String): String {
+        log("method=$method outcome=err code=$code")
+        return Envelope.error(requestId, code, message).toString()
     }
 }
