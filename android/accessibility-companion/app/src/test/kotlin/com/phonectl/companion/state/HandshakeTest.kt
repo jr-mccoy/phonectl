@@ -45,6 +45,7 @@ class HandshakeTest {
             "act_set_text_native", "act_semantic_action",
             "observe_notifications", "notifications_wait", "notifications_reply",
             "notifications_dismiss",
+            "observe_ocr",
         )
         assertEquals(expected, caps.keys().asSequence().toSet())
         for (key in expected) assertTrue("$key should default enabled", caps.getBoolean(key))
@@ -57,6 +58,13 @@ class HandshakeTest {
             assertTrue("$key should be present", caps.has(key))
             assertTrue("$key should default enabled", caps.getBoolean(key))
         }
+    }
+
+    @Test
+    fun handshakeAdvertisesObserveOcrEnabledByDefault() {
+        val caps = handshake(FakeTrustState()).getJSONObject("capabilities")
+        assertTrue("observe_ocr should be present", caps.has("observe_ocr"))
+        assertTrue("observe_ocr should default enabled", caps.getBoolean("observe_ocr"))
     }
 
     @Test

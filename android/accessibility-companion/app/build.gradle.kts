@@ -51,6 +51,12 @@ dependencies {
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
+    // Bundled on-device Latin text recognition (Plan 4.7) — the only third-party runtime
+    // dependency in the APK. The `text-recognition` artifact ships the model inside the APK
+    // (≈few-MB size cost — see the companion-build index toolchain table), so OCR works offline
+    // with no Play-Services dependency at call time.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
     // org.json ships with the Android platform at runtime; the explicit test
     // dependency provides the real implementation on the JVM unit-test classpath
     // (otherwise android.jar's stub throws). Pure serialization is tested here.
