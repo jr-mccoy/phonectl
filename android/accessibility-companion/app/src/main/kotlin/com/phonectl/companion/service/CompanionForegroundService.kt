@@ -62,8 +62,9 @@ class CompanionForegroundService : Service() {
         val port = Server.DEFAULT_PORT // port override seam (prefs) — default 8765 for MVP
         val methods = HashMap<String, Method>()
         methods.putAll(CoreHandlers.methods(state))
-        // Task 5 plugs the AccessibilityService method handlers into this same map.
         methods.putAll(CompanionAccessibilityService.methods(state))
+        // NotificationListenerService methods (Plan 4.6) over the same loopback transport.
+        methods.putAll(CompanionNotificationListenerService.methods(state))
         val srv = Server(port = port, dispatcher = Dispatcher(methods))
         runCatching { srv.start() }.onSuccess { server = srv }
     }

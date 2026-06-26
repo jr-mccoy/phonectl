@@ -1,0 +1,60 @@
+package com.phonectl.companion.json
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+/**
+ * One notification action: its label and whether it carries a `RemoteInput` (direct-reply).
+ * Plain data so the org.json shape is built and tested without Android's `Notification.Action`.
+ */
+data class NotifAction(val title: String, val remoteInput: Boolean)
+
+/**
+ * A serialization view of one `StatusBarNotification` (accessibility-companion SPEC §6). The
+ * service maps the Android object into this; the JSON builders below are pure and tested against
+ * the Python authority fixture (tests/test_providers_notifications.py::COMPANION_RAW).
+ */
+data class NotifData(
+    val key: String,
+    val pkg: String,
+    val title: String,
+    val text: String,
+    /** `Notification.category`; null serializes to JSON null (the Python side keeps it as None). */
+    val category: String?,
+    /** `StatusBarNotification.postTime`, epoch-ms. */
+    val postTime: Long,
+    val actions: List<NotifAction>,
+)
+
+/**
+ * Pure org.json builders for the `notifications_list` shape. Field-by-field (no reflection mapper)
+ * so the output provably matches COMPANION_RAW. `remote_input` is emitted only when true — matching
+ * the fixture, where the non-reply action is `{"title":"Mark read"}` with the key absent.
+ */
+object Notifications {
+
+    fun action(a: NotifAction): JSONObject {
+        val o = JSONObject().put("title", a.title)
+        if (a.remoteInput) o.put("remote_input", true)
+        return o
+    }
+
+    fun notification(n: NotifData): JSONObject {
+        val actions = JSONArray()
+        for (a in n.actions) actions.put(action(a))
+        return JSONObject()
+            .put("key", n.key)
+            .put("package", n.pkg)
+            .put("title", n.title)
+            .put("text", n.text)
+            .put("category", n.category ?: JSONObject.NULL)
+            .put("post_time", n.postTime)
+            .put("actions", actions)
+    }
+
+    fun list(items: List<NotifData>): JSONObject {
+        val arr = JSONArray()
+        for (n in items) arr.put(notification(n))
+        return JSONObject().put("notifications", arr)
+    }
+}
