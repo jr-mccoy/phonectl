@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">phonectl companion</string>
+    <string name="tile_label">phonectl</string>
+
+    <!-- Foreground service notification -->
+    <string name="notif_channel_name">phonectl automation</string>
+    <string name="notif_channel_desc">Ongoing control for the phonectl automation surface</string>
+    <string name="notif_running_title">phonectl is active</string>
+    <string name="notif_running_text">Automation surface running. Tap Stop to halt all actions.</string>
+    <string name="notif_action_stop">Stop phonectl</string>
+    <string name="notif_action_resume">Resume</string>
+    <string name="notif_stopped_title">phonectl stopped</string>
+    <string name="notif_stopped_text">All automation is blocked. Tap Resume to allow actions again.</string>
+
+    <!-- Settings: capability toggles -->
+    <string name="prefs_capabilities_title">Capabilities</string>
+    <string name="cap_observe_ui_native">Read on-screen UI elements</string>
+    <string name="cap_observe_ui_events">Stream real-time UI change events</string>
+    <string name="cap_act_gesture_native">Perform touch gestures</string>
+    <string name="cap_act_set_text_native">Fill text fields</string>
+    <string name="cap_act_semantic_action">Trigger semantic accessibility actions</string>
+
+    <!-- Settings: emergency stop -->
+    <string name="prefs_control_title">Control</string>
+    <string name="pref_stopped_title">Emergency stop</string>
+    <string name="pref_stopped_on">Stopped — all automation blocked. Tap to resume.</string>
+    <string name="pref_stopped_off">Active — automation allowed. Tap to stop.</string>
+
+    <!-- Trust &amp; Safety section (foreground-service SPEC §7) -->
+    <string name="prefs_trust_title">Trust &amp; Safety</string>
+    <string name="trust_read_title">What is read</string>
+    <string name="trust_read_summary">The on-screen UI tree (element text, resource IDs, bounds, clickability). Passwords are never read from password fields.</string>
+    <string name="trust_control_title">What is controlled</string>
+    <string name="trust_control_summary">Touch gestures and text insertion — only on behalf of phonectl CLI/MCP commands, never autonomously.</string>
+    <string name="trust_local_title">Local only</string>
+    <string name="trust_local_summary">The transport server binds 127.0.0.1 only. No data leaves the device over the network.</string>
+    <string name="trust_audit_title">Audit visibility</string>
+    <string name="trust_audit_summary">Every action is logged to ~/.config/phonectl/actions.jsonl on the Python side. You can read this log at any time.</string>
+    <string name="trust_warn_title">Password &amp; payment warnings</string>
+    <string name="trust_warn_summary">Password fields and payment screens are flagged so the phonectl policy layer can deny or confirm-gate actions. Guarded apps refuse gestures entirely.</string>
+</resources>
