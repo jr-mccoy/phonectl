@@ -77,14 +77,16 @@ class NotificationsContractTest {
 
     @Test
     fun replyActionIndexFindsFirstRemoteInputAction() {
-        // Mark-read precedes a second reply-capable action to prove "first with RemoteInput" wins.
-        val twoReplies = alice.copy(
+        // A leading non-reply action proves "first action with RemoteInput" wins (index 1, not 0).
+        // Distinct key so the resolver selects this notification, not `alice`.
+        val laterReply = alice.copy(
+            key = "1|com.msg|99|tag|10123",
             actions = listOf(
                 NotifAction("Mark read", remoteInput = false),
                 NotifAction("Reply", remoteInput = true),
             )
         )
-        assertEquals(1, Notifications.replyActionIndex(listOf(alice, twoReplies), twoReplies.key))
+        assertEquals(1, Notifications.replyActionIndex(listOf(alice, laterReply), laterReply.key))
         assertEquals(0, Notifications.replyActionIndex(listOf(alice), alice.key))
     }
 
