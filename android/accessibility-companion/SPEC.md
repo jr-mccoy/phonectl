@@ -403,7 +403,9 @@ companion round trip needed); it only falls back to this method when `tesseract`
 
 ## 8. Non-goals (Plan 4.1 scope)
 
-- The **Kotlin implementation** — this spec is the design input; code is built separately.
+- The **Kotlin implementation** — this spec was the design input; the code now ships, built by
+  Plans 4.5–4.8 (`com.phonectl.companion`, CI debug-APK artifact). See
+  `docs/superpowers/plans/phonectl-companion-apk-build-index.md`.
 - **`SocketTransport`** — specified in Plan 4.3.
 - **Multi-touch / pinch** — the `gesture` method is extensible; pinch is Phase 7 if needed.
 - **Network exposure** — local-only, explicitly out of scope.
