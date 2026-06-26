@@ -17,7 +17,7 @@ interface TrustState {
     /** Packages on which gesture/text actions are refused with `guarded_action` (SPEC §7.6). */
     fun guardedPackages(): Set<String> = emptySet()
 
-    /** The user-enabled map across all advertised MVP capability keys. */
+    /** The user-enabled map across every advertised capability key (MVP + notifications). */
     fun enabledCapabilityMap(): Map<String, Boolean> =
-        Capabilities.MVP_KEYS.associateWith { isCapabilityEnabled(it) }
+        Capabilities.ALL_KEYS.associateWith { isCapabilityEnabled(it) }
 }

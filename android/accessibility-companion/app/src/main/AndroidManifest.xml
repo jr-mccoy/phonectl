@@ -47,6 +47,20 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- NotificationListenerService — surfaces active notifications + inline reply/dismiss
+             over the same loopback transport (accessibility-companion SPEC §6). The
+             BIND_NOTIFICATION_LISTENER_SERVICE permission + intent filter are required for the
+             platform to bind it; the user must additionally grant access in Settings. -->
+        <service
+            android:name=".service.CompanionNotificationListenerService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- Quick-Settings tile — flips the stopped flag (foreground-service SPEC §5). -->
         <service
             android:name=".service.StopTileService"

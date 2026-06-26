@@ -22,6 +22,20 @@ object Capabilities {
         "act_semantic_action",
     )
 
+    /**
+     * NotificationListenerService capability keys (Plan 4.6 / foreground-service SPEC §6). Default
+     * on like the MVP keys; the Python side intersects them with the technically-supported set.
+     */
+    val NOTIFICATION_KEYS: List<String> = listOf(
+        "observe_notifications",
+        "notifications_wait",
+        "notifications_reply",
+        "notifications_dismiss",
+    )
+
+    /** Every capability key the companion advertises in `handshake.capabilities`. */
+    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS
+
     /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
     const val DEFAULT_ENABLED = true
 
@@ -33,7 +47,7 @@ object Capabilities {
      */
     fun handshakeData(enabled: Map<String, Boolean>, stopped: Boolean): JSONObject {
         val caps = JSONObject()
-        for (key in MVP_KEYS) {
+        for (key in ALL_KEYS) {
             caps.put(key, enabled[key] ?: DEFAULT_ENABLED)
         }
         return JSONObject()
