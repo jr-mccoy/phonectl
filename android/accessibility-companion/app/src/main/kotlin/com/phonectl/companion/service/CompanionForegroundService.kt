@@ -66,6 +66,8 @@ class CompanionForegroundService : Service() {
         methods.putAll(CompanionAccessibilityService.methods(state))
         // NotificationListenerService methods (Plan 4.6) over the same loopback transport.
         methods.putAll(CompanionNotificationListenerService.methods(state))
+        // Bundled ML-Kit OCR fallback (Plan 4.7) — no service instance needed.
+        methods.putAll(OcrHandler.methods())
         // Per-capability gate refuses a method whose toggle the user switched off.
         val srv = Server(port = port, dispatcher = Dispatcher(methods, Capabilities.methodGate(state)))
         runCatching { srv.start() }.onSuccess { server = srv }
