@@ -2,7 +2,7 @@
 <!-- accessibility-companion SPEC §1: retrieve interactive window content + report view ids,
      can perform gestures, no key-event filtering. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityFlags="flagRetrieveInteractiveWindowContent|flagReportViewIds"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canPerformGestures="true"
