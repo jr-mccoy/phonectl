@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "breadcrumbs": {
+      "type": "stdio",
+      "command": "breadcrumbs-mcp",
+      "args": [],
+      "env": {
+        "BREADCRUMBS_PROJECT": "${CLAUDE_PROJECT_DIR:-.}"
+      }
+    }
+  }
+}
