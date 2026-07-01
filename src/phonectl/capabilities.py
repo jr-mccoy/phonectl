@@ -41,6 +41,7 @@ CAPABILITY_KEYS = (
     "notifications_dismiss",
     # Phase 4.4 addition (optional OCR)
     "observe_ocr",
+    "observe_ocr_screen",
 )
 
 

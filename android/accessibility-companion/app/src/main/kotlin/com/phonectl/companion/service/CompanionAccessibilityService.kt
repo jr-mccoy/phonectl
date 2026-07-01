@@ -31,6 +31,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * The AccessibilityService surface (accessibility-companion SPEC §3): observe_native, gesture,
@@ -274,7 +275,35 @@ class CompanionAccessibilityService : AccessibilityService() {
         }
     }
 
-    // --- screencap ---
+    // --- screencap / screenshot-backed OCR ---
+
+    private fun captureScreenshotBitmap(): Bitmap {
+        val latch = CountDownLatch(1)
+        val bitmapRef = AtomicReference<Bitmap?>(null)
+        takeScreenshot(
+            Display.DEFAULT_DISPLAY,
+            { it.run() },
+            object : AccessibilityService.TakeScreenshotCallback {
+                override fun onSuccess(result: AccessibilityService.ScreenshotResult) {
+                    try {
+                        val bitmap = Bitmap.wrapHardwareBuffer(result.hardwareBuffer, result.colorSpace)
+                        bitmapRef.set(bitmap?.copy(Bitmap.Config.ARGB_8888, false))
+                    } finally {
+                        result.hardwareBuffer.close()
+                        latch.countDown()
+                    }
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    latch.countDown()
+                }
+            },
+        )
+        latch.await(5, TimeUnit.SECONDS)
+        return bitmapRef.get() ?: throw MethodException("screencap_unavailable", "screenshot failed")
+    }
+
+    private fun ocrScreen(): JSONObject = OcrHandler.ocrBitmap(captureScreenshotBitmap())
 
     private fun screencap(params: JSONObject): JSONObject {
         val path = params.optString("path", "")
@@ -367,6 +396,7 @@ class CompanionAccessibilityService : AccessibilityService() {
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p) },
+                "ocr_screen" to { _ -> svc().ocrScreen() },
                 "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
             )
         }

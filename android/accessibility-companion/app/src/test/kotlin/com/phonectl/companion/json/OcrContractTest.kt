@@ -65,7 +65,8 @@ class OcrContractTest {
     // --- observe_ocr gate (Task 3) ---
 
     private val ocrMethods = mapOf<String, Method>(
-        "ocr_image" to { _ -> JSONObject().put("regions", org.json.JSONArray()) }
+        "ocr_image" to { _ -> JSONObject().put("regions", org.json.JSONArray()) },
+        "ocr_screen" to { _ -> JSONObject().put("regions", org.json.JSONArray()) },
     )
 
     private fun request(method: String): String = JSONObject()
@@ -85,5 +86,28 @@ class OcrContractTest {
         val gate = Capabilities.methodGate(TrustStateStub())
         val resp = JSONObject(Dispatcher(ocrMethods, gate).handleLine(request("ocr_image"))!!)
         assertTrue(resp.getBoolean("ok"))
+    }
+
+    @Test
+    fun ocrScreenResponseShapeMatchesOcrImageEnvelope() {
+        val gate = Capabilities.methodGate(TrustStateStub())
+        val resp = JSONObject(Dispatcher(ocrMethods, gate).handleLine(request("ocr_screen"))!!)
+        assertTrue(resp.getBoolean("ok"))
+        assertTrue(resp.getJSONObject("data").has("regions"))
+    }
+
+    @Test
+    fun disabledObserveOcrScreenYieldsCapabilityDisabled() {
+        val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf("observe_ocr_screen")))
+        val resp = JSONObject(Dispatcher(ocrMethods, gate).handleLine(request("ocr_screen"))!!)
+        assertFalse(resp.getBoolean("ok"))
+        assertEquals("capability_disabled", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun handshakeAdvertisesOcrScreenCapability() {
+        val caps = Capabilities.handshakeData(emptyMap(), stopped = false).getJSONObject("capabilities")
+        assertTrue(caps.has("observe_ocr_screen"))
+        assertTrue(caps.getBoolean("observe_ocr_screen"))
     }
 }

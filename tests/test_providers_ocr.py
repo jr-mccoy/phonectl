@@ -36,6 +36,49 @@ class FakeRegistry:
         return path
 
 
+def test_ocr_screen_prefers_companion_screen_when_advertised():
+    reg = FakeRegistry()
+
+    def screen_handler(params):
+        assert params == {}
+        return {"regions": [{"text": "Direct", "bounds": [1, 2, 3, 4], "confidence": 0.9}]}
+
+    t = LoopbackTransport({
+        "handshake": lambda _p: {
+            "version": 1,
+            "capabilities": {"observe_ocr": True, "observe_ocr_screen": True},
+            "stopped": False,
+        },
+        "ocr_screen": screen_handler,
+    })
+    p = OcrProvider(runner=TsvRunner(TSV), which=_which_found, transport=t)
+
+    out = p.ocr_screen(reg)
+
+    assert reg.captured is None
+    assert out["source"] == "mlkit"
+    assert out["regions"][0]["text"] == "Direct"
+
+
+def test_ocr_screen_falls_back_to_screencap_when_screen_not_advertised(tmp_path):
+    reg = FakeRegistry()
+    r = TsvRunner(TSV)
+    t = LoopbackTransport({
+        "handshake": lambda _p: {
+            "version": 1,
+            "capabilities": {"observe_ocr": True},
+            "stopped": False,
+        },
+    })
+    p = OcrProvider(runner=r, which=_which_found, transport=t)
+
+    out = p.ocr_screen(reg, _tmp=lambda suffix=".png": (0, str(tmp_path / "s.png")))
+
+    assert reg.captured == str(tmp_path / "s.png")
+    assert out["source"] == "tesseract"
+    assert out["regions"][0]["text"] == "Hello"
+
+
 # --- Task 1: discovery ---
 
 def test_is_available_with_local_tesseract():

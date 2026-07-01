@@ -24,7 +24,8 @@
     <string name="cap_notifications_wait">Wait for a matching notification</string>
     <string name="cap_notifications_reply">Reply to inline-reply notifications</string>
     <string name="cap_notifications_dismiss">Dismiss notifications</string>
-    <string name="cap_observe_ocr">Read text from screenshots (on-device OCR)</string>
+    <string name="cap_observe_ocr">Read text from screenshot files (on-device OCR)</string>
+    <string name="cap_observe_ocr_screen">Read text from the current screen without saving screenshots</string>
 
     <!-- Settings: notification-listener access -->
     <string name="prefs_notif_setup_title">Notification access</string>
