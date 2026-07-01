@@ -105,6 +105,35 @@ class DispatcherTest {
     }
 
     @Test
+    fun disabledAccessibilityCapabilitiesYieldCapabilityDisabled() {
+        val methods = mapOf<String, Method>(
+            "observe_native" to { _ -> JSONObject().put("observed", true) },
+            "events" to { _ -> JSONObject().put("events", true) },
+            "gesture" to { _ -> JSONObject().put("gestured", true) },
+            "key" to { _ -> JSONObject().put("keyed", true) },
+            "set_text" to { _ -> JSONObject().put("set", true) },
+            "semantic" to { _ -> JSONObject().put("semantic", true) },
+            "launch" to { _ -> JSONObject().put("launched", true) },
+        )
+        val methodDisabledCapability = mapOf(
+            "observe_native" to "observe_ui_native",
+            "events" to "observe_ui_events",
+            "gesture" to "act_gesture_native",
+            "key" to "act_gesture_native",
+            "set_text" to "act_set_text_native",
+            "semantic" to "act_semantic_action",
+            "launch" to "launch_app",
+        )
+
+        for ((method, disabledCapability) in methodDisabledCapability) {
+            val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf(disabledCapability)))
+            val resp = JSONObject(Dispatcher(methods, gate).handleLine(request(method))!!)
+            assertFalse("$method should be blocked by $disabledCapability", resp.getBoolean("ok"))
+            assertEquals("capability_disabled", resp.getJSONObject("error").getString("code"))
+        }
+    }
+
+    @Test
     fun enabledCapabilityPassesThroughGate() {
         val gate = Capabilities.methodGate(TrustStateStub())
         val resp = JSONObject(Dispatcher(replyMethods, gate).handleLine(request("notifications_reply"))!!)
