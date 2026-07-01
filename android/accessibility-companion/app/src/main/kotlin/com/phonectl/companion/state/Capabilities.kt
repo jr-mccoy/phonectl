@@ -41,6 +41,7 @@ object Capabilities {
      */
     val OCR_KEYS: List<String> = listOf(
         "observe_ocr",
+        "observe_ocr_screen",
     )
 
     /** Every capability key the companion advertises in `handshake.capabilities`. */
@@ -83,6 +84,7 @@ object Capabilities {
         "notifications_reply" to "notifications_reply",
         "notifications_dismiss" to "notifications_dismiss",
         "ocr_image" to "observe_ocr",
+        "ocr_screen" to "observe_ocr_screen",
     )
 
     /**

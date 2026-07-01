@@ -1,5 +1,6 @@
 package com.phonectl.companion.service
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
@@ -49,6 +50,11 @@ object OcrHandler {
         val bitmap = BitmapFactory.decodeFile(path)
             ?: throw MethodException("screencap_unavailable", "cannot decode image at $path")
 
+        return ocrBitmap(bitmap)
+    }
+
+    /** Run OCR over an in-memory screenshot bitmap without requiring or creating a PNG file. */
+    fun ocrBitmap(bitmap: Bitmap): JSONObject {
         val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val text = try {
             Tasks.await(

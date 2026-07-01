@@ -143,6 +143,7 @@ class SettingsActivity : AppCompatActivity() {
                 "notifications_reply" to R.string.cap_notifications_reply,
                 "notifications_dismiss" to R.string.cap_notifications_dismiss,
                 "observe_ocr" to R.string.cap_observe_ocr,
+                "observe_ocr_screen" to R.string.cap_observe_ocr_screen,
             )
 
             private val TRUST_SECTIONS = listOf(

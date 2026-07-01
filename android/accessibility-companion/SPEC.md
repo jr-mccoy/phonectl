@@ -366,6 +366,16 @@ currently active.
 
 ## 7. ML-Kit OCR method (Plan 4.4)
 
+### `ocr_screen`
+
+Request params: `{}`. Captures the current display with Android `takeScreenshot()` inside the accessibility companion, feeds the in-memory bitmap directly to ML Kit, and returns the same response shape as `ocr_image`:
+
+```json
+{ "regions": [] }
+```
+
+This path does not persist a screenshot and should be preferred by clients when the handshake advertises `observe_ocr_screen: true`.
+
 ### `ocr_image`
 
 Params: `{"path": "<absolute path on device — existing PNG>"}`
@@ -392,12 +402,10 @@ Implementation: read the PNG at `path` using `BitmapFactory.decodeFile`, run
 `TextBlock`/`TextLine`/`TextElement` as a flat region list. The Python caller receives the
 regions and applies a `min_confidence` filter.
 
-**Capability toggle:** `observe_ocr` must be `true` in the handshake's capabilities map for this
-method to be dispatched; when the toggle is off, the companion returns `ok: false` with
+**Capability toggle:** `observe_ocr_screen` gates `ocr_screen`; `observe_ocr` must be `true` in the handshake's capabilities map for `ocr_image` to be dispatched; when the toggle is off, the companion returns `ok: false` with
 `code: "capability_disabled"`.
 
-**Source precedence:** the Python `OcrProvider` tries the local `tesseract` binary first (no
-companion round trip needed); it only falls back to this method when `tesseract` is absent.
+**Source precedence:** for whole-screen OCR, the Python `OcrProvider` prefers companion `ocr_screen` when advertised to avoid a path-based screenshot handoff. `ocr_image` remains for backward compatibility and for explicit image paths; local Tesseract can still be used when direct companion screen OCR is unavailable.
 
 ---
 
