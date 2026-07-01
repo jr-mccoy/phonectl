@@ -27,15 +27,15 @@ class AccessibilityProvider:
         if not self.is_available():
             return caps_mod.make()
         return caps_mod.make(
-            observe_ui_native=True, observe_ui_events=True,
+            observe_ui_native=True, observe_ui_events=True, persistent_events=True,
             act_set_text_native=True, act_gesture_native=True, act_semantic_action=True,
             observe_ui_tree=True, observe_screenshot=True,
             act_tap=True, act_type=True, act_key=True, launch_app=True,
         )
 
-    def _call(self, method: str, params: dict | None = None) -> dict:
+    def _call(self, method: str, params: dict | None = None, *, timeout: float | None = None) -> dict:
         rid = next_request_id()
-        resp = self._t.request(method, params or {}, request_id=rid, timeout=self._timeout)
+        resp = self._t.request(method, params or {}, request_id=rid, timeout=timeout or self._timeout)
         if resp.get("request_id") != rid:
             raise errors.ObserveError(
                 f"stale companion response: expected {rid}, got {resp.get('request_id')}"
@@ -100,5 +100,18 @@ class AccessibilityProvider:
 
     # --- Task 6: UI event polling ---
 
+    def supports_events_wait(self) -> bool:
+        return bool(self.capabilities().get("persistent_events"))
+
     def poll_events(self, since: int = 0, *, max_events: int = 50) -> dict:
         return self._call("events", {"since": since, "max": max_events})
+
+    def wait_events(self, since: int = 0, *, max_events: int = 50, timeout_ms: int = 1000) -> dict:
+        timeout_ms = max(0, min(int(timeout_ms), 30_000))
+        # Give the socket a small margin beyond the companion's server-side wait timeout.
+        timeout = max(self._timeout, (timeout_ms / 1000.0) + 0.5)
+        return self._call(
+            "events_wait",
+            {"since": since, "max": max_events, "timeout_ms": timeout_ms},
+            timeout=timeout,
+        )

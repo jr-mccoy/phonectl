@@ -24,6 +24,7 @@ class EventRing(private val capacity: Int = 200) {
         val seq = nextSeq++
         buffer.addLast(Event(seq, type, pkg, ts))
         while (buffer.size > capacity) buffer.removeFirst()
+        (this as java.lang.Object).notifyAll()
         return seq
     }
 
@@ -40,8 +41,35 @@ class EventRing(private val capacity: Int = 200) {
         return selected to cursor
     }
 
+    @Synchronized
+    fun waitFor(since: Long, max: Int, timeoutMs: Long): Pair<List<Event>, Long> {
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0L)
+        var result = query(since, max)
+        while (result.first.isEmpty() && timeoutMs > 0L) {
+            val remaining = deadline - System.currentTimeMillis()
+            if (remaining <= 0L) break
+            try {
+                (this as java.lang.Object).wait(remaining)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            result = query(since, max)
+        }
+        return result
+    }
+
     fun queryJson(since: Long, max: Int): JSONObject {
         val (events, cursor) = query(since, max)
+        return toJson(events, cursor)
+    }
+
+    fun waitJson(since: Long, max: Int, timeoutMs: Long): JSONObject {
+        val (events, cursor) = waitFor(since, max, timeoutMs)
+        return toJson(events, cursor)
+    }
+
+    private fun toJson(events: List<Event>, cursor: Long): JSONObject {
         val arr = Json.arr(
             events.map {
                 JSONObject()

@@ -368,6 +368,13 @@ class CompanionAccessibilityService : AccessibilityService() {
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p) },
                 "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
+                "events_wait" to { p ->
+                    svc().events.waitJson(
+                        p.optLong("since", 0),
+                        p.optInt("max", 50),
+                        p.optLong("timeout_ms", 1_000).coerceIn(0L, 30_000L),
+                    )
+                },
             )
         }
 

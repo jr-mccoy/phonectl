@@ -17,6 +17,7 @@ object Capabilities {
     val MVP_KEYS: List<String> = listOf(
         "observe_ui_native",
         "observe_ui_events",
+        "persistent_events",
         "act_gesture_native",
         "act_set_text_native",
         "act_semantic_action",
@@ -75,6 +76,8 @@ object Capabilities {
         "notifications_reply" to "notifications_reply",
         "notifications_dismiss" to "notifications_dismiss",
         "ocr_image" to "observe_ocr",
+        "events" to "observe_ui_events",
+        "events_wait" to "observe_ui_events",
     )
 
     /**

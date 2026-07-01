@@ -56,3 +56,28 @@ def test_drain_publishes_only_new_notifications():
     assert [e["data"]["key"] for e in events] == ["k1", "k2"]
     assert all(e["type"] == "notification_posted" for e in events)
     assert all(e["source"] == "notifications" for e in events)
+
+
+class FakeWaitUiSource(FakeUiSource):
+    def __init__(self, batches):
+        super().__init__(batches)
+        self.wait_calls = []
+        self.poll_calls = []
+
+    def supports_events_wait(self):
+        return True
+
+    def wait_events(self, since=0, *, max_events=50, timeout_ms=1000):
+        self.wait_calls.append((since, max_events, timeout_ms))
+        return self.poll_events(since, max_events=max_events)
+
+    def poll_events(self, since=0, *, max_events=50):
+        self.poll_calls.append((since, max_events))
+        return super().poll_events(since, max_events=max_events)
+
+
+def test_drain_prefers_events_wait_when_supported():
+    bus = EventBus()
+    ui = FakeWaitUiSource([{"events": [{"seq": 1, "package": "a"}], "cursor": 1}])
+    assert EventPoller(bus, ui_source=ui).drain_once(timeout_ms=100) == 1
+    assert ui.wait_calls == [(0, 50, 100)]

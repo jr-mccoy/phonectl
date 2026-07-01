@@ -113,3 +113,19 @@ def test_poll_events_passes_since_cursor():
     t = LoopbackTransport({"events": events})
     AccessibilityProvider(t).poll_events(since=7)
     assert seen["since"] == 7
+
+
+def test_wait_events_calls_events_wait_with_timeout_margin():
+    seen = {}
+
+    def events_wait(p):
+        seen.update(p)
+        return {"events": [], "cursor": p["since"]}
+    t = LoopbackTransport({"events_wait": events_wait})
+    out = AccessibilityProvider(t).wait_events(since=7, max_events=5, timeout_ms=25)
+    assert out == {"events": [], "cursor": 7}
+    assert seen == {"since": 7, "max": 5, "timeout_ms": 25}
+
+
+def test_provider_advertises_persistent_events_when_available():
+    assert AccessibilityProvider(LoopbackTransport({})).capabilities()["persistent_events"] is True

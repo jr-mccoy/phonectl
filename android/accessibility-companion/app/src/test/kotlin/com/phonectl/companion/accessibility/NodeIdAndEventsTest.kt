@@ -77,6 +77,36 @@ class NodeIdAndEventsTest {
     }
 
     @Test
+    fun eventRingWaitReturnsImmediateEvent() {
+        val ring = EventRing()
+        ring.add("content_changed", "com.app", ts = 1)
+        val j = ring.waitJson(since = 0, max = 10, timeoutMs = 1_000)
+        assertEquals(1, j.getJSONArray("events").length())
+        assertEquals(1L, j.getLong("cursor"))
+    }
+
+    @Test
+    fun eventRingWaitTimesOutWithNoEvents() {
+        val ring = EventRing()
+        val start = System.currentTimeMillis()
+        val j = ring.waitJson(since = 1, max = 10, timeoutMs = 25)
+        assertEquals(0, j.getJSONArray("events").length())
+        assertEquals(1L, j.getLong("cursor"))
+        assertTrue(System.currentTimeMillis() - start >= 15)
+    }
+
+    @Test
+    fun eventRingWaitAdvancesCursor() {
+        val ring = EventRing()
+        ring.add("content_changed", "com.app", ts = 1)
+        val first = ring.waitJson(since = 0, max = 10, timeoutMs = 0)
+        ring.add("view_clicked", "com.app", ts = 2)
+        val second = ring.waitJson(since = first.getLong("cursor"), max = 10, timeoutMs = 0)
+        assertEquals(1, second.getJSONArray("events").length())
+        assertEquals(2L, second.getLong("cursor"))
+    }
+
+    @Test
     fun semanticActionVocabulary() {
         assertTrue(SemanticActions.isSupported("click"))
         assertTrue(SemanticActions.isSupported("scroll_forward"))

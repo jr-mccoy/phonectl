@@ -45,3 +45,27 @@ def test_poll_respects_max_and_empty_cursor():
     assert out["cursor"] == 2
     tail = bus.poll(since=5)
     assert tail["events"] == [] and tail["cursor"] == 5
+
+
+def test_wait_returns_immediate_event():
+    bus = EventBus(now=_clock())
+    bus.publish("ui_changed", {"package": "a"}, source="accessibility")
+    out = bus.wait(since=0, timeout_ms=100)
+    assert len(out["events"]) == 1
+    assert out["cursor"] == 1
+
+
+def test_wait_times_out_with_no_events():
+    bus = EventBus()
+    out = bus.wait(since=3, timeout_ms=1)
+    assert out == {"events": [], "cursor": 3}
+
+
+def test_wait_advances_cursor():
+    bus = EventBus(now=_clock())
+    bus.publish("ui_changed", {"package": "a"}, source="accessibility")
+    first = bus.wait(since=0, timeout_ms=0)
+    bus.publish("ui_changed", {"package": "b"}, source="accessibility")
+    second = bus.wait(since=first["cursor"], timeout_ms=0)
+    assert [e["data"]["package"] for e in second["events"]] == ["b"]
+    assert second["cursor"] == 2
