@@ -3,6 +3,7 @@ package com.phonectl.companion.state
 import android.content.Context
 import android.content.SharedPreferences
 import java.io.File
+import java.security.SecureRandom
 
 /**
  * On-device [TrustState] backed by SharedPreferences, with STOP-sentinel parity against the
@@ -48,6 +49,25 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         prefs.edit().putString(KEY_STOP_FILE, path).apply()
     }
 
+    /**
+     * The shared-secret token the loopback socket requires on every request (Finding 2).
+     * Generated once on first read and persisted; shown in the settings UI so the user can pair
+     * it into `phonectl config` (`companion_token`). Loopback is not a UID boundary on Android,
+     * so this token — not the bind address — is what keeps other local apps out.
+     */
+    fun companionToken(): String {
+        prefs.getString(KEY_TOKEN, null)?.takeIf { it.isNotBlank() }?.let { return it }
+        val token = generateToken()
+        prefs.edit().putString(KEY_TOKEN, token).apply()
+        return token
+    }
+
+    private fun generateToken(): String {
+        val bytes = ByteArray(16)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     private fun stopFileExists(): Boolean {
         val path = resolveStopFilePath() ?: return false
         return runCatching { File(path).exists() }.getOrDefault(false)
@@ -64,6 +84,7 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         const val KEY_STOPPED = "stopped"
         const val KEY_GUARDED = "guarded_packages"
         const val KEY_STOP_FILE = "stop_file_path"
+        const val KEY_TOKEN = "companion_token"
         private fun capKey(key: String) = "cap_$key"
     }
 }

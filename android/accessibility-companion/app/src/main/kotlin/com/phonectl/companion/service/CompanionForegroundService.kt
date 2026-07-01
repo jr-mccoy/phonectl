@@ -69,8 +69,14 @@ class CompanionForegroundService : Service() {
         // Bundled ML-Kit OCR fallback (Plan 4.7) — no service instance needed.
         methods.putAll(OcrHandler.methods())
         // Per-capability gate refuses a method whose toggle the user switched off. The audit log
-        // sink records method + outcome only — never request payloads (SPEC §9).
-        val dispatcher = Dispatcher(methods, Capabilities.methodGate(state)) { line ->
+        // sink records method + outcome only — never request payloads (SPEC §9). The shared-secret
+        // token (Finding 2) is required on every request except `ping`: loopback is not a UID
+        // boundary on Android, so the token — not the bind address — keeps other local apps out.
+        val dispatcher = Dispatcher(
+            methods,
+            Capabilities.methodGate(state),
+            expectedToken = state.companionToken(),
+        ) { line ->
             android.util.Log.i(TRANSPORT_LOG_TAG, line)
         }
         val srv = Server(port = port, dispatcher = dispatcher)

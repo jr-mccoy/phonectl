@@ -21,6 +21,13 @@ typealias Method = (JSONObject) -> JSONObject
  * refuse a method whose per-capability toggle is off (Plan 4.6 / foreground-service SPEC §6)
  * without each handler re-checking. Defaults to ungated.
  *
+ * [expectedToken] is the paired shared secret (Finding 2). On Android, loopback is NOT a UID
+ * boundary: any local app with INTERNET permission can connect to the companion socket. When a
+ * token is set, every method except the `ping` liveness probe must present a matching `token`
+ * field or is refused with `unauthorized` — checked before method lookup so an unauthenticated
+ * caller cannot even probe which methods exist. Null (unpaired) leaves the socket open, matching
+ * the JVM contract tests; the on-device service always supplies one (SharedPrefsTrustState).
+ *
  * [log] receives a one-line audit record per request: the method name and outcome **only** —
  * `method=<name> outcome=ok` or `method=<name> outcome=err code=<code>`. It is NEVER passed the
  * request `params` or the response `data`, so typed text / reply bodies cannot reach the log
@@ -30,6 +37,7 @@ typealias Method = (JSONObject) -> JSONObject
 class Dispatcher(
     private val methods: Map<String, Method>,
     private val gate: (String) -> String? = { null },
+    private val expectedToken: String? = null,
     private val log: (String) -> Unit = {},
 ) {
 
@@ -50,6 +58,12 @@ class Dispatcher(
         val version = req.optInt("version", -1)
         if (version != Envelope.VERSION) {
             return fail(requestId, method, "version_mismatch", "unsupported version: $version")
+        }
+
+        // Shared-secret auth (Finding 2): loopback is not a trust boundary on Android. `ping`
+        // stays open for liveness; every other method must present the paired token.
+        if (expectedToken != null && method != "ping" && req.optString("token", "") != expectedToken) {
+            return fail(requestId, method, "unauthorized", "missing or invalid token")
         }
 
         val handler = methods[method]

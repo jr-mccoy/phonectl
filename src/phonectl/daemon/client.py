@@ -10,14 +10,17 @@ from phonectl.providers.transport import SocketTransport, next_request_id
 
 
 class DaemonClient:
-    def __init__(self, host, port, *, transport=None, version=PROTOCOL_VERSION) -> None:
+    def __init__(self, host, port, *, transport=None, version=PROTOCOL_VERSION,
+                 token=None) -> None:
         self._host, self._port, self._version = host, port, version
-        self._transport = transport or SocketTransport(host, port, version=version)
+        self._transport = transport or SocketTransport(host, port, version=version,
+                                                       token=token)
 
     @classmethod
     def from_discovery(cls, info, *, transport=None):
         return cls(info["host"], info["port"], transport=transport,
-                   version=info.get("version", PROTOCOL_VERSION))
+                   version=info.get("version", PROTOCOL_VERSION),
+                   token=info.get("token"))
 
     def call(self, method, params=None, *, timeout=5.0) -> dict:
         rid = next_request_id()

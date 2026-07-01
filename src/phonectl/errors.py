@@ -80,6 +80,12 @@ class UnknownMethodError(PhonectlError):
     code = "unknown_method"
 
 
+class UnauthorizedError(PhonectlError):
+    # An RPC arrived without the required shared-secret token (Finding 2).
+    code = "unauthorized"
+    requires_user = True
+
+
 class MacroValidationError(PhonectlError):
     code = "macro_invalid"
     requires_user = True

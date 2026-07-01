@@ -330,7 +330,6 @@ Tool catalog:
 | `phone_policy_explain` | Explain risk and policy before acting. | `verb`, `selector`, `index`, `x`, `y` |
 | `phone_audit_query` | Read recent redacted audit entries. | `limit` |
 | `phone_stop` | Engage the emergency stop. | none |
-| `phone_resume` | Clear the emergency stop. | none |
 | `phone_clipboard_read` | Read clipboard text (requires Termux:API). | none |
 | `phone_clipboard_write` | Write text to the clipboard. | `text`, `dry_run`, `confirm` |
 | `phone_clipboard_clear` | Clear the clipboard. | `dry_run`, `confirm` |
@@ -373,6 +372,11 @@ Example blocked action envelope:
 ```
 
 The action tools are thin frontends over `runtime.run_action`, so MCP and CLI use the same single-writer lock, kill switch, dry-run mode, confirmation policy, rate limits, re-observe-after-act behavior, and audit log.
+
+There is deliberately **no `phone_resume` tool** (and no daemon `resume` RPC). Engaging the
+kill switch (`phone_stop`) is agent-reachable, but *clearing* it is a human-only, out-of-band
+action — a kill switch the agent can turn off is not a kill switch. Resume from the host with
+`phonectl resume`, by removing the `STOP` sentinel, or from the companion notification/tile.
 
 ### Global flag
 
@@ -509,14 +513,24 @@ phonectl audit purge
 
 ### Kill switch
 
-Create the file `~/.config/phonectl/STOP` (or `$PHONECTL_HOME/STOP`) to instantly refuse all action verbs regardless of mode:
+Engage the kill switch to instantly refuse all action verbs regardless of mode. Any of these work:
 
 ```bash
-touch ~/.config/phonectl/STOP    # engage
-rm ~/.config/phonectl/STOP       # disengage
+phonectl stop                    # engage (host CLI)
+touch ~/.config/phonectl/STOP    # engage (or create the sentinel directly)
 ```
 
-Any action verb while `STOP` is present exits with code `2` and prints:
+Clearing it is a **human-only, out-of-band** step — there is no agent-facing resume (no
+`phone_resume` MCP tool, no daemon `resume` RPC), so an agent cannot turn its own brakes off:
+
+```bash
+phonectl resume                  # disengage (host CLI, human action)
+rm ~/.config/phonectl/STOP       # or remove the sentinel directly
+```
+
+`phonectl stop`/`resume` are host commands; the agent's only reachable control is engaging
+`STOP` (via `phone_stop` or the daemon `stop` RPC). Any action verb while `STOP` is present
+exits with code `2` and prints:
 ```
 phonectl: action refused (kill switch STOP present)
 ```
@@ -629,6 +643,7 @@ JSON protocol running on `127.0.0.1` only. Configure the port phonectl connects 
 {
   "companion_port": 8765,
   "companion_host": "127.0.0.1",
+  "companion_token": "<paste from the companion app>",
   "companion_timeout": 2.0
 }
 ```
@@ -638,11 +653,27 @@ JSON protocol running on `127.0.0.1` only. Configure the port phonectl connects 
 required. When set, phonectl pings the companion on startup; if it does not respond, the providers
 are omitted silently.
 
-### Transport guarantee: loopback only
+### Pairing: loopback is not a security boundary on Android
 
-`SocketTransport` rejects any `companion_host` that is not `127.0.0.1`, `localhost`, or `::1` with
-a `ValueError`. There is no way to connect the transport to an external host. The companion APK
-server also binds `127.0.0.1` only — never `0.0.0.0`.
+The companion APK server binds `127.0.0.1` only — never `0.0.0.0` — and `SocketTransport` rejects
+any `companion_host` that is not `127.0.0.1`, `localhost`, or `::1`. **But loopback is not an app
+boundary on Android:** any installed app with `INTERNET` permission can `connect()` to a loopback
+port opened by another app. Binding `127.0.0.1` alone does **not** keep other local apps out.
+
+So the companion requires a **shared-secret token** on every request except the `ping` liveness
+probe. Pair it once:
+
+1. Open the companion app → **Pairing** → copy the **Companion token**.
+2. Put it in `~/.config/phonectl/config.json` as `companion_token` (above).
+
+`SocketTransport` stamps the token onto every request; the companion refuses any action, read, or
+handshake that lacks it with an `unauthorized` error. Without a matching token the companion is
+unusable — a companion with a configured port but no paired token reports `reachable=false`.
+
+The token defends the companion from being *driven* by other apps. It does **not** by itself stop
+a hostile app that binds the fixed default port `8765` *first* from impersonating the companion to
+phonectl (the client would send its token to the imposter). If that matters in your threat model,
+set a non-default `companion_port` and start the companion before any untrusted app.
 
 ### `phonectl trust status`
 
@@ -1172,6 +1203,8 @@ phonectl daemon start
 
 The daemon binds to an **ephemeral loopback TCP port** (`127.0.0.1` only — non-loopback is refused). It writes its address to `$PHONECTL_HOME/daemon.json` and removes it on clean shutdown.
 
+Because loopback is not an app boundary on Android, the daemon also mints a **per-run shared-secret token** on startup and writes it into `daemon.json` — which lives under `$PHONECTL_HOME` (the Termux app's private storage), unreadable by other apps. Every RPC except the `ping` liveness probe must present that token; an unauthenticated request is refused with an `unauthorized` error. The CLI/MCP read the token out of `daemon.json` automatically, so this is invisible in normal use.
+
 ### Frontend auto-routing
 
 Once a daemon is running, every `phonectl` CLI command (and the MCP server) **transparently routes through it** — no flags needed. `discover()` reads `daemon.json`, pings the endpoint, and on success the frontend sends a JSON-RPC call instead of building an in-process runtime. When no daemon is found, the original in-process path is used unchanged — daemonization is a **compatible evolution**.
@@ -1184,7 +1217,7 @@ phonectl daemon status --json  # check if a daemon is running and its state
 phonectl daemon stop           # send the shutdown RPC and terminate the daemon
 ```
 
-`phonectl daemon stop` calls the daemon's `shutdown` RPC and waits for it to exit cleanly. This is **distinct** from the emergency kill-switch: the `stop`/`resume` sentinel (`STOP` file or companion flag) still interrupts individual actions regardless of daemon state.
+`phonectl daemon stop` calls the daemon's `shutdown` RPC and waits for it to exit cleanly. This is **distinct** from the emergency kill-switch: the `STOP` sentinel (`STOP` file or companion flag) still interrupts individual actions regardless of daemon state. The daemon exposes a `stop` RPC (engage), but **no `resume` RPC** — clearing the kill switch is a host-only human action (`phonectl resume` or removing the sentinel).
 
 ### Async job model
 
@@ -1207,9 +1240,9 @@ phonectl job job_abc123 --json    # structured job envelope
 
 Job statuses: `accepted` (queued), `running`, `done`, `error`.
 
-### Loopback-only
+### Loopback-only + token auth
 
-The daemon binds and listens on **`127.0.0.1` exclusively**. `daemon_host` is validated and a non-loopback address is rejected with a clear error. The socket is never exposed to the network.
+The daemon binds and listens on **`127.0.0.1` exclusively**. `daemon_host` is validated and a non-loopback address is rejected with a clear error. The socket is never exposed to the network. Loopback alone is **not** an app boundary on Android, so the daemon additionally requires the per-run shared-secret token (written to `daemon.json`, unreadable by other apps) on every RPC except `ping` — see "Starting the daemon" above.
 
 ### Config keys
 
@@ -1272,9 +1305,12 @@ The daemon is the single writer **and** event broker.
   "host": "127.0.0.1",
   "port": 54321,
   "version": 1,
+  "token": "<per-run shared secret>",
   "started_at": 1750000000.0
 }
 ```
+
+The `token` is the shared secret every RPC (except `ping`) must present. `daemon.json` lives under `$PHONECTL_HOME` — the app's private storage — so other apps cannot read it.
 
 ### No daemon required
 

@@ -168,14 +168,26 @@ def test_observe_method_returns_snapshot(tmp_path, monkeypatch):
     assert "hash" in polled["data"]["result"]["data"]
 
 
-def test_stop_then_resume_toggles_sentinel(tmp_path, monkeypatch):
+def test_stop_engages_sentinel(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     from phonectl import audit
     srv = _srv(tmp_path)
     assert json.loads(srv.handle_line(_req("stop")))["ok"] is True
     assert audit.kill_switch_active() is True
-    assert json.loads(srv.handle_line(_req("resume")))["ok"] is True
-    assert audit.kill_switch_active() is False
+
+
+def test_daemon_resume_not_in_agent_surface(tmp_path, monkeypatch):
+    # Finding 1: the daemon exposes no resume RPC — an agent cannot clear its own STOP.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import audit
+    srv = _srv(tmp_path)
+    assert not srv.registry.has("resume")
+    json.loads(srv.handle_line(_req("stop")))
+    resp = json.loads(srv.handle_line(_req("resume")))
+    assert resp["ok"] is False
+    assert resp["error"]["code"] == "unknown_method"
+    # STOP is still engaged — the RPC did not clear it.
+    assert audit.kill_switch_active() is True
 
 
 def test_audit_query_returns_entries(tmp_path, monkeypatch):
@@ -213,6 +225,70 @@ def test_bind_publishes_daemon_json_and_shutdown_removes_it(tmp_path, monkeypatc
     srv.shutdown()
     assert discovery.read() is None
     assert sock.closed is True
+
+
+# ── Finding 2: shared-secret token on the daemon RPC ──────────────────────
+
+class _FakeBindSock:
+    def getsockname(self): return ("127.0.0.1", 54321)
+    def close(self): pass
+
+
+def _bound_srv(tmp_path):
+    srv = _srv(tmp_path)
+    srv.bind(server_factory=lambda h: _FakeBindSock())
+    return srv
+
+
+def test_bind_publishes_and_requires_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.daemon import discovery
+    srv = _bound_srv(tmp_path)
+    token = discovery.read()["token"]
+    assert token and srv._token == token
+
+
+def test_daemon_rejects_rpc_without_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _bound_srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("status")))  # no token field
+    assert resp["ok"] is False
+    assert resp["error"]["code"] == "unauthorized"
+
+
+def test_daemon_rejects_rpc_with_wrong_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _bound_srv(tmp_path)
+    line = json.dumps({"method": "status", "params": {}, "request_id": "r1",
+                       "token": "not-the-token"})
+    resp = json.loads(srv.handle_line(line))
+    assert resp["ok"] is False and resp["error"]["code"] == "unauthorized"
+
+
+def test_daemon_accepts_rpc_with_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _bound_srv(tmp_path)
+    line = json.dumps({"method": "status", "params": {}, "request_id": "r1",
+                       "token": srv._token})
+    resp = json.loads(srv.handle_line(line))
+    assert resp["ok"] is True
+
+
+def test_daemon_ping_is_token_exempt(tmp_path, monkeypatch):
+    # ping stays open so discovery can detect a live daemon without the token.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _bound_srv(tmp_path)
+    resp = json.loads(srv.handle_line(_req("ping")))
+    assert resp["ok"] is True
+
+
+def test_daemon_client_carries_token_from_discovery():
+    from phonectl.daemon.client import DaemonClient
+    # from_discovery reads the token out of the discovery info dict and hands it to
+    # the transport, which stamps it onto every request.
+    client = DaemonClient.from_discovery(
+        {"host": "127.0.0.1", "port": 1, "version": 1, "token": "abc"})
+    assert client._transport._token == "abc"
 
 
 # ── Task 2: observe mints snapshot_id ─────────────────────────────────────
@@ -401,7 +477,8 @@ def test_act_via_worker_appends_one_run_record(tmp_path, monkeypatch):
 def test_act_is_not_in_handle_line_mutating_set():
     from phonectl.daemon import rpc as rpc_mod
     assert "act" not in rpc_mod.MUTATING
-    assert "stop" in rpc_mod.MUTATING and "resume" in rpc_mod.MUTATING
+    assert "stop" in rpc_mod.MUTATING
+    assert "resume" not in rpc_mod.MUTATING  # Finding 1: no resume RPC
 
 
 # ── Task 6: shutdown RPC + worker lifecycle ───────────────────────────────

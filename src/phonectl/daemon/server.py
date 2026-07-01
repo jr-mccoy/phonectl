@@ -6,7 +6,7 @@ import os
 import threading
 import time
 
-from phonectl import audit, config, errors, observer, policy, results
+from phonectl import audit, errors, observer, policy, results
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.daemon import rpc as rpc_mod
 from phonectl.daemon.discovery import LOOPBACK
@@ -33,6 +33,9 @@ class DaemonServer:
         self._sock = None
         self._running = False
         self._port = None
+        # Shared-secret token required on every RPC once the daemon is network-exposed
+        # (set in bind()). Loopback is not a UID boundary on Android — see Finding 2.
+        self._token = None
         self.snapshots = SnapshotCache()
         self.events = EventBus()
         self.jobs = JobRegistry(
@@ -109,15 +112,12 @@ class DaemonServer:
 
         @self.registry.register("stop")
         def _stop(params, ctx):
-            (config.config_dir() / "STOP").write_text("stopped via daemon\n")
+            audit.engage_stop("stopped via daemon\n")
             return results.ok(capability="daemon.stop", data={"stopped": True})
 
-        @self.registry.register("resume")
-        def _resume(params, ctx):
-            p = config.config_dir() / "STOP"
-            if p.exists():
-                p.unlink()
-            return results.ok(capability="daemon.resume", data={"stopped": False})
+        # No "resume" RPC: clearing the kill switch is a human-only, out-of-band
+        # action (Finding 1). Resume via `phonectl resume` on the host or the
+        # companion notification/tile — never through an agent-reachable RPC.
 
         @self.registry.register("status")
         def _status(params, ctx):
@@ -374,6 +374,20 @@ class DaemonServer:
                 results.err(("bad_request", "malformed RPC request line")), None
             )
 
+        # Token gate (Finding 2): once bound to a socket the daemon holds a shared
+        # secret and every method except the liveness probe must present it. `ping`
+        # stays open so discovery can detect the daemon without the token.
+        if self._token is not None and method != "ping":
+            if req.get("token") != self._token:
+                return self._finish(
+                    results.err(
+                        errors.UnauthorizedError("missing or invalid daemon token"),
+                        user_action="Use the phonectl CLI/MCP on this host; other "
+                                    "apps cannot read the daemon token.",
+                    ),
+                    rid,
+                )
+
         ctx = {"server": self, "request_id": rid}
         if method in rpc_mod.MUTATING:
             with self._write_lock:
@@ -445,11 +459,13 @@ class DaemonServer:
         from phonectl.daemon import discovery
         self._sock = server_factory(self._host)
         self._port = self._sock.getsockname()[1]
+        self._token = discovery.new_token()
         discovery.write({
             "pid": os.getpid(),
             "host": self._host,
             "port": self._port,
             "version": PROTOCOL_VERSION,
+            "token": self._token,
             "started_at": self._now(),
         })
         self._publish_lifecycle("started")

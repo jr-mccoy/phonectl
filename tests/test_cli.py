@@ -63,6 +63,17 @@ def test_tap_blocked_by_kill_switch(tmp_path, monkeypatch):
     assert rc == 2
     assert fb.calls == []  # action refused
 
+def test_cli_stop_and_resume_toggle_kill_switch(tmp_path, monkeypatch):
+    # Finding 1: the host CLI is the out-of-band human path for both engaging and
+    # clearing the kill switch (resume is intentionally absent from agent surfaces).
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import audit
+    assert cli.main(["stop"]) == 0
+    assert audit.kill_switch_active() is True
+    assert cli.main(["resume"]) == 0
+    assert audit.kill_switch_active() is False
+
+
 def test_wait_for_requires_text_or_id(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     rc = cli.main(["wait-for"])

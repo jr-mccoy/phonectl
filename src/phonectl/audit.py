@@ -1,11 +1,36 @@
 import json
 import time
+from pathlib import Path
 from phonectl import redact
 from phonectl.config import config_dir, load
 
 
+def stop_file() -> Path:
+    return config_dir() / "STOP"
+
+
+def engage_stop(note: str = "") -> None:
+    """Write the STOP sentinel (kill switch). Safe to call when already stopped."""
+    stop_file().write_text(note)
+
+
+def clear_stop() -> bool:
+    """Remove the STOP sentinel. Returns True if a sentinel was present.
+
+    Clearing STOP is an out-of-band, human-only recovery step (host CLI or the
+    companion notification/tile). It is deliberately NOT exposed on any
+    agent-facing surface (MCP tool, daemon RPC) — a kill switch the agent can
+    clear is not a kill switch.
+    """
+    p = stop_file()
+    if p.exists():
+        p.unlink()
+        return True
+    return False
+
+
 def kill_switch_active(*, extra_checks=()) -> bool:
-    if (config_dir() / "STOP").exists():
+    if stop_file().exists():
         return True
     for check in extra_checks:
         try:

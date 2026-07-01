@@ -165,19 +165,28 @@ def test_audit_query_returns_recent_entries(tmp_path, monkeypatch):
     assert env["data"]["entries"][-1]["hash"] == "h1"
 
 
-def test_stop_and_resume_toggle_kill_switch(tmp_path, monkeypatch):
+def test_stop_engages_kill_switch(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     assert mcp_server.stop()["data"]["stopped"] is True
     assert (config_dir() / "STOP").exists()
-    assert mcp_server.resume()["data"]["stopped"] is False
-    assert not (config_dir() / "STOP").exists()
+
+
+def test_mcp_resume_not_agent_accessible(tmp_path, monkeypatch):
+    # Finding 1: phone_resume is not a registered MCP tool — an agent cannot clear
+    # its own kill switch. call_tool must reject it, and STOP must survive.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    mcp_server.stop()
+    assert "phone_resume" not in mcp_server.TOOLS
+    env = mcp_server.call_tool("phone_resume", {})
+    assert env["ok"] is False
+    assert (config_dir() / "STOP").exists()
 
 
 def test_registry_lists_stable_tool_names():
     for name in (
         "phone_observe_ui", "phone_find", "phone_capabilities", "phone_tap",
         "phone_type", "phone_swipe", "phone_key", "phone_launch",
-        "phone_policy_explain", "phone_audit_query", "phone_stop", "phone_resume",
+        "phone_policy_explain", "phone_audit_query", "phone_stop",
     ):
         assert name in mcp_server.TOOLS
         assert callable(mcp_server.TOOLS[name]["handler"])

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from phonectl import errors, results
 
-MUTATING = {"stop", "resume", "macro_run", "macro_cancel",
+# "resume" is deliberately absent — the daemon exposes no resume RPC (Finding 1);
+# clearing the kill switch is a human-only, out-of-band action.
+MUTATING = {"stop", "macro_run", "macro_cancel",
             "macro_enable", "macro_disable", "autonomy_grant", "autonomy_revoke", "memory_delete"}
 
 

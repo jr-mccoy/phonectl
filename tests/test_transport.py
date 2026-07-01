@@ -83,6 +83,22 @@ def test_socket_transport_drops_stale_then_matches(monkeypatch):
     assert out["data"]["v"] == 1
 
 
+def test_socket_transport_omits_token_when_unset():
+    # Finding 2: no token configured -> the wire request carries no token field.
+    conn = FakeConn([json.dumps({"ok": True, "request_id": "r", "version": 1, "data": {}}) + "\n"])
+    t = SocketTransport("127.0.0.1", 8765, connect=lambda h, p, to: conn)
+    t.request("ping", {}, request_id="r", timeout=1.0)
+    assert "token" not in json.loads(conn.sent[-1])
+
+
+def test_socket_transport_stamps_token_when_set():
+    # Finding 2: a configured shared secret is attached to every request.
+    conn = FakeConn([json.dumps({"ok": True, "request_id": "r", "version": 1, "data": {}}) + "\n"])
+    t = SocketTransport("127.0.0.1", 8765, connect=lambda h, p, to: conn, token="s3cr3t")
+    t.request("ping", {}, request_id="r", timeout=1.0)
+    assert json.loads(conn.sent[-1])["token"] == "s3cr3t"
+
+
 def test_socket_transport_ping_true_on_ok():
     def factory(host, port, timeout):
         class C(FakeConn):

@@ -1,9 +1,12 @@
 package com.phonectl.companion.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
@@ -57,6 +60,29 @@ class SettingsActivity : AppCompatActivity() {
                     }
                 )
             }
+
+            // --- Pairing token (Finding 2) ---
+            // Loopback is not an app boundary on Android; the token is the real gate. Show it so
+            // the user can paste it into `phonectl config` (companion_token), and copy on tap.
+            val state = SharedPrefsTrustState(ctx)
+            val pairing = PreferenceCategory(ctx).apply {
+                title = getString(R.string.prefs_pairing_title)
+            }
+            screen.addPreference(pairing)
+            pairing.addPreference(
+                Preference(ctx).apply {
+                    title = getString(R.string.pref_pairing_token_title)
+                    summary = state.companionToken()
+                    isPersistent = false
+                    setOnPreferenceClickListener {
+                        val clip = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clip.setPrimaryClip(
+                            ClipData.newPlainText("phonectl companion_token", state.companionToken()))
+                        Toast.makeText(ctx, R.string.pref_pairing_token_copied, Toast.LENGTH_SHORT).show()
+                        true
+                    }
+                }
+            )
 
             // --- Notification access (grant guidance) ---
             val notifSetup = PreferenceCategory(ctx).apply {
