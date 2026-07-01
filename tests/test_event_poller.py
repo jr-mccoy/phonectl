@@ -81,3 +81,16 @@ def test_drain_prefers_events_wait_when_supported():
     ui = FakeWaitUiSource([{"events": [{"seq": 1, "package": "a"}], "cursor": 1}])
     assert EventPoller(bus, ui_source=ui).drain_once(timeout_ms=100) == 1
     assert ui.wait_calls == [(0, 50, 100)]
+
+
+class FakeDisabledWaitUiSource(FakeWaitUiSource):
+    def capabilities(self):
+        return {"persistent_events": False}
+
+
+def test_drain_falls_back_when_persistent_events_not_advertised():
+    bus = EventBus()
+    ui = FakeDisabledWaitUiSource([{"events": [{"seq": 1, "package": "a"}], "cursor": 1}])
+    assert EventPoller(bus, ui_source=ui).drain_once(timeout_ms=100) == 1
+    assert ui.wait_calls == []
+    assert ui.poll_calls == [(0, 50)]

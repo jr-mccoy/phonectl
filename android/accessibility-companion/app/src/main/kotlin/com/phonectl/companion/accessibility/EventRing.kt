@@ -2,6 +2,8 @@ package com.phonectl.companion.accessibility
 
 import com.phonectl.companion.json.Json
 import org.json.JSONObject
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 /**
  * Bounded ring buffer of UI events (accessibility-companion SPEC §events). The service appends one
@@ -16,21 +18,40 @@ class EventRing(private val capacity: Int = 200) {
 
     data class Event(val seq: Long, val type: String, val pkg: String, val ts: Long)
 
+    private val lock = ReentrantLock()
+    private val changed = lock.newCondition()
     private val buffer = ArrayDeque<Event>()
     private var nextSeq = 1L
 
-    @Synchronized
-    fun add(type: String, pkg: String, ts: Long): Long {
+    fun add(type: String, pkg: String, ts: Long): Long = lock.withLock {
         val seq = nextSeq++
         buffer.addLast(Event(seq, type, pkg, ts))
         while (buffer.size > capacity) buffer.removeFirst()
-        (this as java.lang.Object).notifyAll()
-        return seq
+        changed.signalAll()
+        seq
     }
 
     /** Returns (selected events, new cursor). */
-    @Synchronized
-    fun query(since: Long, max: Int): Pair<List<Event>, Long> {
+    fun query(since: Long, max: Int): Pair<List<Event>, Long> = lock.withLock {
+        queryLocked(since, max)
+    }
+
+    fun waitFor(since: Long, max: Int, timeoutMs: Long): Pair<List<Event>, Long> = lock.withLock {
+        var remainingNanos = timeoutMs.coerceAtLeast(0L) * 1_000_000L
+        var result = queryLocked(since, max)
+        while (result.first.isEmpty() && remainingNanos > 0L) {
+            try {
+                remainingNanos = changed.awaitNanos(remainingNanos)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            result = queryLocked(since, max)
+        }
+        result
+    }
+
+    private fun queryLocked(since: Long, max: Int): Pair<List<Event>, Long> {
         val cap = max.coerceAtLeast(0)
         val selected = if (since <= 0L) {
             buffer.toList().takeLast(cap)
@@ -39,24 +60,6 @@ class EventRing(private val capacity: Int = 200) {
         }
         val cursor = selected.lastOrNull()?.seq ?: since
         return selected to cursor
-    }
-
-    @Synchronized
-    fun waitFor(since: Long, max: Int, timeoutMs: Long): Pair<List<Event>, Long> {
-        val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0L)
-        var result = query(since, max)
-        while (result.first.isEmpty() && timeoutMs > 0L) {
-            val remaining = deadline - System.currentTimeMillis()
-            if (remaining <= 0L) break
-            try {
-                (this as java.lang.Object).wait(remaining)
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
-            }
-            result = query(since, max)
-        }
-        return result
     }
 
     fun queryJson(since: Long, max: Int): JSONObject {

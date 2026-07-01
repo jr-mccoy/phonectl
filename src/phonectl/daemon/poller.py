@@ -34,6 +34,9 @@ class EventPoller:
         return published
 
     def _ui_supports_wait(self) -> bool:
+        caps = getattr(self._ui, "capabilities", None)
+        if caps is not None and not caps().get("persistent_events", False):
+            return False
         supports = getattr(self._ui, "supports_events_wait", None)
         if supports is None:
             return hasattr(self._ui, "wait_events")
