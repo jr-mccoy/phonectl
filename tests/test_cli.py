@@ -848,3 +848,100 @@ def test_autonomy_grant_cli(tmp_path, monkeypatch, capsys):
     rc = cli.main(["autonomy", "list", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert any(g["macro"] == "reply" for g in out["data"]["grants"])
+
+# --- Companion handshake gating for notifications/OCR factories ---
+
+def test_make_notifications_provider_gates_disabled_observe_notifications(tmp_path, monkeypatch):
+    from phonectl.providers.transport import LoopbackTransport
+
+    t = LoopbackTransport({"handshake": lambda _p: {
+        "version": 1,
+        "capabilities": {"observe_notifications": False, "notifications_reply": True,
+                         "notifications_dismiss": True},
+        "stopped": False,
+    }})
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+
+    p = cli._make_notifications_provider()
+
+    assert p is not None
+    assert p.capabilities()["observe_notifications"] is False
+
+
+def test_make_notifications_provider_gates_notifications_reply_and_dismiss(tmp_path, monkeypatch):
+    from phonectl.providers.transport import LoopbackTransport
+
+    t = LoopbackTransport({"handshake": lambda _p: {
+        "version": 1,
+        "capabilities": {"observe_notifications": True, "notifications_reply": False,
+                         "notifications_dismiss": False},
+        "stopped": False,
+    }})
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
+
+    p = cli._make_notifications_provider()
+    caps = p.capabilities()
+
+    assert caps["observe_notifications"] is True
+    assert caps["notifications_reply"] is False
+    assert caps["notifications_dismiss"] is False
+
+
+def test_make_notifications_provider_preserves_termux_only_observe(tmp_path, monkeypatch):
+    class FakeTermux:
+        def is_available(self): return True
+
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: None)
+    monkeypatch.setattr(cli, "_make_termux_provider", lambda: FakeTermux())
+
+    p = cli._make_notifications_provider()
+    caps = p.capabilities()
+
+    assert caps["observe_notifications"] is True
+    assert caps["notifications_reply"] is False
+    assert caps["notifications_dismiss"] is False
+
+
+def test_make_ocr_provider_gates_companion_observe_ocr(tmp_path, monkeypatch):
+    from phonectl.providers.ocr import OcrProvider
+    from phonectl.providers.transport import LoopbackTransport
+
+    t = LoopbackTransport({"handshake": lambda _p: {
+        "version": 1,
+        "capabilities": {"observe_ocr": False},
+        "stopped": False,
+    }})
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
+    monkeypatch.setattr(cli, "OcrProvider", lambda transport=None: OcrProvider(
+        which=lambda _name: None, transport=transport))
+
+    p = cli._make_ocr_provider()
+
+    assert p is not None
+    assert p.capabilities()["observe_ocr"] is False
+
+
+def test_make_ocr_provider_preserves_local_tesseract_when_companion_disabled(tmp_path, monkeypatch):
+    from phonectl.providers.ocr import OcrProvider
+    from phonectl.providers.transport import LoopbackTransport
+
+    t = LoopbackTransport({"handshake": lambda _p: {
+        "version": 1,
+        "capabilities": {"observe_ocr": False},
+        "stopped": False,
+    }})
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
+    monkeypatch.setattr(cli, "OcrProvider", lambda transport=None: OcrProvider(
+        which=lambda _name: "/usr/bin/tesseract", transport=transport))
+
+    p = cli._make_ocr_provider()
+
+    assert p is not None
+    assert p.capabilities()["observe_ocr"] is True

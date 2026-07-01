@@ -125,14 +125,25 @@ def _make_accessibility_provider():
 def _make_notifications_provider():
     termux = _make_termux_provider()
     transport = _make_companion_transport(config.load())
+    hs = trust.negotiate(transport) if transport is not None else None
     p = NotificationsProvider(transport=transport, termux=termux)
-    return p if p.is_available() else None
+    if not p.is_available():
+        return None
+    if hs is not None and hs.capabilities:
+        return trust.GatedProvider(p, hs.capabilities)
+    return p
 
 
 def _make_ocr_provider():
     cfg = config.load()
-    p = OcrProvider(transport=_make_companion_transport(cfg))
-    return p if p.is_available() else None
+    transport = _make_companion_transport(cfg)
+    hs = trust.negotiate(transport) if transport is not None else None
+    p = OcrProvider(transport=transport)
+    if not p.is_available():
+        return None
+    if hs is not None and hs.capabilities and not p._local_ok():
+        return trust.GatedProvider(p, hs.capabilities)
+    return p
 
 
 def build_runtime(cfg, backend=None):
