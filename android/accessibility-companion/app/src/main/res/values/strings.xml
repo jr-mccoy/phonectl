@@ -20,6 +20,7 @@
     <string name="cap_act_gesture_native">Perform touch gestures</string>
     <string name="cap_act_set_text_native">Fill text fields</string>
     <string name="cap_act_semantic_action">Trigger semantic accessibility actions</string>
+    <string name="cap_launch_app">Launch apps</string>
     <string name="cap_observe_notifications">Read active notifications</string>
     <string name="cap_notifications_wait">Wait for a matching notification</string>
     <string name="cap_notifications_reply">Reply to inline-reply notifications</string>

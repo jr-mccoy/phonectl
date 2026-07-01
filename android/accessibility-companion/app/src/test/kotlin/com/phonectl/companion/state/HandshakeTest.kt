@@ -42,7 +42,7 @@ class HandshakeTest {
         val caps = data.getJSONObject("capabilities")
         val expected = setOf(
             "observe_ui_native", "observe_ui_events", "act_gesture_native",
-            "act_set_text_native", "act_semantic_action",
+            "act_set_text_native", "act_semantic_action", "launch_app",
             "observe_notifications", "notifications_wait", "notifications_reply",
             "notifications_dismiss",
             "observe_ocr",

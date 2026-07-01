@@ -20,6 +20,7 @@ object Capabilities {
         "act_gesture_native",
         "act_set_text_native",
         "act_semantic_action",
+        "launch_app",
     )
 
     /**
@@ -71,6 +72,13 @@ object Capabilities {
      * the call with `capability_disabled` (defence in depth — the Python side also drops the grant).
      */
     val METHOD_CAPABILITY: Map<String, String> = mapOf(
+        "observe_native" to "observe_ui_native",
+        "events" to "observe_ui_events",
+        "gesture" to "act_gesture_native",
+        "key" to "act_gesture_native",
+        "set_text" to "act_set_text_native",
+        "semantic" to "act_semantic_action",
+        "launch" to "launch_app",
         "notifications_list" to "observe_notifications",
         "notifications_reply" to "notifications_reply",
         "notifications_dismiss" to "notifications_dismiss",

@@ -137,6 +137,7 @@ class SettingsActivity : AppCompatActivity() {
                 "act_gesture_native" to R.string.cap_act_gesture_native,
                 "act_set_text_native" to R.string.cap_act_set_text_native,
                 "act_semantic_action" to R.string.cap_act_semantic_action,
+                "launch_app" to R.string.cap_launch_app,
                 "observe_notifications" to R.string.cap_observe_notifications,
                 "notifications_wait" to R.string.cap_notifications_wait,
                 "notifications_reply" to R.string.cap_notifications_reply,
