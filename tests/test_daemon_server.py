@@ -133,6 +133,7 @@ def test_warm_triple_builds_once(tmp_path, monkeypatch):
 
 def test_act_reuses_one_registry_across_two_calls(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     from phonectl.providers.registry import ProviderRegistry
     from phonectl.session import Session
 
@@ -439,6 +440,7 @@ def test_act_submit_returns_job_id(tmp_path, monkeypatch):
 
 def test_act_job_poll_returns_result_when_done(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     srv = _srv(tmp_path)
     _acc, polled = _submit_run_poll(srv, "act", {"verb": "tap", "target": {"i": 0}, "i": 0})
     assert polled["ok"] is True
@@ -527,6 +529,7 @@ def test_macro_validate_reports_errors(tmp_path, monkeypatch):
 
 def test_macro_run_executes_actions(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     srv = _srv(tmp_path)
     resp = json.loads(srv.handle_line(_req("macro_run",
         {"macro": {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}, "i": 0}]}})))

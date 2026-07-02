@@ -79,3 +79,59 @@ def test_intent_broadcast_classifies_high():
 def test_notifications_reply_is_high_risk():
     from phonectl import risk
     assert "notifications_reply" in risk.HIGH_RISK_VERBS
+
+
+def test_intent_start_is_high_risk():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "intent_start", {"action": "android.intent.action.VIEW"})
+    assert result["level"] == "high"
+    assert any(r["signal"] == "high_risk_verb" for r in result["reasons"])
+
+
+def test_intent_start_tel_is_critical():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "intent_start", {"data": "tel:+15551234567"})
+    assert result["level"] == "critical"
+    assert any(r["signal"] == "critical_intent" for r in result["reasons"])
+
+
+def test_intent_start_action_call_is_critical():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(
+        snap, "intent_start", {"action": "android.intent.action.CALL"}
+    )
+    assert result["level"] == "critical"
+
+
+def test_intent_start_sms_is_critical():
+    snap = {"app": {}, "elements": []}
+    result = risk.classify(snap, "intent_start", {"data": "smsto:+15551234567"})
+    assert result["level"] == "critical"
+
+
+def test_verb_risk_matrix():
+    snap = {"app": {}, "elements": []}
+    expected = {
+        "packages_clear": "critical",
+        "packages_stop": "high",
+        "intent_broadcast": "high",
+        "intent_start": "high",
+        "notifications_reply": "high",
+        "tap": "low",
+        "type": "low",
+        "swipe": "low",
+        "key": "low",
+        "launch": "low",
+    }
+    for verb, level in expected.items():
+        assert risk.classify(snap, verb, {})["level"] == level, verb
+
+
+def test_install_keyword_trimmed_to_low_noise_terms():
+    # "allow", "grant", "send" appear on nearly every messaging/permission screen;
+    # they were removed to prevent confirmation fatigue (adversarial review F4).
+    for benign in ("Allow", "Grant access", "Send"):
+        snap = _snap(elements=[{"text": benign, "content_desc": "", "password": False}])
+        assert risk.classify(snap, "tap", {"i": 0})["level"] == "low", benign
+    snap = _snap(elements=[{"text": "Install app", "content_desc": "", "password": False}])
+    assert risk.classify(snap, "tap", {"i": 0})["level"] == "high"

@@ -52,7 +52,7 @@ def test_happy_path_pairs_connects_and_persists(tmp_path, monkeypatch):
     assert conn.pairs == [("127.0.0.1:37000", "482913")]
     assert conn.connects == ["127.0.0.1:41000"]
     assert conn.cfg["serial"] == "127.0.0.1:41000"
-    assert conn.cfg["mode"] == "auto"
+    assert conn.cfg["mode"] == "confirm"   # safe default (Finding 5); auto is opt-in
     assert conn.cfg["last_port"] == "41000"
     from phonectl import config
     saved = config.load()

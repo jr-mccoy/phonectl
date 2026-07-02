@@ -282,3 +282,30 @@ def test_scroll_until_returns_last_snapshot_when_not_found(fake_backend, fake_se
 def test_scroll_until_requires_text_or_selector(fake_backend, fake_session):
     with pytest.raises(ValueError):
         actuator.scroll_until(fake_backend, fake_session, "down")
+
+
+def test_scroll_until_halts_on_stop_midloop(fake_backend, fake_session):
+    # Finding 6: the loop must re-check the kill switch between iterations,
+    # not only once at entry.
+    from phonectl import errors
+
+    scrolls = []
+    halted = [False]
+
+    def halt():
+        return halted[0]
+
+    orig = fake_backend.input_named_swipe
+
+    def counting_swipe(*a, **kw):
+        scrolls.append(1)
+        halted[0] = True   # STOP engages after the first gesture
+        return orig(*a, **kw)
+
+    fake_backend.input_named_swipe = counting_swipe
+    with pytest.raises(errors.StoppedError):
+        actuator.scroll_until(
+            fake_backend, fake_session, "down", text="NotPresent",
+            max_scrolls=5, sleep=lambda _: None, halt=halt,
+        )
+    assert len(scrolls) == 1

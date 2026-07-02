@@ -33,6 +33,17 @@ def _new_request_id() -> str:
     return uuid.uuid4().hex
 
 
+def _companion_transport_from_cfg(cfg):
+    """A configured companion (companion_port set) is consulted for its STOP
+    flag on every action, without each caller having to wire the transport."""
+    port = cfg.get("companion_port")
+    if not port:
+        return None
+    from phonectl.providers.transport import SocketTransport
+    return SocketTransport(cfg.get("companion_host", "127.0.0.1"), int(port),
+                           token=cfg.get("companion_token"))
+
+
 def _rate_path():
     return config.config_dir() / "ratelimit.json"
 
@@ -80,11 +91,15 @@ def run_action(
     rid = request_id or gen_id()
     base = {"verb": verb, "target": target, "request_id": rid}
 
+    if companion_transport is None:
+        companion_transport = _companion_transport_from_cfg(cfg)
+
     extra_checks = []
     if companion_transport is not None:
         from phonectl import trust as _trust
         _t = companion_transport
-        extra_checks.append(lambda: _trust.companion_stopped(_t))
+        _timeout = cfg.get("companion_timeout", 1.0)
+        extra_checks.append(lambda: _trust.companion_stopped(_t, timeout=_timeout))
 
     env = _run_action_body(
         verb,

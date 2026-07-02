@@ -6,12 +6,17 @@ def test_config_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     # no file: returns defaults only
     assert config.load().get("serial") is None
-    assert config.get_mode(config.load()) == "auto"
-    config.save({"serial": "127.0.0.1:5555", "mode": "confirm"})
+    config.save({"serial": "127.0.0.1:5555", "mode": "auto"})
     cfg = config.load()
     assert cfg["serial"] == "127.0.0.1:5555"
-    assert config.get_mode(cfg) == "confirm"
-    assert config.get_mode({}) == "auto"
+    assert config.get_mode(cfg) == "auto"
+
+
+def test_default_mode_is_confirm(tmp_path, monkeypatch):
+    # Finding 5: unconfirmed execution must be opt-in, not the default.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    assert config.get_mode(config.load()) == "confirm"
+    assert config.get_mode({}) == "confirm"
 
 
 def test_kill_switch(tmp_path, monkeypatch):

@@ -260,7 +260,7 @@ phonectl intent broadcast com.example.MY_ACTION --yes
 phonectl intent broadcast com.example.MY_ACTION --extra key=value --yes
 ```
 
-Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies `intent_broadcast` as `high_risk_verb`. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
+Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies both `intent_start` and `intent_broadcast` as `high_risk_verb`; an `intent start` whose action or data targets the dialer or SMS (`tel:`, `sms:`/`smsto:`, `ACTION_CALL`/`DIAL`/`SENDTO`) is classified **critical** and denied by default policy. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
 
 ### `packages`
 
@@ -394,8 +394,8 @@ The `mode` key in `~/.config/phonectl/config.json` (or `$PHONECTL_HOME/config.js
 
 | Mode | Behaviour |
 |---|---|
-| `auto` | Acts immediately. Default when no mode is set. |
-| `confirm` | Prints the intended action and refuses unless `--yes` is passed on the command line. Exit code `3` on refusal. |
+| `auto` | Acts immediately. Opt-in: set it explicitly in `config.json`. |
+| `confirm` | Prints the intended action and refuses unless `--yes` is passed on the command line. Exit code `3` on refusal. **Default when no mode is set.** |
 | `dry-run` | Observes the screen, prints what would have been done, but does **not** inject any input and does **not** write to the audit log. |
 
 Set the mode by editing `config.json`:
@@ -444,10 +444,11 @@ Before any mutating action executes, `runtime.run_action` observes the current s
 | `password_field` | `high` | A parsed element has `password: true`. |
 | `payment_keyword` | `critical` | Screen text contains payment/purchase/bank/card wording. |
 | `destructive_keyword` | `critical` | Screen text contains factory reset, wipe, delete account, or uninstall wording. |
-| `install_keyword` | `high` | Screen text contains install, allow, grant, subscribe, or send. |
+| `install_keyword` | `high` | Screen text contains install or sideload wording. |
 | `otp_like_content` | `medium` | Visible element text contains a 4-8 digit code. |
-| `high_risk_verb` | `high` | Verb is `packages_stop`, `intent_broadcast`, or `notifications_reply`. |
+| `high_risk_verb` | `high` | Verb is `packages_stop`, `intent_start`, `intent_broadcast`, or `notifications_reply`. |
 | `critical_verb` | `critical` | Verb is `packages_clear`. |
+| `critical_intent` | `critical` | `intent_start` action/data targets the dialer or SMS (`tel:`, `sms:`/`smsto:`/`mms:`, `ACTION_CALL`/`DIAL`/`SENDTO`). |
 
 Effective default policy:
 
@@ -711,8 +712,9 @@ The companion APK exposes a per-capability toggle UI. The user enables or disabl
 `trust.gate_capabilities`. A disabled toggle removes the grant from the provider graph; the registry
 falls back to ADB or returns `CapabilityUnavailableError` for that capability.
 
-Keys absent from the companion's `capabilities` map default to **enabled** — the toggle set only
-ever removes grants, never invents capabilities the provider does not support.
+Keys absent from the companion's `capabilities` map default to **disabled** — a capability the
+handshake did not explicitly affirm is not exercised, and the toggle set never invents
+capabilities the provider does not support.
 
 ### Emergency stop
 
@@ -723,8 +725,11 @@ The companion APK's persistent "Stop phonectl" notification and Quick-Settings t
 
 The precedence rule: **file sentinel OR companion stop flag blocks**. The file kill-switch is the
 hard guarantee (survives APK crashes); the companion flag is the low-latency path for the running
-session. A flaky companion socket never wedges the CLI — socket exceptions in extra checks are
-swallowed and treated as "not stopped".
+session. The companion check **fails closed**: when a companion is configured
+(`companion_port` set) but unreachable or erroring at the moment an action is gated, the action is
+refused as `stopped` rather than silently proceeding. If the companion is intentionally offline,
+unset `companion_port` (or fix connectivity) to act over ADB alone — a setup with no companion
+configured never consults this check.
 
 ```bash
 # File-based kill switch (always available, no companion needed)
@@ -1004,9 +1009,7 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 
 ## Status
 
-The observe-act-observe core (library + CLI) is implemented and unit-tested. The real-device connectivity proof (build-step-zero: pairing `adb` inside PRoot against `adbd` over the loopback) and the end-to-end smoke run are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure.
-
-Features deferred to follow-on work: `phonectl setup` interactive wizard, MCP server wrapper, richer provider graph, macro runtime, and AccessibilityService APK backend.
+Phases 1–6 of the platform roadmap are implemented and unit-tested: structured results and capabilities, selector/tree observation, resilience and the setup wizard, the `run_action` single-writer funnel with risk policy and audit v2, the provider/capability graph (clipboard, intents, packages, gestures, extraction, Termux:API), the companion APK event providers (accessibility, notifications, OCR), the daemon/event runtime, and the macro engine with progressive autonomy. The real-device connectivity proof and end-to-end smoke runs are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure and [docs/superpowers/phonectl-platform-roadmap.md](docs/superpowers/phonectl-platform-roadmap.md) for phase status.
 
 ## Selector targeting and tree observation
 

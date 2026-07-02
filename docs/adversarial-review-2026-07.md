@@ -1,6 +1,14 @@
 # phonectl — Adversarial Technical Review
 
 **Date:** 2026-07-01
+**Remediation status (2026-07-02):** Findings **1, 2** fixed (PR #40). Findings
+**4, 5, 6, 7, 8, 12, 15** fixed on `claude/system-improvement-emxdl8` — intent_start
+risk + tel/sms critical, safe defaults (`mode: confirm`, unknown caps disabled),
+scroll_until through `run_action` with mid-loop STOP checks, intent/launch shell
+quoting, fail-closed companion STOP check (now actually wired into `run_action`),
+clipboard audit length surrogate, uniform exit codes. Still open: **3, 9, 10, 14, 16**
+(Kotlin/companion — need an Android build), **11, 13** (cross-process idempotency,
+provider fallback), and the longer-term human-only sensitive-action policy layer.
 **Scope:** Full system — Python CLI, provider architecture, MCP interface, daemon, macro
 engine, Android companion APK/specs, transport/trust model, docs, tests, packaging.
 **Method:** Firsthand source reading of every core layer plus the companion Kotlin, a full

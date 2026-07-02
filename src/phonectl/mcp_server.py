@@ -312,17 +312,21 @@ def find_text(build=_default_build, *, pattern) -> dict:
 
 
 def scroll_until_mcp(build=_default_build, *, direction="down", text=None,
-                     selector=None, max_scrolls=10, within_index=None) -> dict:
-    try:
-        backend, session, conn = build(config.load())
-        conn.ensure()
-        snap = actuator.scroll_until(backend, session, direction,
-                                     text=text, selector=selector,
-                                     max_scrolls=max_scrolls,
-                                     within_i=within_index)
-        return results.ok(capability="gesture.scroll_until", provider="adb", data=snap)
-    except errors.PhonectlError as e:
-        return results.err(e, **getattr(e, "lock_state", {}))
+                     selector=None, max_scrolls=10, within_index=None,
+                     dry_run=False, confirm=False) -> dict:
+    # Finding 6: route through run_action (kill switch, risk gate, rate limit,
+    # audit) and re-check STOP between scroll iterations via `halt`.
+    cfg = _action_cfg(dry_run)
+    return runtime.run_action(
+        "scroll_until",
+        lambda b, s: actuator.scroll_until(b, s, direction,
+                                           text=text, selector=selector,
+                                           max_scrolls=max_scrolls,
+                                           within_i=within_index,
+                                           halt=audit.kill_switch_active),
+        {"direction": direction, "text": text},
+        build=build, yes=confirm, cfg=cfg,
+    )
 
 
 def policy_explain(build=_default_build, *, verb="tap", index=None, selector=None, x=None, y=None) -> dict:
@@ -526,7 +530,7 @@ TOOLS = {
     "phone_drag": {"description": "Drag from (x1,y1) to (x2,y2) using a long-duration swipe.", "schema": _schema(x1={"type": "integer"}, y1={"type": "integer"}, x2={"type": "integer"}, y2={"type": "integer"}, duration_ms={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": drag, "needs_build": True},
     "phone_fling": {"description": "Fling in a direction with velocity-scaled speed.", "schema": _schema(direction={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": fling, "needs_build": True},
     "phone_scroll": {"description": "Scroll in a direction, optionally within a scrollable container.", "schema": _schema(direction={"type": "string"}, within_index={"type": "integer"}, distance_pct={"type": "number"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": scroll, "needs_build": True},
-    "phone_scroll_until": {"description": "Scroll until text or selector appears, or max_scrolls is exhausted.", "schema": _schema(direction={"type": "string"}, text={"type": "string"}, selector={"type": "object"}, max_scrolls={"type": "integer"}, within_index={"type": "integer"}), "handler": scroll_until_mcp, "needs_build": True},
+    "phone_scroll_until": {"description": "Scroll until text or selector appears, or max_scrolls is exhausted.", "schema": _schema(direction={"type": "string"}, text={"type": "string"}, selector={"type": "object"}, max_scrolls={"type": "integer"}, within_index={"type": "integer"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": scroll_until_mcp, "needs_build": True},
     # Phase 4.2: notifications (companion NotificationListenerService or Termux:API read-only)
     "phone_notifications_list": {"description": "List current notifications; each item includes can_reply/can_dismiss flags.", "schema": _schema(package={"type": "string"}), "handler": notifications_list, "needs_build": True},
     "phone_notifications_wait": {"description": "Poll until a matching notification appears or timeout elapses.", "schema": _schema(package={"type": "string"}, title_contains={"type": "string"}, text_contains={"type": "string"}, timeout={"type": "integer"}), "handler": notifications_wait, "needs_build": True},

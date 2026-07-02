@@ -32,10 +32,12 @@ class ClipboardProvider:
 
     def write(self, text: str, *, build, yes: bool = False, cfg=None) -> dict:
         from phonectl import runtime
+        # Audit target is a length surrogate (like `type`): clipboard content is
+        # often a password or token and must never reach the log (Finding 12).
         return runtime.run_action(
             "clipboard_write",
             lambda backend, session: (backend.clipboard_write(text), {"text": text})[1],
-            repr(text[:20]),
+            f"<{len(text)} chars>",
             build=build,
             yes=yes,
             cfg=cfg,

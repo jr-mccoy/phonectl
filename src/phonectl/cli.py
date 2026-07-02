@@ -200,6 +200,14 @@ def _cmd_observe(args):
     return 0
 
 
+def _exit_code(env) -> int:
+    """Uniform envelope→exit-code mapping (README: stopped→2, confirm→3)."""
+    if env.get("ok"):
+        return 0
+    code = env.get("error", {}).get("code")
+    return {"stopped": 2, "confirmation_required": 3}.get(code, 1)
+
+
 def _do_action(args, verb, fn, target):
     cfg = config.load()
 
@@ -229,12 +237,11 @@ def _do_action(args, verb, fn, target):
         else:
             _emit(env["data"])
         return 0
-    code = env["error"]["code"]
     if getattr(args, "json", False):
         print(json.dumps(env, indent=2))
     else:
         print(f"phonectl: {env['error']['message']}")
-    return {"stopped": 2, "confirmation_required": 3}.get(code, 1)
+    return _exit_code(env)
 
 
 def _selector_from_args(args):
@@ -375,7 +382,8 @@ def _cmd_scroll_until(args):
         lambda b, s: actuator.scroll_until(b, s, direction,
                                             text=text, selector=sel,
                                             max_scrolls=max_scrolls,
-                                            within_i=within_i),
+                                            within_i=within_i,
+                                            halt=audit.kill_switch_active),
         {"direction": direction, "text": text},
     )
 
@@ -788,7 +796,7 @@ def _cmd_clipboard_read(args):
         print(env["data"]["text"])
     else:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_clipboard_write(args):
@@ -802,7 +810,7 @@ def _cmd_clipboard_write(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_clipboard_clear(args):
@@ -816,7 +824,7 @@ def _cmd_clipboard_clear(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_intent_start(args):
@@ -840,7 +848,7 @@ def _cmd_intent_start(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_intent_broadcast(args):
@@ -862,7 +870,7 @@ def _cmd_intent_broadcast(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_packages_list(args):
@@ -878,7 +886,7 @@ def _cmd_packages_list(args):
             print(pkg)
     else:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_packages_resolve(args):
@@ -894,7 +902,7 @@ def _cmd_packages_resolve(args):
         print(f"{d['package']}  version={d['version_name']}  activity={d['launch_activity']}")
     else:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_packages_launch(args):
@@ -908,7 +916,7 @@ def _cmd_packages_launch(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_packages_stop(args):
@@ -922,7 +930,7 @@ def _cmd_packages_stop(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_packages_clear(args):
@@ -936,7 +944,7 @@ def _cmd_packages_clear(args):
         print(json.dumps(env, indent=2))
     elif not env["ok"]:
         print(f"phonectl: {env['error']['message']}")
-    return 0 if env["ok"] else 1
+    return _exit_code(env)
 
 
 def _cmd_notifications_list(args):
@@ -1027,7 +1035,7 @@ def _cmd_notifications_reply(args):
         print(json.dumps(env, indent=2))
     else:
         print(f"phonectl: {env['error']['message']}")
-    return 1
+    return _exit_code(env)
 
 
 def _cmd_notifications_dismiss(args):
@@ -1061,7 +1069,7 @@ def _cmd_notifications_dismiss(args):
         print(json.dumps(env, indent=2))
     else:
         print(f"phonectl: {env['error']['message']}")
-    return 1
+    return _exit_code(env)
 
 
 def _cmd_macro_validate(args):

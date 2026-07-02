@@ -27,7 +27,9 @@ DEFAULT_KEYWORDS = {
         "clear data",
         "force stop",
     ),
-    "install_keyword": ("install", "allow", "grant", "subscribe", "send"),
+    # Deliberately narrow: "allow"/"grant"/"send"/"subscribe" appear on nearly every
+    # permission or messaging screen and caused confirmation fatigue (review F4).
+    "install_keyword": ("install", "sideload"),
 }
 
 _SIGNAL_LEVEL = {
@@ -39,10 +41,25 @@ _SIGNAL_LEVEL = {
     "otp_like_content": "medium",
     "high_risk_verb": "high",
     "critical_verb": "critical",
+    "critical_intent": "critical",
 }
 
-HIGH_RISK_VERBS = frozenset({"packages_stop", "intent_broadcast", "notifications_reply"})
+HIGH_RISK_VERBS = frozenset(
+    {"packages_stop", "intent_start", "intent_broadcast", "notifications_reply"}
+)
 CRITICAL_VERBS = frozenset({"packages_clear"})
+
+# intent_start payloads that can dial, call, or message with no on-screen signal.
+_CRITICAL_INTENT_MARKERS = (
+    "tel:",
+    "sms:",
+    "smsto:",
+    "mms:",
+    "mmsto:",
+    "android.intent.action.CALL",
+    "android.intent.action.DIAL",
+    "android.intent.action.SENDTO",
+)
 
 
 def _bump(level: str, candidate: str) -> str:
@@ -88,5 +105,9 @@ def classify(
         add("critical_verb", f"{verb} is a critical-risk verb")
     if verb in HIGH_RISK_VERBS:
         add("high_risk_verb", f"{verb} is a high-risk verb")
+    if verb == "intent_start":
+        blob = str(target).lower()
+        if any(marker.lower() in blob for marker in _CRITICAL_INTENT_MARKERS):
+            add("critical_intent", "intent targets dialer/SMS (tel:/sms:/CALL)")
 
     return {"level": level, "reasons": reasons}

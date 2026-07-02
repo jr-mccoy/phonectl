@@ -256,3 +256,40 @@ def test_input_fling_issues_fast_swipe(calls, wm_size_runner):
 def test_input_fling_unknown_direction_raises():
     with pytest.raises(ValueError):
         AdbBackend(serial=None).input_fling("sideways")
+
+
+# Finding 7: intent/launch args reach the device shell and are re-tokenized
+# there — every value must be shlex-quoted like input_text/clipboard_write.
+@pytest.mark.parametrize("hostile", [
+    "a b", "a;reboot", "x&y", "$(id)", "`id`", "it's", 'say "hi"',
+])
+def test_intent_fields_shell_quoted(hostile):
+    import shlex
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_start(
+        action=hostile, data=hostile, component=hostile, extras={hostile: hostile},
+    )
+    cmd = calls[-1][0]
+    assert hostile not in cmd  # raw value must never appear as a bare token
+    assert cmd.count(shlex.quote(hostile)) >= 4
+
+
+@pytest.mark.parametrize("hostile", ["a b", "a;reboot", "$(id)"])
+def test_intent_broadcast_fields_shell_quoted(hostile):
+    import shlex
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).intent_broadcast(
+        hostile, extras={hostile: hostile}
+    )
+    cmd = calls[-1][0]
+    assert hostile not in cmd
+    assert cmd.count(shlex.quote(hostile)) >= 3
+
+
+def test_launch_package_shell_quoted():
+    import shlex
+    calls = []
+    AdbBackend(serial=None, runner=make_runner(calls)).launch("com.x; reboot")
+    cmd = calls[-1][0]
+    assert "com.x; reboot" not in cmd
+    assert shlex.quote("com.x; reboot") in cmd

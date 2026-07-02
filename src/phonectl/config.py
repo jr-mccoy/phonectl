@@ -42,4 +42,6 @@ def save(cfg: dict) -> None:
 
 
 def get_mode(cfg: dict) -> str:
-    return cfg.get("mode", "auto")
+    # Safe-by-default (Finding 5): actions require confirmation until the user
+    # explicitly opts into auto (config set mode auto / setup wizard).
+    return cfg.get("mode", "confirm")
