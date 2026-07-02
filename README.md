@@ -260,7 +260,7 @@ phonectl intent broadcast com.example.MY_ACTION --yes
 phonectl intent broadcast com.example.MY_ACTION --extra key=value --yes
 ```
 
-Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies `intent_broadcast` as `high_risk_verb`. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
+Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies both `intent_start` and `intent_broadcast` as `high_risk_verb`; an `intent start` whose action or data targets the dialer or SMS (`tel:`, `sms:`/`smsto:`, `ACTION_CALL`/`DIAL`/`SENDTO`) is classified **critical** and denied by default policy. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
 
 ### `packages`
 
@@ -444,10 +444,11 @@ Before any mutating action executes, `runtime.run_action` observes the current s
 | `password_field` | `high` | A parsed element has `password: true`. |
 | `payment_keyword` | `critical` | Screen text contains payment/purchase/bank/card wording. |
 | `destructive_keyword` | `critical` | Screen text contains factory reset, wipe, delete account, or uninstall wording. |
-| `install_keyword` | `high` | Screen text contains install, allow, grant, subscribe, or send. |
+| `install_keyword` | `high` | Screen text contains install or sideload wording. |
 | `otp_like_content` | `medium` | Visible element text contains a 4-8 digit code. |
-| `high_risk_verb` | `high` | Verb is `packages_stop`, `intent_broadcast`, or `notifications_reply`. |
+| `high_risk_verb` | `high` | Verb is `packages_stop`, `intent_start`, `intent_broadcast`, or `notifications_reply`. |
 | `critical_verb` | `critical` | Verb is `packages_clear`. |
+| `critical_intent` | `critical` | `intent_start` action/data targets the dialer or SMS (`tel:`, `sms:`/`smsto:`/`mms:`, `ACTION_CALL`/`DIAL`/`SENDTO`). |
 
 Effective default policy:
 

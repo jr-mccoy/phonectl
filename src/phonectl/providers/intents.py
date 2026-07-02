@@ -15,7 +15,14 @@ class IntentProvider:
                 errors.CapabilityUnavailableError("intent_start not available"),
                 capability="intent.start",
             )
-        target = component or action or data or "(intent)"
+        # Structured target: the risk classifier inspects action/data for
+        # dialer/SMS markers (tel:, sms:, ACTION_CALL) — a bare component
+        # string would hide them.
+        target = {
+            k: v
+            for k, v in {"action": action, "data": data, "component": component}.items()
+            if v
+        } or "(intent)"
         return rt.run_action(
             "intent_start",
             lambda backend, session: (
