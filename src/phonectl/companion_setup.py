@@ -76,3 +76,19 @@ def ensure_accessibility(adb, out, *, assume_yes, prompt) -> dict:
     adb("shell", "settings", "put", "secure", "enabled_accessibility_services", value)
     adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
     return step("accessibility", "done", "AccessibilityService enabled")
+
+
+_NOTIF_LISTENER_HINT = (
+    "Manual step (adb cannot grant this): open the companion app and tap "
+    "'Notification access' to enable inline-reply/dismiss.")
+
+
+def ensure_notifications(adb, out) -> dict:
+    dump = adb("shell", "dumpsys", "package", PACKAGE).stdout
+    granted = "POST_NOTIFICATIONS: granted=true" in dump
+    result = step("notifications", "skipped", "POST_NOTIFICATIONS already granted")
+    if not granted:
+        adb("shell", "pm", "grant", PACKAGE, "android.permission.POST_NOTIFICATIONS")
+        result = step("notifications", "done", "granted POST_NOTIFICATIONS")
+    out(_NOTIF_LISTENER_HINT)
+    return result

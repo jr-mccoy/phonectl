@@ -113,3 +113,19 @@ def test_ensure_accessibility_appends_to_existing_service():
             if len(a) > 5 and a[2] == "put" and a[4] == "enabled_accessibility_services"]
     assert puts, "expected a put to enabled_accessibility_services"
     assert puts[-1][-1] == existing + ":" + cs.ACCESSIBILITY_COMPONENT  # existing entry preserved
+
+def test_ensure_notifications_grants_when_missing():
+    adb = FakeAdb([(lambda a: a[:3] == ("shell", "dumpsys", "package"),
+                    cp(out="android.permission.POST_NOTIFICATIONS: granted=false"))])
+    out = []
+    r = cs.ensure_notifications(adb, out.append)
+    assert r["status"] == "done"
+    assert any(a[:3] == ("shell", "pm", "grant") for a in adb.calls)
+    assert any("notification access" in m.lower() for m in out)
+
+def test_ensure_notifications_skips_when_granted():
+    adb = FakeAdb([(lambda a: a[:3] == ("shell", "dumpsys", "package"),
+                    cp(out="android.permission.POST_NOTIFICATIONS: granted=true"))])
+    r = cs.ensure_notifications(adb, (lambda m: None))
+    assert r["status"] == "skipped"
+    assert not any(a[:3] == ("shell", "pm", "grant") for a in adb.calls)
