@@ -80,7 +80,7 @@ class AdbBackend:
         self._adb("shell", "input", "keyevent", keycode)
 
     def launch(self, package: str) -> None:
-        self._adb("shell", "monkey", "-p", package,
+        self._adb("shell", "monkey", "-p", shlex.quote(package),
                   "-c", "android.intent.category.LAUNCHER", "1")
 
     def clipboard_write(self, text: str) -> None:
@@ -91,23 +91,25 @@ class AdbBackend:
 
     def intent_start(self, *, action=None, data=None, component=None,
                      extras=None, flags=None) -> None:
+        # `adb shell am …` is re-tokenized by the device shell: every value
+        # must be quoted, same as input_text/clipboard_write (Finding 7).
         cmd = ["shell", "am", "start"]
         if action:
-            cmd += ["-a", action]
+            cmd += ["-a", shlex.quote(action)]
         if data:
-            cmd += ["-d", data]
+            cmd += ["-d", shlex.quote(data)]
         if component:
-            cmd += ["-n", component]
+            cmd += ["-n", shlex.quote(component)]
         if flags is not None:
             cmd += ["-f", str(flags)]
         for key, val in (extras or {}).items():
-            cmd += ["--es", key, str(val)]
+            cmd += ["--es", shlex.quote(key), shlex.quote(str(val))]
         self._adb(*cmd)
 
     def intent_broadcast(self, action: str, *, extras=None) -> None:
-        cmd = ["shell", "am", "broadcast", "-a", action]
+        cmd = ["shell", "am", "broadcast", "-a", shlex.quote(action)]
         for key, val in (extras or {}).items():
-            cmd += ["--es", key, str(val)]
+            cmd += ["--es", shlex.quote(key), shlex.quote(str(val))]
         self._adb(*cmd)
 
     def packages_list(self, include_system: bool = False) -> list:
