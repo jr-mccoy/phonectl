@@ -28,6 +28,8 @@ def raise_companion_error(err: dict):
         "capability_disabled": errors.CapabilityUnavailableError,
         "unauthorized": errors.UnauthorizedError,
         "unknown_method": errors.UnknownMethodError,
+        # Finding 9: the observation the action was reasoned over no longer matches the tree.
+        "stale_generation": errors.StaleSnapshotError,
     }.get(code, errors.PhonectlError)
     raise exc(message)
 

@@ -16,6 +16,9 @@ class AccessibilityProvider:
     def __init__(self, transport, *, timeout: float = 2.0) -> None:
         self._t = transport
         self._timeout = timeout
+        # Tree-generation token from the last observe_native (Finding 9). Threaded into
+        # set_text/semantic so the companion can refuse actions reasoned over a stale tree.
+        self._last_generation = None
 
     def is_available(self) -> bool:
         try:
@@ -47,7 +50,15 @@ class AccessibilityProvider:
     # --- Task 3: native tree + compat XML ---
 
     def observe_native(self) -> dict:
-        return self._call("observe_native")
+        data = self._call("observe_native")
+        if "generation" in data:
+            self._last_generation = data["generation"]
+        return data
+
+    def _with_generation(self, params: dict) -> dict:
+        if self._last_generation is not None:
+            params["generation"] = self._last_generation
+        return params
 
     def ui_dump(self) -> str:
         from phonectl import native_tree
@@ -75,10 +86,11 @@ class AccessibilityProvider:
         self._call("key", {"keycode": keycode})
 
     def input_text(self, text):
-        self._call("set_text", {"text": text, "mode": "type"})
+        self._call("set_text", self._with_generation({"text": text, "mode": "type"}))
 
     def set_text_native(self, node_id, text):
-        self._call("set_text", {"node_id": node_id, "text": text, "mode": "set"})
+        self._call("set_text",
+                   self._with_generation({"node_id": node_id, "text": text, "mode": "set"}))
 
     def launch(self, package):
         self._call("launch", {"package": package})
@@ -95,7 +107,8 @@ class AccessibilityProvider:
     def semantic_action(self, node_id, action) -> dict:
         if action not in SUPPORTED_SEMANTIC_ACTIONS:
             raise ValueError(f"unsupported semantic action {action!r}")
-        return self._call("semantic", {"node_id": node_id, "action": action})
+        return self._call("semantic",
+                          self._with_generation({"node_id": node_id, "action": action}))
 
     # --- Task 6: UI event polling ---
 

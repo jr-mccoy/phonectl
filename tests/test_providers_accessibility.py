@@ -92,6 +92,61 @@ def test_semantic_action_rejects_unknown_action_locally():
     assert all(m != "semantic" for m, _ in t.sent)  # never contacted companion
 
 
+# --- Finding 9: actions carry the generation of the observation they were reasoned over ---
+
+def _native_with_generation(gen):
+    def handler(_params):
+        data = _native_handler({})
+        data["generation"] = gen
+        return data
+    return handler
+
+
+def test_set_text_native_threads_last_observed_generation():
+    t = RecordingTransport()
+    t._handlers["observe_native"] = _native_with_generation(7)
+    p = AccessibilityProvider(t)
+    p.observe_native()
+    p.set_text_native("n2", "hello")
+    method, params = t.sent[-1]
+    assert method == "set_text"
+    assert params["generation"] == 7
+
+
+def test_semantic_action_threads_last_observed_generation():
+    t = RecordingTransport()
+    t._handlers["observe_native"] = _native_with_generation(3)
+    t._handlers["semantic"] = lambda p: {"performed": p["action"]}
+    p = AccessibilityProvider(t)
+    p.observe_native()
+    p.semantic_action("n1", "click")
+    assert t.sent[-1][1]["generation"] == 3
+
+
+def test_generation_omitted_before_first_observation():
+    # No observation yet -> no token to bind to; the companion allows opted-out callers.
+    t = RecordingTransport()
+    AccessibilityProvider(t).set_text_native("n2", "hello")
+    assert "generation" not in t.sent[-1][1]
+
+
+def test_reobserve_updates_the_threaded_generation():
+    t = RecordingTransport()
+    p = AccessibilityProvider(t)
+    t._handlers["observe_native"] = _native_with_generation(1)
+    p.observe_native()
+    t._handlers["observe_native"] = _native_with_generation(2)
+    p.observe_native()
+    p.set_text_native("n2", "hello")
+    assert t.sent[-1][1]["generation"] == 2
+
+
+def test_stale_generation_maps_to_stale_snapshot_error():
+    p = AccessibilityProvider(ErrorTransport("stale_generation", "re-observe"))
+    with pytest.raises(errors.StaleSnapshotError):
+        p.set_text_native("n1", "hi")
+
+
 # --- Finding 3: companion error envelopes map to the typed error hierarchy ---
 
 class ErrorTransport(LoopbackTransport):

@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.phonectl.companion.accessibility.EventRing
+import com.phonectl.companion.accessibility.Generation
 import com.phonectl.companion.accessibility.NativeTreeJson
 import com.phonectl.companion.accessibility.NodeData
 import com.phonectl.companion.accessibility.NodeId
@@ -31,6 +32,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -43,6 +45,13 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     private val events = EventRing()
 
+    /**
+     * Tree-generation token (Finding 9): bumped on every tree-mutating accessibility event.
+     * observe_native returns the current value; set_text/semantic refuse a request whose echoed
+     * generation no longer matches, so an action is bound to the observation it was reasoned over.
+     */
+    private val treeGeneration = AtomicLong(0)
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -50,6 +59,11 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        ) {
+            treeGeneration.incrementAndGet()
+        }
         val type = eventTypeName(event.eventType) ?: return
         val pkg = event.packageName?.toString() ?: ""
         events.add(type, pkg, event.eventTime)
@@ -65,6 +79,9 @@ class CompanionAccessibilityService : AccessibilityService() {
     // --- observe_native ---
 
     private fun observeNative(): JSONObject {
+        // Capture the generation BEFORE walking: if the tree mutates mid-walk the event bumps the
+        // counter and a later action carrying this token is (correctly, conservatively) stale.
+        val generation = treeGeneration.get()
         val windows = mutableListOf<WindowData>()
         for (window in safeWindows()) {
             val root = window.root ?: continue
@@ -85,6 +102,7 @@ class CompanionAccessibilityService : AccessibilityService() {
         // `flags` key — native_tree.to_compat_xml ignores it.
         return NativeTreeJson.tree(windows, dm.widthPixels, dm.heightPixels)
             .put("flags", ObserveFlags.compute(windows))
+            .put("generation", generation)
     }
 
     private fun safeWindows(): List<AccessibilityWindowInfo> =
@@ -213,6 +231,7 @@ class CompanionAccessibilityService : AccessibilityService() {
     // --- set_text ---
 
     private fun setText(params: JSONObject) {
+        Generation.requireFresh(Generation.requested(params), treeGeneration.get())
         val text = params.optString("text", "")
         val node = when (params.optString("mode", "set")) {
             "type" -> findFocusedEditable()
@@ -243,6 +262,7 @@ class CompanionAccessibilityService : AccessibilityService() {
     // --- semantic ---
 
     private fun semantic(params: JSONObject): JSONObject {
+        Generation.requireFresh(Generation.requested(params), treeGeneration.get())
         val action = params.optString("action", "")
         if (!SemanticActions.isSupported(action)) {
             throw MethodException("unsupported_action", "unknown semantic action '$action'")
@@ -343,33 +363,39 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     // --- shared node lookup ---
 
+    /**
+     * Resolve a node id across all windows, refusing ambiguity (Finding 9): resource ids are not
+     * unique (list rows share them), and silently acting on the first match targets the wrong
+     * node. Two or more matches raise `ambiguous_node_id`; zero returns null (caller raises
+     * `node_not_found`).
+     */
     private fun findById(nodeId: String): AccessibilityNodeInfo? {
         if (nodeId.isBlank()) return null
+        val matches = mutableListOf<AccessibilityNodeInfo>()
         for (window in safeWindows()) {
             val root = window.root ?: continue
-            val match = findByIdRec(root, window.id, emptyList(), nodeId)
-            if (match != null) {
-                root.recycle()
-                return match
-            }
+            collectById(root, window.id, emptyList(), nodeId, matches)
             root.recycle()
         }
-        return null
+        if (matches.size > 1) {
+            matches.forEach { it.recycle() }
+            NodeId.requireUnambiguous(matches.size, nodeId) // throws ambiguous_node_id
+        }
+        return matches.firstOrNull()
     }
 
-    private fun findByIdRec(
+    private fun collectById(
         node: AccessibilityNodeInfo, windowId: Int, path: List<Int>, target: String,
-    ): AccessibilityNodeInfo? {
+        out: MutableList<AccessibilityNodeInfo>,
+    ) {
         if (NodeId.resolve(node.viewIdResourceName, windowId, path) == target) {
-            return AccessibilityNodeInfo.obtain(node)
+            out.add(AccessibilityNodeInfo.obtain(node))
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val match = findByIdRec(child, windowId, path + i, target)
+            collectById(child, windowId, path + i, target, out)
             child.recycle()
-            if (match != null) return match
         }
-        return null
     }
 
     private fun nodeActionStrings(node: AccessibilityNodeInfo): List<String> =
