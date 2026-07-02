@@ -105,7 +105,10 @@ def _make_companion_transport(cfg):
     port = cfg.get("companion_port")
     if not port:
         return None
-    return SocketTransport(cfg.get("companion_host", "127.0.0.1"), int(port))
+    # companion_token pairs the CLI with the APK (Finding 2): the token is shown in
+    # the companion UI and pasted into config; loopback alone is not a trust boundary.
+    return SocketTransport(cfg.get("companion_host", "127.0.0.1"), int(port),
+                           token=cfg.get("companion_token"))
 
 
 def _make_termux_provider():
@@ -487,6 +490,32 @@ def _cmd_policy(args):
         print(json.dumps(out, indent=2))
     else:
         print(f"phonectl: {args.verb} -> {out['decision']} (risk={out['risk_level']})")
+    return 0
+
+
+def _cmd_stop(args):
+    """Engage the emergency kill switch from the host (out-of-band, human-driven)."""
+    audit.engage_stop("stopped via CLI\n")
+    env = results.ok(capability="control.stop", data={"stopped": True})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print("phonectl: STOP engaged (kill switch active)")
+    return 0
+
+
+def _cmd_resume(args):
+    """Clear the emergency kill switch — deliberately host-only (Finding 1).
+
+    Resume is not reachable from any agent surface (MCP tool or daemon RPC); a
+    human must run this on the host (or use the companion notification/tile).
+    """
+    cleared = audit.clear_stop()
+    env = results.ok(capability="control.resume", data={"stopped": False})
+    if getattr(args, "json", False):
+        print(json.dumps(env, indent=2))
+    else:
+        print("phonectl: STOP cleared" if cleared else "phonectl: no STOP was engaged")
     return 0
 
 
@@ -1488,6 +1517,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     mcp = sub.add_parser("mcp")
     mcp.set_defaults(func=_cmd_mcp)
+
+    # Emergency kill switch — host-only (Finding 1). `resume` is intentionally not
+    # exposed on any agent surface (no MCP tool, no daemon RPC).
+    st = sub.add_parser("stop", help="Engage the emergency kill switch (STOP).")
+    st.add_argument("--json", action="store_true")
+    st.set_defaults(func=_cmd_stop)
+    rs = sub.add_parser("resume", help="Clear the kill switch (host-only, human action).")
+    rs.add_argument("--json", action="store_true")
+    rs.set_defaults(func=_cmd_resume)
 
     # clipboard subcommand group
     cb = sub.add_parser("clipboard")

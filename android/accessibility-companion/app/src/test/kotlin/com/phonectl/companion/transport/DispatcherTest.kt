@@ -149,6 +149,67 @@ class DispatcherTest {
         assertEquals("unknown_method", resp.getJSONObject("error").getString("code"))
     }
 
+    // --- shared-secret token auth (Finding 2) ---
+
+    private val pingAndEcho = mapOf<String, Method>(
+        "ping" to { _ -> JSONObject().put("pong", true) },
+        "echo" to { p -> JSONObject().put("said", p.optString("msg")) },
+    )
+
+    private fun tokenRequest(method: String, token: String?): String {
+        val req = JSONObject().put("version", 1).put("request_id", "t1")
+            .put("method", method).put("params", JSONObject())
+        if (token != null) req.put("token", token)
+        return req.toString()
+    }
+
+    @Test
+    fun requestWithoutTokenIsRejectedWhenTokenExpected() {
+        val d = Dispatcher(pingAndEcho, expectedToken = "secret")
+        val resp = JSONObject(d.handleLine(tokenRequest("echo", token = null))!!)
+        assertFalse(resp.getBoolean("ok"))
+        assertEquals("unauthorized", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun requestWithWrongTokenIsRejected() {
+        val d = Dispatcher(pingAndEcho, expectedToken = "secret")
+        val resp = JSONObject(d.handleLine(tokenRequest("echo", token = "nope"))!!)
+        assertFalse(resp.getBoolean("ok"))
+        assertEquals("unauthorized", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun requestWithCorrectTokenPasses() {
+        val d = Dispatcher(pingAndEcho, expectedToken = "secret")
+        val resp = JSONObject(d.handleLine(tokenRequest("echo", token = "secret"))!!)
+        assertTrue(resp.getBoolean("ok"))
+    }
+
+    @Test
+    fun pingIsExemptFromTokenForLiveness() {
+        val d = Dispatcher(pingAndEcho, expectedToken = "secret")
+        val resp = JSONObject(d.handleLine(tokenRequest("ping", token = null))!!)
+        assertTrue(resp.getBoolean("ok"))
+        assertTrue(resp.getJSONObject("data").getBoolean("pong"))
+    }
+
+    @Test
+    fun unauthorizedTakesPrecedenceOverUnknownMethod() {
+        // An unauthenticated caller must not be able to probe which methods exist.
+        val d = Dispatcher(pingAndEcho, expectedToken = "secret")
+        val resp = JSONObject(d.handleLine(tokenRequest("does_not_exist", token = null))!!)
+        assertEquals("unauthorized", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun noTokenExpectedLeavesSocketOpen() {
+        // expectedToken defaults to null (unpaired / JVM contract tests) — no token required.
+        val d = Dispatcher(pingAndEcho)
+        val resp = JSONObject(d.handleLine(tokenRequest("echo", token = null))!!)
+        assertTrue(resp.getBoolean("ok"))
+    }
+
     // --- no-payload logging (Plan 4.8 Task 2 / SPEC §9) ---
 
     @Test

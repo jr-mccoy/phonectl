@@ -34,6 +34,12 @@
     <string name="pref_notif_access_granted">Granted — phonectl can read, reply to, and dismiss notifications. Tap to review.</string>
     <string name="pref_notif_access_missing">Not granted. Tap to open Settings → Notifications → Device &amp; app notifications → phonectl companion → Allow.</string>
 
+    <!-- Settings: pairing token (Finding 2) -->
+    <string name="prefs_pairing_title">Pairing</string>
+    <string name="pref_pairing_token_title">Companion token</string>
+    <string name="pref_pairing_token_summary">Set this as companion_token in phonectl config, then set companion_port. Loopback is not a security boundary on Android — this shared secret is what keeps other apps out. Tap to copy.</string>
+    <string name="pref_pairing_token_copied">Token copied to clipboard</string>
+
     <!-- Settings: emergency stop -->
     <string name="prefs_control_title">Control</string>
     <string name="pref_stopped_title">Emergency stop</string>
@@ -51,7 +57,7 @@
     <string name="trust_ocr_title">OCR</string>
     <string name="trust_ocr_summary">OCR reads text from a screenshot you captured; images never leave the device (on-device ML-Kit). Used only as a fallback when the Tesseract binary is not installed.</string>
     <string name="trust_local_title">Local only</string>
-    <string name="trust_local_summary">The transport server binds 127.0.0.1 only. No data leaves the device over the network.</string>
+    <string name="trust_local_summary">The transport server binds 127.0.0.1 only, so no data leaves the device over the network. Loopback is NOT an app boundary on Android, so every request must also carry the pairing token — see the Pairing section.</string>
     <string name="trust_audit_title">Audit visibility</string>
     <string name="trust_audit_summary">Every action is logged to ~/.config/phonectl/actions.jsonl on the Python side. You can read this log at any time.</string>
     <string name="trust_warn_title">Password &amp; payment warnings</string>

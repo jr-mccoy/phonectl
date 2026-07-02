@@ -102,6 +102,37 @@ class ServerTest {
     }
 
     @Test
+    fun serverRejectsUnauthenticatedRequest() {
+        // Finding 2: with a token configured, an action method sent without the token is refused;
+        // ping stays open for liveness. Drives the real loopback socket end-to-end.
+        val methods = mapOf<String, Method>(
+            "ping" to { _ -> JSONObject().put("pong", true) },
+            "set_text" to { _ -> JSONObject().put("applied", true) },
+        )
+        val server = Server(port = 0, dispatcher = Dispatcher(methods, expectedToken = "secret"))
+        server.start()
+        try {
+            val noToken = JSONObject().put("version", 1).put("request_id", "a")
+                .put("method", "set_text").put("params", JSONObject()).toString()
+            val denied = JSONObject(roundTrip(server.boundPort, noToken)!!)
+            assertEquals(false, denied.getBoolean("ok"))
+            assertEquals("unauthorized", denied.getJSONObject("error").getString("code"))
+
+            val withToken = JSONObject().put("version", 1).put("request_id", "b")
+                .put("method", "set_text").put("params", JSONObject())
+                .put("token", "secret").toString()
+            val ok = JSONObject(roundTrip(server.boundPort, withToken)!!)
+            assertTrue(ok.getBoolean("ok"))
+
+            val ping = JSONObject().put("version", 1).put("request_id", "c")
+                .put("method", "ping").put("params", JSONObject()).toString()
+            assertTrue(JSONObject(roundTrip(server.boundPort, ping)!!).getBoolean("ok"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun refusesNonLoopbackHost() {
         val server = Server(port = 0, dispatcher = Dispatcher(emptyMap()), host = "10.0.0.5")
         assertThrows(IllegalArgumentException::class.java) { server.start() }

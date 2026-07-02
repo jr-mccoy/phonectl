@@ -43,16 +43,23 @@ class _SocketConn:
 class SocketTransport:
     """Loopback TCP transport — newline-delimited JSON with stale-response protection."""
 
-    def __init__(self, host: str, port: int, *, version: int = 1, connect=None) -> None:
+    def __init__(self, host: str, port: int, *, version: int = 1, connect=None,
+                 token=None) -> None:
         if host not in _LOOPBACK:
             raise ValueError(f"companion transport is loopback-only; refusing host {host!r}")
         self._host, self._port, self._version = host, port, version
+        self._token = token
         self._connect = connect or (lambda h, p, t: _SocketConn(h, p, t))
 
     def request(self, method: str, params: dict, *, request_id: str, timeout: float) -> dict:
-        line = _json.dumps({"method": method, "params": params or {},
-                            "request_id": request_id, "timeout": timeout,
-                            "version": self._version})
+        req = {"method": method, "params": params or {},
+               "request_id": request_id, "timeout": timeout,
+               "version": self._version}
+        # Shared-secret auth (Finding 2). Loopback is not a UID boundary on Android:
+        # both the daemon RPC and the companion socket require this token per-request.
+        if self._token is not None:
+            req["token"] = self._token
+        line = _json.dumps(req)
         conn = self._connect(self._host, self._port, timeout)
         deadline = _time.monotonic() + timeout
         try:

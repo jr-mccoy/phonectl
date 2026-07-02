@@ -348,15 +348,14 @@ def audit_query(*, limit=20) -> dict:
 
 
 def stop() -> dict:
-    (config.config_dir() / "STOP").write_text("")
+    audit.engage_stop("")
     return results.ok(capability="control.stop", data={"stopped": True})
 
 
-def resume() -> dict:
-    p = config.config_dir() / "STOP"
-    if p.exists():
-        p.unlink()
-    return results.ok(capability="control.resume", data={"stopped": False})
+# There is intentionally no `resume()` handler here: clearing the kill switch is a
+# human-only, out-of-band action (Finding 1). The agent-facing MCP surface can
+# engage STOP (phone_stop) but cannot clear it — resume via `phonectl resume` on
+# the host or the companion notification/tile.
 
 
 def _notifications_provider(build):
@@ -506,7 +505,9 @@ TOOLS = {
     "phone_policy_explain": {"description": "Explain the risk/policy decision for an action.", "schema": _schema(verb={"type": "string"}, **_TARGET_PROPS), "handler": policy_explain, "needs_build": True},
     "phone_audit_query": {"description": "Read recent redacted audit entries.", "schema": _schema(limit={"type": "integer"}), "handler": audit_query, "needs_build": False},
     "phone_stop": {"description": "Engage the emergency stop.", "schema": _OBJ, "handler": stop, "needs_build": False},
-    "phone_resume": {"description": "Clear the emergency stop.", "schema": _OBJ, "handler": resume, "needs_build": False},
+    # phone_resume is intentionally NOT exposed: clearing the kill switch is a
+    # human-only, out-of-band action (Finding 1). Resume via `phonectl resume`
+    # on the host or the companion notification/tile.
     # Phase 3.2: clipboard, intent, packages
     "phone_clipboard_read": {"description": "Read clipboard text (requires Termux:API).", "schema": _OBJ, "handler": clipboard_read, "needs_build": True},
     "phone_clipboard_write": {"description": "Write text to the clipboard.", "schema": _schema(text={"type": "string"}, dry_run={"type": "boolean"}, confirm={"type": "boolean"}), "handler": clipboard_write, "needs_build": True},

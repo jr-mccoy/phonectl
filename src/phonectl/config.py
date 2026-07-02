@@ -5,6 +5,7 @@ from pathlib import Path
 DEFAULTS: dict = {
     "companion_host": "127.0.0.1",
     "companion_port": None,
+    "companion_token": None,    # shared secret paired from the companion APK UI (Finding 2)
     "companion_timeout": 2.0,
     "daemon_host": "127.0.0.1",
     "daemon_autostart": False,

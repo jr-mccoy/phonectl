@@ -53,8 +53,10 @@ def test_duplicate_registration_raises():
         pass
 
 
-def test_mutating_set_contains_stop_resume():
+def test_mutating_set_contains_stop_not_resume():
     # act is no longer in MUTATING: its submit is fast; the worker acquires the lock during execution
     # macro_run/cancel are also MUTATING (Phase 6.1)
-    assert {"stop", "resume"} <= rpc.MUTATING
+    assert "stop" in rpc.MUTATING
     assert {"macro_run", "macro_cancel"} <= rpc.MUTATING
+    # Finding 1: there is no resume RPC — resume is a human-only, out-of-band action.
+    assert "resume" not in rpc.MUTATING
