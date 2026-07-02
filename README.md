@@ -415,7 +415,7 @@ Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/
 
 ### Single-writer runtime & audit
 
-All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers with a process-local lock, stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
+All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers — both within a process (thread lock) and across phonectl processes (an `flock` on `$PHONECTL_HOME/action.lock`) — stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
 
 Action verbs accept `--json` to print the full structured result envelope:
 
@@ -424,13 +424,13 @@ phonectl tap --xy 100 200 --json
 phonectl type "hello" --request-id req-123 --idempotency-key msg-1 --json
 ```
 
-The action envelope includes `verb`, `target`, and `request_id`. A repeated `--idempotency-key` replays the first process-local envelope with `idempotent_replay: true` instead of executing the action again. Durable cross-process idempotency is deferred to the daemon runtime.
+The action envelope includes `verb`, `target`, and `request_id`. A repeated `--idempotency-key` replays the first envelope with `idempotent_replay: true` instead of executing the action again. Replay envelopes persist to `$PHONECTL_HOME/idempotency.json` (TTL `idempotency_ttl`, default 300 s), so deduplication holds across one-shot CLI invocations, not just within the daemon process.
 
 Single-writer control errors use stable codes:
 
 | Code | Exit | Meaning |
 |---|---:|---|
-| `busy` | `1` | Another action holds the process-local writer lock; retry later. |
+| `busy` | `1` | Another action (in this or another phonectl process) holds the single-writer lock; retry later. |
 | `stopped` | `2` | The `STOP` kill-switch file is present. |
 | `confirmation_required` | `3` | Confirm mode refused the action because `--yes` was not supplied. |
 
@@ -622,6 +622,13 @@ provider.semantic_action("node_id", "scroll_forward")
 provider.set_text_native("node_id", "search query")  # ACTION_SET_TEXT, IME-independent
 ```
 
+Node ids are **bound to the observation they came from**: `observe_native` returns a
+tree-`generation` token, the provider echoes it on `set_text`/`semantic`, and the companion
+refuses the request with `stale_generation` (surfaced as `stale_snapshot`) when the tree changed
+in between — re-observe and retry. A node id that matches more than one node (list rows often
+share a `viewIdResourceName`) is refused with `ambiguous_node_id` rather than silently acting on
+the first match.
+
 **UI event stream** (cursor-based polling):
 
 ```python
@@ -716,6 +723,17 @@ Keys absent from the companion's `capabilities` map default to **disabled** — 
 handshake did not explicitly affirm is not exercised, and the toggle set never invents
 capabilities the provider does not support.
 
+### Guarded apps
+
+Packages on the companion's guarded list are protected on the device side for **both actions and
+observation**: gestures, key events, text entry, semantic actions, and `launch` are refused with
+`guarded_action`; `observe_native`, `screencap`, and `ocr_screen` refuse when a guarded app is in
+the foreground (guarded windows are also dropped from split-screen observations); the UI event
+stream and `notifications_list` filter guarded packages out; and `notifications_reply`/`dismiss`
+refuse notifications from guarded apps. Screenshots additionally only ever land under the
+companion's own app storage — a client-supplied output path outside it is refused
+(`path_rejected`).
+
 ### Emergency stop
 
 The companion APK's persistent "Stop phonectl" notification and Quick-Settings tile set a
@@ -730,6 +748,11 @@ session. The companion check **fails closed**: when a companion is configured
 refused as `stopped` rather than silently proceeding. If the companion is intentionally offline,
 unset `companion_port` (or fix connectivity) to act over ADB alone — a setup with no companion
 configured never consults this check.
+
+The companion also enforces its stop **on-device**: while `stopped=true`, the companion's own
+dispatcher refuses every method except `ping` (liveness) and `handshake` (how the stop is
+observed) with a `stopped` error. A direct socket client — anything that bypasses the phonectl
+Python layer entirely — cannot act through the companion while it is stopped.
 
 ```bash
 # File-based kill switch (always available, no companion needed)
@@ -911,7 +934,7 @@ Stable error codes:
 | `capability_unavailable` | false | true | The active provider cannot perform the requested capability. |
 | `guarded_action` | false | true | Policy or a guardrail blocked the action. |
 | `rate_limited` | true | false | Action rate limiting blocked the request temporarily. |
-| `busy` | true | false | Another action holds the process-local writer lock. |
+| `busy` | true | false | Another action (in this or another phonectl process) holds the single-writer lock. |
 | `stopped` | false | true | The kill switch is active. |
 | `confirmation_required` | false | true | The action requires explicit confirmation. |
 
