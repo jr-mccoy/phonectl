@@ -12,3 +12,6 @@ snap-*.png
 .project-memory/generated/*.local.md
 .project-memory/generated/*.tmp
 # <<< breadcrumbs managed block <<<
+
+# Claude Code personal project overrides (incl. MCP approvals)
+.claude/settings.local.json
