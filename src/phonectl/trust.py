@@ -44,7 +44,9 @@ def companion_stopped(transport, *, timeout: float = 1.0) -> bool:
 
 
 def gate_capabilities(advertised: dict, enabled: dict) -> dict:
-    return {k: bool(v) and bool(enabled.get(k, True)) for k, v in advertised.items()}
+    # Unknown keys default to disabled (Finding 5): a capability the companion
+    # handshake did not explicitly affirm must not be exercised.
+    return {k: bool(v) and bool(enabled.get(k, False)) for k, v in advertised.items()}
 
 
 class GatedProvider:

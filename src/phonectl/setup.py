@@ -72,7 +72,7 @@ def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.
         return 1
 
     if conn.backend.get_state() == "device":
-        conn.cfg.setdefault("mode", "auto")
+        conn.cfg.setdefault("mode", "confirm")
         config.save(conn.cfg)
         out(f"phonectl: already connected (serial={conn.backend.serial}). Nothing to do.")
         return 0
@@ -86,7 +86,7 @@ def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.
             except ConnectionError:
                 reconnect_failed = True
             if conn.backend.get_state() == "device":
-                conn.cfg.setdefault("mode", "auto")
+                conn.cfg.setdefault("mode", "confirm")
                 config.save(conn.cfg)
                 out(f"phonectl: reconnected (serial={conn.backend.serial}).")
                 return 0
@@ -111,7 +111,7 @@ def run_setup(conn, prompt=input, out=print, which=shutil.which, exists=os.path.
         return 2
 
     conn.cfg["serial"] = conn.backend.serial or connect_addr
-    conn.cfg.setdefault("mode", "auto")
+    conn.cfg.setdefault("mode", "confirm")
     if ":" in connect_addr:
         conn.cfg["last_port"] = connect_addr.rsplit(":", 1)[-1]
     config.save(conn.cfg)

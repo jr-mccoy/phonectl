@@ -394,8 +394,8 @@ The `mode` key in `~/.config/phonectl/config.json` (or `$PHONECTL_HOME/config.js
 
 | Mode | Behaviour |
 |---|---|
-| `auto` | Acts immediately. Default when no mode is set. |
-| `confirm` | Prints the intended action and refuses unless `--yes` is passed on the command line. Exit code `3` on refusal. |
+| `auto` | Acts immediately. Opt-in: set it explicitly in `config.json`. |
+| `confirm` | Prints the intended action and refuses unless `--yes` is passed on the command line. Exit code `3` on refusal. **Default when no mode is set.** |
 | `dry-run` | Observes the screen, prints what would have been done, but does **not** inject any input and does **not** write to the audit log. |
 
 Set the mode by editing `config.json`:
@@ -712,8 +712,9 @@ The companion APK exposes a per-capability toggle UI. The user enables or disabl
 `trust.gate_capabilities`. A disabled toggle removes the grant from the provider graph; the registry
 falls back to ADB or returns `CapabilityUnavailableError` for that capability.
 
-Keys absent from the companion's `capabilities` map default to **enabled** — the toggle set only
-ever removes grants, never invents capabilities the provider does not support.
+Keys absent from the companion's `capabilities` map default to **disabled** — a capability the
+handshake did not explicitly affirm is not exercised, and the toggle set never invents
+capabilities the provider does not support.
 
 ### Emergency stop
 

@@ -359,13 +359,14 @@ def build(tmp_path, monkeypatch):
 
 
 def test_phone_long_press_returns_ok(build):
-    env = mcp_server.call_tool("phone_long_press", {"x": 100, "y": 200}, build)
+    env = mcp_server.call_tool("phone_long_press", {"x": 100, "y": 200, "confirm": True}, build)
     assert env["ok"] is True
 
 
 def test_phone_scroll_until_returns_ok(build):
     env = mcp_server.call_tool("phone_scroll_until",
-                               {"direction": "down", "text": "x", "max_scrolls": 1},
+                               {"direction": "down", "text": "x", "max_scrolls": 1,
+                                "confirm": True},
                                build)
     assert env["ok"] is True
 
@@ -488,7 +489,8 @@ def test_phone_macro_status_empty(tmp_path, monkeypatch):
 def test_scroll_until_mcp_routes_through_run_action(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     b, _ = make_build()
-    env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1)
+    env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1,
+                                      confirm=True)
     assert env["ok"] is True and env["verb"] == "scroll_until"
     # the funnel audits every action; a direct actuator call would not
     assert (tmp_path / "actions.jsonl").exists()

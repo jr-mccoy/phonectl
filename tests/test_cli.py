@@ -46,6 +46,7 @@ def test_observe_prints_json(tmp_path, monkeypatch, capsys):
 
 def test_tap_auto_mode_acts_and_logs(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     rc = cli.main(["tap", "--xy", "100", "200"])
@@ -119,6 +120,7 @@ def test_doctor_reports_connected(tmp_path, monkeypatch, capsys):
 # Fix C: type command redacts text in audit log
 def test_type_redacts_text_in_audit_log(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     rc = cli.main(["type", "hunter2"])
@@ -202,6 +204,7 @@ def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
 
 def test_tap_json_emits_run_action_envelope(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["tap", "--xy", "1", "2", "--json"])
     out = _json.loads(capsys.readouterr().out)
@@ -212,6 +215,7 @@ def test_tap_json_emits_run_action_envelope(tmp_path, monkeypatch, capsys):
 
 def test_tap_busy_when_lock_held_maps_to_exit_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     from phonectl import runtime
 
@@ -371,6 +375,7 @@ def test_packages_list_emits_ok(tmp_path, monkeypatch, capsys):
 
 def test_swipe_named_direction(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["swipe", "up", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -380,6 +385,7 @@ def test_swipe_named_direction(tmp_path, monkeypatch, capsys):
 
 def test_scroll_until_cli(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["scroll-until", "--text", "NotHere", "--max", "1", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -956,3 +962,16 @@ def test_make_ocr_provider_preserves_local_tesseract_when_companion_disabled(tmp
 
     assert p is not None
     assert p.capabilities()["observe_ocr"] is True
+
+
+def test_default_mode_requires_confirmation(tmp_path, monkeypatch, capsys):
+    # Finding 5: with no config at all, actions must not run unconfirmed.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fb = FakeBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["tap", "--xy", "100", "200"])
+    assert rc == 3
+    assert fb.calls == []
+    rc = cli.main(["tap", "--xy", "100", "200", "--yes"])
+    assert rc == 0
+    assert ("tap", 100, 200) in fb.calls

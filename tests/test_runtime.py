@@ -22,6 +22,7 @@ class FakeSession:
 
 def test_run_action_success_returns_ok_envelope_and_audits(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -120,6 +121,7 @@ def test_run_action_dry_run_observes_but_does_not_act_or_audit(tmp_path, monkeyp
 
 def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
 
@@ -144,6 +146,7 @@ def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
 
 def test_run_action_reports_busy_when_lock_held(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     runtime._action_lock.acquire()
     try:
         env = runtime.run_action(
@@ -180,6 +183,7 @@ def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
 
 def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     backend = FakeBackend()
     sess = FakeSession()
@@ -232,6 +236,7 @@ def _payment_observe(b, s, **kw):
 
 def test_run_action_denies_critical_risk(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(runtime.observer, "observe", _payment_observe)
@@ -250,6 +255,7 @@ def test_run_action_denies_critical_risk(tmp_path, monkeypatch):
 
 def test_run_action_high_risk_confirm_requires_yes(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
 
@@ -287,6 +293,7 @@ def test_run_action_high_risk_confirm_requires_yes(tmp_path, monkeypatch):
 
 def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -311,7 +318,7 @@ def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
 
 def test_run_action_rate_limits_after_bucket_fills(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    config.save({"rate_limits": {"tap": 1, "global": 100}})
+    config.save({"mode": "auto", "rate_limits": {"tap": 1, "global": 100}})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -351,7 +358,7 @@ def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
     import json as _json
 
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    config.save({"rate_limits": {"tap": 1, "global": 100}})
+    config.save({"mode": "auto", "rate_limits": {"tap": 1, "global": 100}})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -490,6 +497,7 @@ def test_blocked_action_is_audited(tmp_path, monkeypatch):
     import json as _json
 
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(runtime.observer, "observe", _payment_observe)
@@ -505,6 +513,7 @@ def test_blocked_action_is_audited(tmp_path, monkeypatch):
 
 def test_idempotency_key_reexecutes_after_ttl(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     backend = FakeBackend()
     sess = FakeSession()
