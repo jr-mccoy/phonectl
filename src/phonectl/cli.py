@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import glob as _glob
 import json
+import os
 from phonectl import (
     __version__,
     actuator,
@@ -16,6 +18,7 @@ from phonectl import (
     diagnostics,
     ui_parser,
 )
+from phonectl import companion_setup as _companion_setup
 from phonectl.adb_backend import AdbBackend
 from phonectl.providers.registry import ProviderRegistry
 from phonectl.providers.termux import TermuxApiProvider
@@ -481,6 +484,51 @@ def _cmd_setup(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
     return setup_mod.run_module(args.module, conn)
+
+
+def _resolve_apk(explicit):
+    if explicit:
+        return explicit
+    candidates = []
+    for base in (os.path.expanduser("~/Download"), "/sdcard/Download",
+                 "/storage/emulated/0/Download"):
+        candidates += _glob.glob(os.path.join(base, "**", "app-debug.apk"), recursive=True)
+    return max(candidates, key=os.path.getmtime) if candidates else None
+
+
+def _cmd_companion_setup(args):
+    cfg = config.load()
+    apk = _resolve_apk(getattr(args, "apk", None))
+    if apk is None:
+        print("phonectl: no app-debug.apk found; pass --apk PATH")
+        return 2
+    backend, _session, conn = build_runtime(cfg)
+    conn.ensure()
+    res = _companion_setup.run_companion_setup(
+        backend.run_adb, cfg, apk_path=apk, assume_yes=getattr(args, "yes", False))
+    if getattr(args, "json", False):
+        print(json.dumps(res, indent=2))
+    else:
+        for s in res["steps"]:
+            print(f"  [{s['status']}] {s['name']}: {s['message']}")
+        print("phonectl: companion setup " + ("OK" if res["ok"] else "FAILED"))
+    return 0 if res["ok"] else 1
+
+
+def _cmd_companion_status(args):
+    cfg = config.load()
+    backend, _session, conn = build_runtime(cfg)
+    adb = backend.run_adb
+    installed = _companion_setup.PACKAGE in adb("shell", "pm", "list", "packages",
+                                                _companion_setup.PACKAGE).stdout
+    acc = _companion_setup.ACCESSIBILITY_COMPONENT in adb(
+        "shell", "settings", "get", "secure", "enabled_accessibility_services").stdout
+    up = _companion_setup._socket_up(adb)
+    report = {"installed": installed, "accessibility": acc, "socket": up,
+              "token_paired": bool(cfg.get("companion_token"))}
+    print(json.dumps(report, indent=2) if getattr(args, "json", False)
+          else "  " + "  ".join(f"{k}={v}" for k, v in report.items()))
+    return 0
 
 
 def _cmd_config_get(args):
@@ -1647,6 +1695,18 @@ def build_parser() -> argparse.ArgumentParser:
     dvw.add_argument("--json", action="store_true")
     dvw.set_defaults(func=_cmd_device_wifi)
     dv.set_defaults(func=lambda args: (dv.print_help(), 2)[1])
+
+    # companion subcommand group (Task 12)
+    cp2 = sub.add_parser("companion")
+    cp2sub = cp2.add_subparsers(dest="companion_cmd")
+    cst = cp2sub.add_parser("setup")
+    cst.add_argument("--apk", default=None)
+    cst.add_argument("--yes", action="store_true")
+    cst.add_argument("--json", action="store_true")
+    cst.set_defaults(func=_cmd_companion_setup)
+    cstat = cp2sub.add_parser("status"); cstat.add_argument("--json", action="store_true")
+    cstat.set_defaults(func=_cmd_companion_status)
+    cp2.set_defaults(func=lambda args: (cp2.print_help(), 2)[1])
 
     # tts subcommand group
     tt = sub.add_parser("tts")

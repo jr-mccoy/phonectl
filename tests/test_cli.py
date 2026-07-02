@@ -1029,3 +1029,26 @@ def test_cli_config_set_unknown_key_exits_2(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     from phonectl import cli
     assert cli.main(["config", "set", "not_a_real_key", "x"]) == 2
+
+
+# ── Task 12: companion setup/status CLI wiring ────────────────────────────────
+
+def test_cli_companion_setup_dispatches(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
+    from phonectl import cli, companion_setup
+
+    class _Backend:  # stands in for AdbBackend
+        serial = "1.2.3.4:5"
+        def run_adb(self, *a):
+            import subprocess; return subprocess.CompletedProcess(a, 0, stdout="", stderr="")
+    class _Conn:
+        def __init__(self): self.backend = _Backend()
+        def ensure(self): pass
+    monkeypatch.setattr(cli, "build_runtime", lambda cfg: (_Conn().backend, None, _Conn()))
+    monkeypatch.setattr(companion_setup, "run_companion_setup",
+                        lambda adb, cfg, **k: {"ok": True, "steps": [
+                            companion_setup.step("install", "done", "ok")]})
+    rc = cli.main(["companion", "setup", "--apk", str(apk), "--yes"])
+    assert rc == 0
+    assert "install" in capsys.readouterr().out
