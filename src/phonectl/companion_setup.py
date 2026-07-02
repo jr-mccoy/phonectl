@@ -55,3 +55,24 @@ def ensure_installed(adb, apk_path, cfg, out) -> dict:
         return step("install", "failed", res.stderr.strip() or res.stdout.strip() or "adb install failed", ok=False)
     cfg["companion_apk_sha"] = sha
     return step("install", "done", f"installed {apk_path}")
+
+
+def _confirm(assume_yes, prompt, what) -> bool:
+    if assume_yes:
+        return True
+    return prompt(f"Grant/start: {what}? [y/N]: ").strip().lower() in ("y", "yes")
+
+
+def ensure_accessibility(adb, out, *, assume_yes, prompt) -> dict:
+    current = adb("shell", "settings", "get", "secure",
+                  "enabled_accessibility_services").stdout.strip()
+    if ACCESSIBILITY_COMPONENT in current:
+        return step("accessibility", "skipped", "service already enabled")
+    out("This enables an AccessibilityService that can read the screen and inject gestures.")
+    if not _confirm(assume_yes, prompt, "enable companion AccessibilityService"):
+        return step("accessibility", "failed", "declined (re-run with --yes)", ok=False)
+    value = (ACCESSIBILITY_COMPONENT if current in ("", "null")
+             else current + ":" + ACCESSIBILITY_COMPONENT)
+    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", value)
+    adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
+    return step("accessibility", "done", "AccessibilityService enabled")

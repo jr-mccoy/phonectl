@@ -82,3 +82,24 @@ def test_ensure_installed_signature_mismatch_reinstalls(tmp_path):
     assert installs[1][0] == "install" and "-r" not in installs[1]
     import hashlib
     assert cfg["companion_apk_sha"] == hashlib.sha256(b"APKBYTES").hexdigest()
+
+def test_ensure_accessibility_skips_when_already_enabled():
+    adb = FakeAdb([(lambda a: a[:4] == ("shell", "settings", "get", "secure"),
+                    cp(out=cs.ACCESSIBILITY_COMPONENT))])
+    r = cs.ensure_accessibility(adb, (lambda m: None), assume_yes=True, prompt=(lambda m="": "y"))
+    assert r["status"] == "skipped"
+    assert not any(a[2] == "put" for a in adb.calls if len(a) > 2)
+
+def test_ensure_accessibility_appends_when_yes():
+    adb = FakeAdb([(lambda a: a[:4] == ("shell", "settings", "get", "secure"), cp(out="null"))])
+    r = cs.ensure_accessibility(adb, (lambda m: None), assume_yes=True, prompt=(lambda m="": "n"))
+    assert r["status"] == "done"
+    puts = [a for a in adb.calls if len(a) > 2 and a[2] == "put"]
+    assert any(cs.ACCESSIBILITY_COMPONENT in a for a in puts)
+    assert any(a[-2:] == ("accessibility_enabled", "1") for a in puts)
+
+def test_ensure_accessibility_declined_without_yes():
+    adb = FakeAdb([(lambda a: a[:4] == ("shell", "settings", "get", "secure"), cp(out="null"))])
+    r = cs.ensure_accessibility(adb, (lambda m: None), assume_yes=False, prompt=(lambda m="": "n"))
+    assert r["status"] == "failed" and not r["ok"]
+    assert not any(len(a) > 2 and a[2] == "put" for a in adb.calls)
