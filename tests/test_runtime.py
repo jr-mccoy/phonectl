@@ -1,3 +1,5 @@
+import pytest
+
 from phonectl import config, errors, runtime
 
 
@@ -220,6 +222,113 @@ def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
     assert second["data"]["hash"] == "after1"
     assert second["idempotent_replay"] is True
     assert second["request_id"] == "req1"
+
+
+# --- Finding 11: idempotency + the single-writer lock hold across processes ---
+
+def _observed(monkeypatch):
+    monkeypatch.setattr(
+        runtime.observer,
+        "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h"}),
+    )
+
+
+def test_idempotency_key_dedupes_across_processes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    runtime._idempotency_cache.clear()
+    _observed(monkeypatch)
+    backend, sess = FakeBackend(), FakeSession()
+    build = lambda cfg: (backend, sess, FakeConn())
+    runs = []
+
+    def fn(b, s):
+        runs.append(1)
+        return {"hash": f"after{len(runs)}"}
+
+    first = runtime.run_action("tap", fn, {"x": 1}, build=build,
+                               idempotency_key="k1", gen_id=lambda: "req1")
+    # A one-shot CLI is a fresh process: the module-level cache is empty, only disk survives.
+    runtime._idempotency_cache.clear()
+    second = runtime.run_action("tap", fn, {"x": 1}, build=build,
+                                idempotency_key="k1", gen_id=lambda: "req2")
+    assert runs == [1]
+    assert second["idempotent_replay"] is True
+    assert second["request_id"] == "req1"
+    assert second["data"]["hash"] == first["data"]["hash"]
+    assert (tmp_path / "idempotency.json").exists()
+
+
+def test_idempotency_disk_entry_expires_after_ttl(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    runtime._idempotency_cache.clear()
+    _observed(monkeypatch)
+    backend, sess = FakeBackend(), FakeSession()
+    build = lambda cfg: (backend, sess, FakeConn())
+    runs = []
+
+    def fn(b, s):
+        runs.append(1)
+        return {"hash": f"after{len(runs)}"}
+
+    t = [1000.0]
+    runtime.run_action("tap", fn, {"x": 1}, build=build, cfg={"mode": "auto"},
+                       idempotency_key="k1", gen_id=lambda: "r1", now=lambda: t[0])
+    runtime._idempotency_cache.clear()   # fresh process
+    t[0] += 301.0                        # past the 300 s default TTL
+    env = runtime.run_action("tap", fn, {"x": 1}, build=build, cfg={"mode": "auto"},
+                             idempotency_key="k1", gen_id=lambda: "r2", now=lambda: t[0])
+    assert runs == [1, 1]
+    assert "idempotent_replay" not in env
+
+
+def test_corrupt_idempotency_file_is_ignored(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    runtime._idempotency_cache.clear()
+    (tmp_path / "idempotency.json").write_text("{not json")
+    _observed(monkeypatch)
+    backend, sess = FakeBackend(), FakeSession()
+    env = runtime.run_action("tap", lambda b, s: {"hash": "x"}, {"x": 1},
+                             build=lambda cfg: (backend, sess, FakeConn()),
+                             idempotency_key="k1")
+    assert env["ok"] is True
+
+
+def test_two_cli_processes_serialize_via_file_lock(tmp_path, monkeypatch):
+    # A second phonectl process (simulated by an independently held flock on action.lock)
+    # must get a retryable busy envelope, not run concurrently.
+    fcntl = pytest.importorskip("fcntl")
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    holder = open(tmp_path / "action.lock", "a+")
+    try:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        env = runtime.run_action(
+            "tap",
+            lambda b, s: None,
+            {"x": 1},
+            build=lambda cfg: (_ for _ in ()).throw(AssertionError("no build")),
+        )
+    finally:
+        holder.close()
+    assert env["ok"] is False
+    assert env["error"]["code"] == "busy"
+    assert env["error"]["retryable"] is True
+
+
+def test_file_lock_released_after_action(tmp_path, monkeypatch):
+    fcntl = pytest.importorskip("fcntl")
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    _observed(monkeypatch)
+    backend, sess = FakeBackend(), FakeSession()
+    runtime.run_action("tap", lambda b, s: {"hash": "x"}, {"x": 1},
+                       build=lambda cfg: (backend, sess, FakeConn()))
+    with open(tmp_path / "action.lock", "a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # must not raise
 
 
 def _payment_observe(b, s, **kw):

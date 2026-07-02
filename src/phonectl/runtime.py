@@ -18,6 +18,72 @@ def _sweep_idempotency_cache(now_ts, ttl):
         del _idempotency_cache[k]
 
 
+# --- cross-process idempotency + single-writer lock (Finding 11) ---
+# The module globals above only protect a long-lived process (the daemon). Each one-shot CLI
+# invocation is a fresh process, so idempotency keys and the single-writer lock must also hold
+# through $PHONECTL_HOME: a JSON store for replays and an flock'd sentinel for mutual exclusion.
+
+def _idempotency_path():
+    return config.config_dir() / "idempotency.json"
+
+
+def _load_idempotency() -> dict:
+    path = _idempotency_path()
+    try:
+        return json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, ValueError):
+        return {}   # corrupt/unreadable store must never block actions
+
+
+def _idempotency_lookup(key, now_ts, ttl):
+    """A fresh (unexpired) cached envelope for ``key``, from memory or disk, else None."""
+    if key in _idempotency_cache:
+        ts, env = _idempotency_cache[key]
+        if now_ts - ts < ttl:
+            return env
+        del _idempotency_cache[key]   # expired -> fall through and re-execute
+    entry = _load_idempotency().get(key)
+    if entry:
+        ts, env = entry
+        if now_ts - ts < ttl:
+            _idempotency_cache[key] = (ts, env)
+            return env
+    return None
+
+
+def _idempotency_store(key, now_ts, env, ttl) -> None:
+    _sweep_idempotency_cache(now_ts, ttl)
+    _idempotency_cache[key] = (now_ts, dict(env))
+    store = {k: v for k, v in _load_idempotency().items() if now_ts - v[0] < ttl}
+    store[key] = [now_ts, dict(env)]
+    try:
+        _idempotency_path().write_text(json.dumps(store))
+    except OSError:
+        pass   # persistence is best-effort; the in-process cache still holds
+
+
+def _acquire_file_lock():
+    """Cross-process single-writer lock. Returns the open file holding the flock,
+    True where flock is unsupported (the thread lock still guards in-process),
+    or None when another phonectl process holds the lock."""
+    try:
+        import fcntl
+    except ImportError:
+        return True
+    f = open(config.config_dir() / "action.lock", "a+")
+    try:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return f
+    except OSError:
+        f.close()
+        return None
+
+
+def _release_file_lock(lock) -> None:
+    if hasattr(lock, "close"):
+        lock.close()   # closing drops the flock
+
+
 DEFAULT_LIMITS = {
     "tap": 120,
     "type": 30,
@@ -81,13 +147,12 @@ def run_action(
 ) -> dict:
     cfg = config.load() if cfg is None else cfg
     ttl = cfg.get("idempotency_ttl", 300.0)
-    if idempotency_key is not None and idempotency_key in _idempotency_cache:
-        ts, cached = _idempotency_cache[idempotency_key]
-        if now() - ts < ttl:
+    if idempotency_key is not None:
+        cached = _idempotency_lookup(idempotency_key, now(), ttl)
+        if cached is not None:
             replay = dict(cached)
             replay["idempotent_replay"] = True
             return replay
-        del _idempotency_cache[idempotency_key]   # expired -> fall through and re-execute
     rid = request_id or gen_id()
     base = {"verb": verb, "target": target, "request_id": rid}
 
@@ -115,9 +180,7 @@ def run_action(
         now=now,
     )
     if idempotency_key is not None:
-        ts_now = now()
-        _sweep_idempotency_cache(ts_now, ttl)
-        _idempotency_cache[idempotency_key] = (ts_now, dict(env))
+        _idempotency_store(idempotency_key, now(), env, ttl)
     return env
 
 
@@ -143,6 +206,12 @@ def _run_action_body(
 
     if not _action_lock.acquire(blocking=False):
         return results.err(errors.BusyError("another action is already in progress"), **base)
+    file_lock = _acquire_file_lock()
+    if file_lock is None:
+        _action_lock.release()
+        return results.err(
+            errors.BusyError("another phonectl process is already running an action"), **base
+        )
     try:
         try:
             backend, session, conn = build(cfg)
@@ -229,4 +298,5 @@ def _run_action_body(
         except errors.PhonectlError as e:
             return results.err(e, **getattr(e, "lock_state", {}), **base)
     finally:
+        _release_file_lock(file_lock)
         _action_lock.release()
