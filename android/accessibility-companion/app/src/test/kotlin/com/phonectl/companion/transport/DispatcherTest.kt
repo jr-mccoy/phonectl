@@ -149,6 +149,34 @@ class DispatcherTest {
         assertEquals("unknown_method", resp.getJSONObject("error").getString("code"))
     }
 
+    // --- on-device STOP gate (Finding 3) ---
+
+    private val stopGateMethods = mapOf<String, Method>(
+        "ping" to { _ -> JSONObject().put("pong", true) },
+        "handshake" to { _ -> JSONObject().put("stopped", true) },
+        "gesture" to { _ -> JSONObject().put("gestured", true) },
+        "set_text" to { _ -> JSONObject().put("applied", true) },
+    )
+
+    @Test
+    fun dispatcherRefusesAllActionMethodsWhenStopped() {
+        val gate = Capabilities.methodGate(TrustStateStub(stopped = true))
+        for (method in listOf("gesture", "set_text")) {
+            val resp = JSONObject(Dispatcher(stopGateMethods, gate).handleLine(request(method))!!)
+            assertFalse("$method must be refused when stopped", resp.getBoolean("ok"))
+            assertEquals("stopped", resp.getJSONObject("error").getString("code"))
+        }
+    }
+
+    @Test
+    fun handshakeAndPingStillAllowedWhenStopped() {
+        val gate = Capabilities.methodGate(TrustStateStub(stopped = true))
+        for (method in listOf("ping", "handshake")) {
+            val resp = JSONObject(Dispatcher(stopGateMethods, gate).handleLine(request(method))!!)
+            assertTrue("$method must stay allowed when stopped", resp.getBoolean("ok"))
+        }
+    }
+
     // --- shared-secret token auth (Finding 2) ---
 
     private val pingAndEcho = mapOf<String, Method>(

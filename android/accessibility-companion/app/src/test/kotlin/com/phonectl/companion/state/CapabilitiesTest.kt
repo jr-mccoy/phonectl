@@ -50,4 +50,34 @@ class CapabilitiesTest {
         }
         assertNull(gate("unmapped_method"))
     }
+
+    // --- on-device STOP gate (Finding 3): fail closed independent of the Python client ---
+
+    @Test
+    fun methodGateRefusesEveryActionMethodWhenStopped() {
+        val gate = Capabilities.methodGate(TrustStateStub(stopped = true))
+        val actionMethods = listOf(
+            "observe_native", "events", "gesture", "key", "set_text", "semantic", "launch",
+            "notifications_list", "notifications_reply", "notifications_dismiss",
+            "ocr_image", "ocr_screen", "unmapped_method",
+        )
+        for (method in actionMethods) {
+            assertEquals("$method must fail closed when stopped", "stopped", gate(method))
+        }
+    }
+
+    @Test
+    fun methodGateStillAllowsHandshakeAndPingWhenStopped() {
+        val gate = Capabilities.methodGate(TrustStateStub(stopped = true))
+        assertNull("ping must stay available for liveness when stopped", gate("ping"))
+        assertNull("handshake must stay available to report stopped state", gate("handshake"))
+    }
+
+    @Test
+    fun stopTakesPrecedenceOverCapabilityDisabled() {
+        val gate = Capabilities.methodGate(
+            TrustStateStub(disabled = setOf("act_set_text_native"), stopped = true)
+        )
+        assertEquals("stopped", gate("set_text"))
+    }
 }

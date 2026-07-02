@@ -6,6 +6,16 @@ import re
 _ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 _OTP_RE = re.compile(r"\b\d{4,8}\b")
 
+# Intent verbs whose device-side target can escalate a benign-looking screen into a call or
+# message (Finding 4). `intent_start` is arbitrary `am start` (dialer, ACTION_CALL, deep links);
+# neither verb shows a triggering keyword, so the risk must come from the verb + target, not
+# observed screen text.
+INTENT_VERBS = frozenset({"intent_start", "intent_broadcast"})
+# Dial / message URI schemes (tel:, sms:, smsto:, mms:, mmsto:) anywhere in the target string.
+_CALL_SCHEME_RE = re.compile(r"\b(?:tel|sms|smsto|mms|mmsto):", re.IGNORECASE)
+# The ACTION_CALL action (android.intent.action.CALL); `\b` keeps CALL_BUTTON from matching.
+_CALL_ACTION_RE = re.compile(r"\.call\b", re.IGNORECASE)
+
 DEFAULT_KEYWORDS = {
     "payment_keyword": (
         "pay",
@@ -27,7 +37,9 @@ DEFAULT_KEYWORDS = {
         "clear data",
         "force stop",
     ),
-    "install_keyword": ("install", "allow", "grant", "subscribe", "send"),
+    # Trimmed to genuine install/permission prompts (Finding 4): "allow", "grant", "send", and
+    # "subscribe" fired on far too many benign screens and caused confirmation fatigue.
+    "install_keyword": ("install",),
 }
 
 _SIGNAL_LEVEL = {
@@ -39,10 +51,20 @@ _SIGNAL_LEVEL = {
     "otp_like_content": "medium",
     "high_risk_verb": "high",
     "critical_verb": "critical",
+    "critical_intent": "critical",
 }
 
-HIGH_RISK_VERBS = frozenset({"packages_stop", "intent_broadcast", "notifications_reply"})
+HIGH_RISK_VERBS = frozenset(
+    {"packages_stop", "intent_broadcast", "intent_start", "notifications_reply"}
+)
 CRITICAL_VERBS = frozenset({"packages_clear"})
+
+
+def _is_critical_intent_target(target) -> bool:
+    """True when an intent target places a call or sends a message (tel:/sms:/ACTION_CALL)."""
+    if not isinstance(target, str):
+        return False
+    return bool(_CALL_SCHEME_RE.search(target) or _CALL_ACTION_RE.search(target))
 
 
 def _bump(level: str, candidate: str) -> str:
@@ -88,5 +110,7 @@ def classify(
         add("critical_verb", f"{verb} is a critical-risk verb")
     if verb in HIGH_RISK_VERBS:
         add("high_risk_verb", f"{verb} is a high-risk verb")
+    if verb in INTENT_VERBS and _is_critical_intent_target(target):
+        add("critical_intent", f"intent target {target!r} places a call or sends a message")
 
     return {"level": level, "reasons": reasons}

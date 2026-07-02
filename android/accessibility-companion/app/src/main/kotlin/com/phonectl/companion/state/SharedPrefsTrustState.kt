@@ -9,10 +9,14 @@ import java.security.SecureRandom
  * On-device [TrustState] backed by SharedPreferences, with STOP-sentinel parity against the
  * `$PHONECTL_HOME/STOP` file.
  *
- * Capability toggles default to enabled (foreground-service SPEC §6). The stop state is true if
- * either the in-app flag is set or the sentinel file exists (best-effort: the APK can only read
- * the file when its path is reachable from the app sandbox; the Python side checks its own copy
- * regardless, so this is the low-latency mirror, not the sole guarantee).
+ * Capability toggles default to enabled (foreground-service SPEC §6). The SharedPreferences flag
+ * (set by the Stop notification action / QS tile) is the companion's **authoritative** on-device
+ * STOP state — `Capabilities.methodGate` reads it to fail every action closed while stopped
+ * (Finding 3), independent of the Python client. The `$PHONECTL_HOME/STOP` sentinel is OR-ed in
+ * only as a best-effort extra: it can add a stop but never clear one, and its default
+ * `System.getenv("PHONECTL_HOME")` lookup usually resolves to nothing in the APK's own UID (a
+ * different UID than Termux) — set an explicit shared path via [setStopFilePath] if you need the
+ * file to reach the APK. STOP correctness does not depend on it.
  */
 class SharedPrefsTrustState(context: Context) : TrustState {
 

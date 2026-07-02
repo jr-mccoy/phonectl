@@ -23,8 +23,11 @@ import com.phonectl.companion.transport.Server
  * Foreground service hosting the loopback NDJSON [Server] and the persistent "Stop phonectl"
  * notification (foreground-service SPEC §1/§4).
  *
- * The Stop action does NOT kill the process — it only flips `stopped=true`, which the Python side
- * re-reads on the next `handshake` cycle and enforces via audit.kill_switch_active. Resume clears it.
+ * The Stop action does NOT kill the process — it only flips `stopped=true` in SharedPrefs (the
+ * companion's authoritative STOP state). Enforcement is on-device: `Capabilities.methodGate`
+ * refuses every action method with `stopped` while the flag is set (Finding 3), so a direct client
+ * cannot act during STOP even if it ignores the handshake's `stopped` flag. The Python side also
+ * re-reads the flag each `handshake` cycle as a second layer. Resume clears it.
  */
 class CompanionForegroundService : Service() {
 

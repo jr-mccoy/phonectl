@@ -88,11 +88,25 @@ object Capabilities {
     )
 
     /**
-     * A per-method gate for [com.phonectl.companion.transport.Dispatcher]: returns
-     * `"capability_disabled"` when the method's controlling toggle is off, else null (allowed).
-     * Methods absent from [METHOD_CAPABILITY] are always allowed.
+     * Methods that stay available even when the emergency stop is engaged: the `ping` liveness
+     * probe and the `handshake` negotiation (which reports `stopped=true` back to the Python side).
+     * Every other method fails closed while stopped (Finding 3).
+     */
+    val STOP_EXEMPT: Set<String> = setOf("ping", "handshake")
+
+    /**
+     * A per-method gate for [com.phonectl.companion.transport.Dispatcher].
+     *
+     * STOP is enforced **on-device** here (Finding 3): when [TrustState.isStopped] is true, every
+     * method except [STOP_EXEMPT] is refused with `"stopped"`, so a direct client cannot act while
+     * the kill switch is engaged — enforcement no longer depends on the Python client honouring the
+     * handshake's `stopped` flag. STOP takes precedence over the per-capability toggle.
+     *
+     * Otherwise the gate returns `"capability_disabled"` when the method's controlling toggle is
+     * off, else null (allowed). Methods absent from [METHOD_CAPABILITY] are allowed when not stopped.
      */
     fun methodGate(state: TrustState): (String) -> String? = gate@{ method ->
+        if (state.isStopped() && method !in STOP_EXEMPT) return@gate "stopped"
         val key = METHOD_CAPABILITY[method] ?: return@gate null
         if (state.isCapabilityEnabled(key)) null else "capability_disabled"
     }
