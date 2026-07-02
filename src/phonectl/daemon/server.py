@@ -411,9 +411,20 @@ class DaemonServer:
     # ── action fn mapping ───────────────────────────────────────────────────
 
     def _fn_for(self, params):
-        from phonectl import actuator
+        from phonectl import actuator, audit
         verb = params["verb"]
         target = params.get("target")
+        tp = target if isinstance(target, dict) else {}
+
+        def g(key, default=None):
+            """Read a param from the top-level dict, falling back to the target dict.
+
+            CLI dispatch merges dict-target keys up into params (_act_params), but
+            direct RPC callers may nest everything under `target`; accept both."""
+            if key in params:
+                return params[key]
+            return tp.get(key, default)
+
         if verb == "tap":
             if "i" in params:
                 i = params["i"]
@@ -424,6 +435,9 @@ class DaemonServer:
             if isinstance(target, str) and target.startswith("i="):
                 i = int(target.split("=", 1)[1])
                 return lambda b, s: actuator.tap(b, s, i=i)
+            if isinstance(target, dict) and "selector" in target:
+                sel = target["selector"]
+                return lambda b, s: actuator.tap(b, s, selector=sel)
             x, y = params["x"], params["y"]
             return lambda b, s: actuator.tap(b, s, x=x, y=y)
         if verb == "type":
@@ -438,6 +452,48 @@ class DaemonServer:
         if verb == "launch":
             pkg = params["package"]
             return lambda b, s: actuator.launch(b, s, pkg)
+        if verb == "named_swipe":
+            direction = g("direction")
+            distance_pct = g("distance_pct", 0.5)
+            ms = g("ms", 400)
+            within_i = g("within_i")
+            return lambda b, s: actuator.named_swipe(
+                b, s, direction, distance_pct=distance_pct, ms=ms, within_i=within_i)
+        if verb == "scroll":
+            direction = g("direction")
+            within_i = g("within_i")
+            distance_pct = g("distance_pct", 0.5)
+            ms = g("ms", 400)
+            return lambda b, s: actuator.scroll(
+                b, s, direction, within_i=within_i, distance_pct=distance_pct, ms=ms)
+        if verb == "long_press":
+            i, x, y = g("i"), g("x"), g("y")
+            sel = g("selector")
+            duration_ms = g("duration_ms", 1000)
+            return lambda b, s: actuator.long_press(
+                b, s, i=i, x=x, y=y, selector=sel, duration_ms=duration_ms)
+        if verb == "double_tap":
+            i, x, y = g("i"), g("x"), g("y")
+            sel = g("selector")
+            interval_ms = g("interval_ms", 100)
+            return lambda b, s: actuator.double_tap(
+                b, s, i=i, x=x, y=y, selector=sel, interval_ms=interval_ms)
+        if verb == "drag":
+            coords = g("coords")
+            duration_ms = g("duration_ms", 500)
+            return lambda b, s: actuator.drag(b, s, *coords, duration_ms=duration_ms)
+        if verb == "fling":
+            direction = g("direction")
+            return lambda b, s: actuator.fling(b, s, direction)
+        if verb == "scroll_until":
+            direction = g("direction", "down")
+            text = g("text")
+            sel = g("selector")
+            max_scrolls = g("max_scrolls", 10)
+            within_i = g("within_i")
+            return lambda b, s: actuator.scroll_until(
+                b, s, direction, text=text, selector=sel, max_scrolls=max_scrolls,
+                within_i=within_i, halt=audit.kill_switch_active)
         raise NotImplementedError(f"no fn mapping for verb {verb!r}")
 
     # ── lifecycle (bind / serve / shutdown) ─────────────────────────────────

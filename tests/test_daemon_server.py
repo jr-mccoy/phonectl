@@ -34,6 +34,7 @@ class _FakeBackend:
     def input_swipe(self, x1, y1, x2, y2, ms=200): self.calls.append(("swipe", x1, y1, x2, y2))
     def input_named_swipe(self, direction, distance_pct=0.5, ms=400): self.calls.append(("named_swipe", direction))
     def input_long_press(self, x, y, duration_ms=1000): self.calls.append(("long_press", x, y))
+    def input_fling(self, direction, velocity=2000): self.calls.append(("fling", direction))
     def launch(self, pkg): self.calls.append(("launch", pkg))
     def screencap(self, path): return path
 
@@ -479,6 +480,65 @@ def test_act_via_worker_appends_one_run_record(tmp_path, monkeypatch):
 def test_act_is_not_in_handle_line_mutating_set():
     from phonectl.daemon import rpc as rpc_mod
     assert "act" not in rpc_mod.MUTATING
+
+
+# ── gesture verbs must route through the daemon act job, not just the 5 core ──
+
+@pytest.mark.parametrize("params, expected_call", [
+    ({"verb": "named_swipe", "target": {"direction": "up"}, "direction": "up"},
+     ("named_swipe", "up")),
+    ({"verb": "scroll", "target": {"direction": "down"}, "direction": "down"},
+     ("named_swipe", "down")),
+    ({"verb": "long_press", "target": {"i": 0}, "i": 0},
+     ("long_press", 540, 450)),
+    ({"verb": "drag", "target": {"coords": [1, 2, 3, 4]}, "coords": [1, 2, 3, 4]},
+     ("swipe", 1, 2, 3, 4)),
+    ({"verb": "fling", "target": {"direction": "up"}, "direction": "up"},
+     ("fling", "up")),
+])
+def test_gesture_verbs_run_through_worker(tmp_path, monkeypatch, params, expected_call):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    backend = _FakeBackend()
+    from phonectl.providers.registry import ProviderRegistry
+    from phonectl.session import Session
+    srv = DaemonServer(config.load(),
+                       build=lambda cfg: (ProviderRegistry([backend]), Session(), _FakeConn()))
+    _acc, polled = _submit_run_poll(srv, "act", params)
+    assert polled["ok"] is True, polled
+    assert polled["data"]["status"] == "done", polled
+    assert polled["data"]["result"]["ok"] is True, polled["data"]["result"]
+    assert expected_call in backend.calls, backend.calls
+
+
+def test_double_tap_runs_through_worker(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    backend = _FakeBackend()
+    from phonectl.providers.registry import ProviderRegistry
+    from phonectl.session import Session
+    srv = DaemonServer(config.load(),
+                       build=lambda cfg: (ProviderRegistry([backend]), Session(), _FakeConn()))
+    _acc, polled = _submit_run_poll(
+        srv, "act", {"verb": "double_tap", "target": {"i": 0}, "i": 0})
+    assert polled["data"]["result"]["ok"] is True
+    assert backend.calls.count(("tap", 540, 450)) == 2
+
+
+def test_scroll_until_runs_through_worker(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    backend = _FakeBackend()
+    from phonectl.providers.registry import ProviderRegistry
+    from phonectl.session import Session
+    srv = DaemonServer(config.load(),
+                       build=lambda cfg: (ProviderRegistry([backend]), Session(), _FakeConn()))
+    # "Wi-Fi" is present in the fake dump, so scroll_until returns immediately.
+    _acc, polled = _submit_run_poll(
+        srv, "act",
+        {"verb": "scroll_until", "target": {"direction": "down", "text": "Wi-Fi"},
+         "direction": "down", "text": "Wi-Fi"})
+    assert polled["data"]["result"]["ok"] is True, polled["data"]["result"]
     assert "stop" in rpc_mod.MUTATING
     assert "resume" not in rpc_mod.MUTATING  # Finding 1: no resume RPC
 
