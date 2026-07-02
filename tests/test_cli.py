@@ -975,3 +975,43 @@ def test_default_mode_requires_confirmation(tmp_path, monkeypatch, capsys):
     rc = cli.main(["tap", "--xy", "100", "200", "--yes"])
     assert rc == 0
     assert ("tap", 100, 200) in fb.calls
+
+
+# ── Finding 15: uniform exit codes across command handlers ────────────────────
+
+class _IntentClipBackend(FakeBackend):
+    def capabilities(self):
+        return capabilities.make(
+            observe_ui_tree=True, act_tap=True, act_type=True, act_key=True,
+            launch_app=True, observe_screenshot=True, requires_adb=True,
+            intent_start=True, intent_broadcast=True, write_clipboard=True,
+        )
+
+    def intent_start(self, **kw):
+        self.calls.append(("intent_start", kw))
+
+    def intent_broadcast(self, action, **kw):
+        self.calls.append(("intent_broadcast", action))
+
+    def clipboard_write(self, text):
+        self.calls.append(("clipboard_write", text))
+
+
+def test_intent_start_stopped_exits_2(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    (tmp_path / "STOP").write_text("")
+    fb = _IntentClipBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["intent", "start", "--action", "android.intent.action.VIEW", "--yes"])
+    assert rc == 2
+    assert fb.calls == []
+
+
+def test_clipboard_write_confirm_required_exits_3(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))  # default mode = confirm
+    fb = _IntentClipBackend()
+    monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
+    rc = cli.main(["clipboard", "write", "hello"])
+    assert rc == 3
+    assert fb.calls == []
