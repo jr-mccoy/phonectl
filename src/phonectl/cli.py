@@ -299,7 +299,7 @@ def _cmd_swipe(args):
             lambda b, s: actuator.named_swipe(b, s, direction,
                                                distance_pct=distance_pct,
                                                within_i=within_i),
-            {"direction": direction},
+            {"direction": direction, "distance_pct": distance_pct, "within_i": within_i},
         )
     if len(swipe_args) == 4:
         try:
@@ -319,12 +319,11 @@ def _cmd_long_press(args):
     i = getattr(args, "i", None)
     x = getattr(args, "x", None)
     y = getattr(args, "y", None)
-    target = f"i={i}" if i is not None else f"({x},{y})"
     return _do_action(
         args, "long_press",
         lambda b, s: actuator.long_press(b, s, i=i, x=x, y=y, selector=sel,
                                           duration_ms=args.duration_ms),
-        target,
+        {"i": i, "x": x, "y": y, "selector": sel, "duration_ms": args.duration_ms},
     )
 
 
@@ -333,12 +332,11 @@ def _cmd_double_tap(args):
     i = getattr(args, "i", None)
     x = getattr(args, "x", None)
     y = getattr(args, "y", None)
-    target = f"i={i}" if i is not None else f"({x},{y})"
     return _do_action(
         args, "double_tap",
         lambda b, s: actuator.double_tap(b, s, i=i, x=x, y=y, selector=sel,
                                           interval_ms=args.interval_ms),
-        target,
+        {"i": i, "x": x, "y": y, "selector": sel, "interval_ms": args.interval_ms},
     )
 
 
@@ -347,7 +345,7 @@ def _cmd_drag(args):
     return _do_action(
         args, "drag",
         lambda b, s: actuator.drag(b, s, x1, y1, x2, y2, args.duration_ms),
-        {"coords": [x1, y1, x2, y2]},
+        {"coords": [x1, y1, x2, y2], "duration_ms": args.duration_ms},
     )
 
 
@@ -364,7 +362,7 @@ def _cmd_scroll(args):
     return _do_action(
         args, "scroll",
         lambda b, s: actuator.scroll(b, s, args.direction, within_i=within_i),
-        {"direction": args.direction},
+        {"direction": args.direction, "within_i": within_i},
     )
 
 
@@ -384,7 +382,8 @@ def _cmd_scroll_until(args):
                                             max_scrolls=max_scrolls,
                                             within_i=within_i,
                                             halt=audit.kill_switch_active),
-        {"direction": direction, "text": text},
+        {"direction": direction, "text": text, "selector": sel,
+         "max_scrolls": max_scrolls, "within_i": within_i},
     )
 
 
