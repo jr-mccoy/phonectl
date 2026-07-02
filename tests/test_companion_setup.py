@@ -103,3 +103,13 @@ def test_ensure_accessibility_declined_without_yes():
     r = cs.ensure_accessibility(adb, (lambda m: None), assume_yes=False, prompt=(lambda m="": "n"))
     assert r["status"] == "failed" and not r["ok"]
     assert not any(len(a) > 2 and a[2] == "put" for a in adb.calls)
+
+def test_ensure_accessibility_appends_to_existing_service():
+    existing = "com.other/OtherService"
+    adb = FakeAdb([(lambda a: a[:4] == ("shell", "settings", "get", "secure"), cp(out=existing))])
+    r = cs.ensure_accessibility(adb, (lambda m: None), assume_yes=True, prompt=(lambda m="": "n"))
+    assert r["status"] == "done"
+    puts = [a for a in adb.calls
+            if len(a) > 5 and a[2] == "put" and a[4] == "enabled_accessibility_services"]
+    assert puts, "expected a put to enabled_accessibility_services"
+    assert puts[-1][-1] == existing + ":" + cs.ACCESSIBILITY_COMPONENT  # existing entry preserved
