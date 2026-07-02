@@ -74,7 +74,10 @@
         </service>
 
         <!-- Lifecycle seam (foreground-service SPEC §8): the Phase-5 daemon sends start/stop via
-             `adb shell am broadcast`. Exported so `am broadcast` can reach it; no daemon wiring. -->
+             `adb shell am broadcast` with the paired token as a string extra ("token"). Exported
+             so `am broadcast` can reach it (shell UID cannot hold a signature permission), so the
+             receiver itself verifies the paired companion token and ignores unauthenticated
+             broadcasts (Finding 14). No daemon wiring. -->
         <receiver
             android:name=".service.LifecycleReceiver"
             android:exported="true">
