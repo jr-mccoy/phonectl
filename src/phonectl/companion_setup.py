@@ -142,3 +142,24 @@ def start_server(adb, token, cfg, out, *, assume_yes, prompt,
             return step("server", "done", f"socket :{DEFAULT_PORT} up")
         sleep(1)
     return step("server", "failed", f"socket :{DEFAULT_PORT} never came up", ok=False)
+
+
+def verify(cfg, *, negotiate=None, transport_factory=None) -> dict:
+    if negotiate is None:
+        from phonectl import trust
+        negotiate = trust.negotiate
+    if transport_factory is None:
+        from phonectl.providers.transport import SocketTransport
+        transport_factory = SocketTransport
+    t = transport_factory(cfg.get("companion_host", "127.0.0.1"),
+                          int(cfg.get("companion_port", DEFAULT_PORT)),
+                          token=cfg.get("companion_token"))
+    hs = negotiate(t, timeout=3.0)
+    caps = hs.capabilities or {}
+    data = {"reachable": hs.reachable, "stopped": hs.stopped, "capabilities": caps}
+    if not hs.reachable:
+        return {**step("verify", "failed", "companion unreachable (token/socket?)", ok=False),
+                "data": data}
+    on = sorted(k for k, v in caps.items() if v)
+    return {**step("verify", "done", f"reachable; {len(on)} caps: {', '.join(on)}"),
+            "data": data}

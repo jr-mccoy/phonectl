@@ -201,3 +201,23 @@ def test_start_server_timeout(tmp_path, monkeypatch):
     r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=True,
                         prompt=(lambda m="": "n"), sleep=(lambda s: None), attempts=3)
     assert r["status"] == "failed" and not r["ok"]
+
+class _HS:
+    def __init__(self, reachable, stopped, caps):
+        self.reachable, self.stopped, self.capabilities = reachable, stopped, caps
+
+def test_verify_reachable_reports_caps():
+    seen = {}
+    def fake_factory(host, port, *, token=None):
+        seen.update(host=host, port=port, token=token); return object()
+    r = cs.verify({"companion_token": "t", "companion_port": 8765},
+                  negotiate=lambda t, **k: _HS(True, False, {"observe_ui_native": True}),
+                  transport_factory=fake_factory)
+    assert r["status"] == "done" and r["data"]["reachable"] is True
+    assert seen["token"] == "t" and seen["port"] == 8765
+
+def test_verify_unreachable_fails():
+    r = cs.verify({"companion_token": "t"},
+                  negotiate=lambda t, **k: _HS(False, False, {}),
+                  transport_factory=lambda *a, **k: object())
+    assert r["status"] == "failed" and not r["ok"]
