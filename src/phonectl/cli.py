@@ -469,8 +469,9 @@ def _cmd_doctor(args):
         "capabilities": backend.capabilities(),
     }
     if getattr(args, "json", False):
-        print(json.dumps(results.ok(provider=getattr(backend, "last_used", None) or "adb",
-                                    data=data), indent=2))
+        # provider stays "adb" here: doctor reports ADB connectivity specifically
+        # (get_state/serial are requires_adb capabilities), not a delegated call.
+        print(json.dumps(results.ok(provider="adb", data=data), indent=2))
     else:
         print(f"phonectl: connected (serial={backend.serial}, state={data['state']})")
     return 0
