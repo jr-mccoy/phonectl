@@ -16,6 +16,10 @@ class AdbBackend:
         res = self._runner(cmd, capture_output=True, text=True)
         return res.stdout
 
+    def run_adb(self, *args: str):
+        cmd = self._base() + list(args)
+        return self._runner(cmd, capture_output=True, text=True)
+
     def _adb_bytes(self, *args: str) -> bytes:
         cmd = self._base() + list(args)
         res = self._runner(cmd, capture_output=True)

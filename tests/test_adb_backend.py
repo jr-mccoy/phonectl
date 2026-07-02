@@ -293,3 +293,17 @@ def test_launch_package_shell_quoted():
     cmd = calls[-1][0]
     assert "com.x; reboot" not in cmd
     assert shlex.quote("com.x; reboot") in cmd
+
+
+# Task 2: run_adb full-result seam
+def test_run_adb_returns_full_result_with_serial():
+    calls = []
+    def fake_runner(cmd, **kw):
+        calls.append(cmd)
+        import subprocess
+        return subprocess.CompletedProcess(cmd, 7, stdout="OUT", stderr="ERR")
+    from phonectl.adb_backend import AdbBackend
+    b = AdbBackend(serial="1.2.3.4:5", runner=fake_runner)
+    res = b.run_adb("shell", "true")
+    assert calls == [["adb", "-s", "1.2.3.4:5", "shell", "true"]]
+    assert (res.returncode, res.stdout, res.stderr) == (7, "OUT", "ERR")
