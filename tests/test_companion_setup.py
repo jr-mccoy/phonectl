@@ -167,12 +167,20 @@ def test_start_server_skips_when_already_up(tmp_path, monkeypatch):
     assert r["status"] == "skipped"
     assert not any(a[:3] == ("shell", "am", "broadcast") for a in adb.calls)
 
+def test_start_server_declined_without_yes(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), cp(out=""))])
+    r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=False,
+                        prompt=(lambda m="": "n"), sleep=(lambda s: None))
+    assert r["status"] == "failed" and not r["ok"]
+    assert not any(a[:3] == ("shell", "am", "broadcast") for a in adb.calls)
+
 def test_start_server_broadcasts_then_up(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     seq = [cp(out=""), _listening()]  # down, then up after broadcast
-    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), None)])
+    calls = []
     def ss_dispatch(*a):
-        adb.calls.append(a)
+        calls.append(a)
         if a[:2] == ("shell", "ss"):
             return seq.pop(0) if len(seq) > 1 else seq[0]
         return cp(out="")
@@ -180,8 +188,12 @@ def test_start_server_broadcasts_then_up(tmp_path, monkeypatch):
     r = cs.start_server(ss_dispatch, "tok", cfg, (lambda m: None), assume_yes=True,
                         prompt=(lambda m="": "n"), sleep=(lambda s: None))
     assert r["status"] == "done"
-    assert any(a[:3] == ("shell", "am", "broadcast") and cs.TOKEN_EXTRA in a for a in adb.calls)
+    assert any(a[:3] == ("shell", "am", "broadcast") and "tok" in a and cs.LIFECYCLE_COMPONENT in a
+               for a in calls)
     assert cfg["companion_port"] == cs.DEFAULT_PORT
+    from phonectl import config
+    assert config.load()["companion_port"] == cs.DEFAULT_PORT
+    assert config.load()["companion_host"] == "127.0.0.1"
 
 def test_start_server_timeout(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
