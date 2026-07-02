@@ -149,3 +149,11 @@ def test_coerce_and_set_rejects_unknown_key():
     with pytest.raises(KeyError):
         config.coerce_and_set({}, "not_a_real_key", "x")
 
+
+def test_coerce_and_set_none_default_string_key_stays_string():
+    cfg = {}
+    config.coerce_and_set(cfg, "companion_token", "482913")  # numeric-looking secret
+    assert cfg["companion_token"] == "482913" and isinstance(cfg["companion_token"], str)
+    config.coerce_and_set(cfg, "companion_port", "8765")
+    assert cfg["companion_port"] == 8765 and isinstance(cfg["companion_port"], int)
+

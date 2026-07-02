@@ -17,6 +17,10 @@ DEFAULTS: dict = {
     "idempotency_ttl": 300.0,   # how long a finished job stays dedupe-eligible
 }
 
+# None-defaulted keys that must still coerce to int (their default is None, so the
+# isinstance(default, int) branch below can't catch them).
+_NUMERIC_NONE_KEYS = frozenset({"companion_port"})
+
 
 def config_dir() -> Path:
     base = os.environ.get("PHONECTL_HOME")
@@ -57,19 +61,9 @@ def coerce_and_set(cfg: dict, key: str, raw: str) -> dict:
         value = int(raw)
     elif isinstance(default, float):
         value = float(raw)
-    elif default is None:
-        # Some keys (e.g. companion_port) default to None as an "unset"
-        # sentinel but hold numeric values once configured; best-effort
-        # numeric coercion so `config set companion_port 8765` stores an
-        # int, falling back to the raw string for genuinely textual keys.
-        try:
-            value = int(raw)
-        except ValueError:
-            try:
-                value = float(raw)
-            except ValueError:
-                value = raw
-    else:  # str
+    elif key in _NUMERIC_NONE_KEYS:
+        value = int(raw)
+    else:  # None/str default -> keep as string (e.g. companion_token, serial)
         value = raw
     cfg[key] = value
     return cfg
