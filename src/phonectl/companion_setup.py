@@ -6,6 +6,7 @@ Device contact goes through an injected ``adb(*args) -> CompletedProcess`` seam
 from __future__ import annotations
 
 import hashlib
+import time
 import xml.etree.ElementTree as ET
 
 from phonectl import config as _config
@@ -118,3 +119,26 @@ def acquire_token(adb, cfg, out, *, prompt) -> dict:
     cfg["companion_token"] = token
     _config.save(cfg)
     return step("token", "done", f"paired via {source}")
+
+
+def _socket_up(adb, port=DEFAULT_PORT) -> bool:
+    return f":{port}" in adb("shell", "ss", "-tln").stdout
+
+
+def start_server(adb, token, cfg, out, *, assume_yes, prompt,
+                 sleep=time.sleep, attempts=10) -> dict:
+    if _socket_up(adb):
+        return step("server", "skipped", f"socket :{DEFAULT_PORT} already listening")
+    out(f"This starts the companion's remote-control socket on 127.0.0.1:{DEFAULT_PORT}.")
+    if not _confirm(assume_yes, prompt, "start companion server"):
+        return step("server", "failed", "declined (re-run with --yes)", ok=False)
+    adb("shell", "am", "broadcast", "-a", START_ACTION,
+        "--es", TOKEN_EXTRA, token, "-n", LIFECYCLE_COMPONENT)
+    for _ in range(attempts):
+        if _socket_up(adb):
+            cfg["companion_host"] = "127.0.0.1"
+            cfg["companion_port"] = DEFAULT_PORT
+            _config.save(cfg)
+            return step("server", "done", f"socket :{DEFAULT_PORT} up")
+        sleep(1)
+    return step("server", "failed", f"socket :{DEFAULT_PORT} never came up", ok=False)

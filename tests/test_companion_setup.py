@@ -154,3 +154,38 @@ def test_acquire_token_prompt_fallback(tmp_path, monkeypatch):
     r = cs.acquire_token(adb, cfg, (lambda m: None), prompt=(lambda m="": "  pasted-tok  "))
     assert r["status"] == "done" and cfg["companion_token"] == "pasted-tok"
     assert any(a[:3] == ("shell", "am", "start") for a in adb.calls)  # app launched for the user
+
+
+def _listening(port=8765):
+    return cp(out=f"LISTEN 0 0 [::ffff:127.0.0.1]:{port} *:*")
+
+def test_start_server_skips_when_already_up(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), _listening())])
+    r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=True,
+                        prompt=(lambda m="": "n"), sleep=(lambda s: None))
+    assert r["status"] == "skipped"
+    assert not any(a[:3] == ("shell", "am", "broadcast") for a in adb.calls)
+
+def test_start_server_broadcasts_then_up(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    seq = [cp(out=""), _listening()]  # down, then up after broadcast
+    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), None)])
+    def ss_dispatch(*a):
+        adb.calls.append(a)
+        if a[:2] == ("shell", "ss"):
+            return seq.pop(0) if len(seq) > 1 else seq[0]
+        return cp(out="")
+    cfg = {}
+    r = cs.start_server(ss_dispatch, "tok", cfg, (lambda m: None), assume_yes=True,
+                        prompt=(lambda m="": "n"), sleep=(lambda s: None))
+    assert r["status"] == "done"
+    assert any(a[:3] == ("shell", "am", "broadcast") and cs.TOKEN_EXTRA in a for a in adb.calls)
+    assert cfg["companion_port"] == cs.DEFAULT_PORT
+
+def test_start_server_timeout(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), cp(out=""))])
+    r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=True,
+                        prompt=(lambda m="": "n"), sleep=(lambda s: None), attempts=3)
+    assert r["status"] == "failed" and not r["ok"]
