@@ -483,6 +483,24 @@ def _cmd_setup(args):
     return setup_mod.run_module(args.module, conn)
 
 
+def _cmd_config_get(args):
+    cfg = config.load()
+    print(json.dumps(cfg.get(args.key)) if getattr(args, "json", False) else cfg.get(args.key))
+    return 0
+
+
+def _cmd_config_set(args):
+    cfg = config.load()
+    try:
+        config.coerce_and_set(cfg, args.key, args.value)
+    except KeyError as e:
+        print(f"phonectl: {e}")
+        return 2
+    config.save(cfg)
+    print(f"phonectl: {args.key} = {cfg[args.key]}")
+    return 0
+
+
 def _cmd_policy(args):
     if getattr(args, "policy_cmd", None) != "explain":
         print("phonectl: policy requires explain")
@@ -1605,6 +1623,19 @@ def build_parser() -> argparse.ArgumentParser:
     getir.add_argument("--json", action="store_true")
     getir.set_defaults(func=_cmd_get_text_in_region)
     ge.set_defaults(func=lambda args: (ge.print_help(), 2)[1])
+
+    # config subcommand group
+    cfgp = sub.add_parser("config")
+    cfgsub = cfgp.add_subparsers(dest="config_cmd")
+    cg = cfgsub.add_parser("get")
+    cg.add_argument("key")
+    cg.add_argument("--json", action="store_true")
+    cg.set_defaults(func=_cmd_config_get)
+    cset = cfgsub.add_parser("set")
+    cset.add_argument("key")
+    cset.add_argument("value")
+    cset.set_defaults(func=_cmd_config_set)
+    cfgp.set_defaults(func=lambda args: (cfgp.print_help(), 2)[1])
 
     # device subcommand group
     dv = sub.add_parser("device")

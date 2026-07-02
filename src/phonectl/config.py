@@ -45,3 +45,31 @@ def get_mode(cfg: dict) -> str:
     # Safe-by-default (Finding 5): actions require confirmation until the user
     # explicitly opts into auto (config set mode auto / setup wizard).
     return cfg.get("mode", "confirm")
+
+
+def coerce_and_set(cfg: dict, key: str, raw: str) -> dict:
+    if key not in DEFAULTS:
+        raise KeyError(f"unknown config key: {key!r}")
+    default = DEFAULTS[key]
+    if isinstance(default, bool):
+        value = str(raw).strip().lower() in ("1", "true", "yes", "on")
+    elif isinstance(default, int):
+        value = int(raw)
+    elif isinstance(default, float):
+        value = float(raw)
+    elif default is None:
+        # Some keys (e.g. companion_port) default to None as an "unset"
+        # sentinel but hold numeric values once configured; best-effort
+        # numeric coercion so `config set companion_port 8765` stores an
+        # int, falling back to the raw string for genuinely textual keys.
+        try:
+            value = int(raw)
+        except ValueError:
+            try:
+                value = float(raw)
+            except ValueError:
+                value = raw
+    else:  # str
+        value = raw
+    cfg[key] = value
+    return cfg

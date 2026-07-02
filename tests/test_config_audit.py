@@ -1,4 +1,5 @@
 import json
+import pytest
 from phonectl import config, audit
 
 
@@ -132,4 +133,19 @@ def test_export_redacts_targets(tmp_path, monkeypatch):
     out = tmp_path / "bundle.json"
     audit.export(str(out), redacted=True)
     assert "482913" not in out.read_text()
+
+
+def test_coerce_and_set_typed():
+    cfg = {}
+    config.coerce_and_set(cfg, "companion_port", "8765")
+    assert cfg["companion_port"] == 8765 and isinstance(cfg["companion_port"], int)
+    config.coerce_and_set(cfg, "companion_timeout", "1.5")
+    assert cfg["companion_timeout"] == 1.5
+    config.coerce_and_set(cfg, "companion_token", "abc")
+    assert cfg["companion_token"] == "abc"
+
+
+def test_coerce_and_set_rejects_unknown_key():
+    with pytest.raises(KeyError):
+        config.coerce_and_set({}, "not_a_real_key", "x")
 

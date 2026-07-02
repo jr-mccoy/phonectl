@@ -1015,3 +1015,17 @@ def test_clipboard_write_confirm_required_exits_3(tmp_path, monkeypatch):
     rc = cli.main(["clipboard", "write", "hello"])
     assert rc == 3
     assert fb.calls == []
+
+
+def test_cli_config_set_and_get(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import cli
+    assert cli.main(["config", "set", "companion_port", "8765"]) == 0
+    assert cli.main(["config", "get", "companion_port"]) == 0
+    assert "8765" in capsys.readouterr().out
+
+
+def test_cli_config_set_unknown_key_exits_2(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import cli
+    assert cli.main(["config", "set", "not_a_real_key", "x"]) == 2
