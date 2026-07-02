@@ -1052,3 +1052,31 @@ def test_cli_companion_setup_dispatches(tmp_path, monkeypatch, capsys):
     rc = cli.main(["companion", "setup", "--apk", str(apk), "--yes"])
     assert rc == 0
     assert "install" in capsys.readouterr().out
+
+
+def test_cli_companion_status_dispatches(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    import subprocess
+    from phonectl import cli, companion_setup
+    config.save({"companion_token": "t"})
+
+    def fake_run_adb(*a):
+        if a[:3] == ("shell", "pm", "list"):
+            return subprocess.CompletedProcess(a, 0, stdout="package:com.phonectl.companion", stderr="")
+        if a[:4] == ("shell", "settings", "get", "secure"):
+            return subprocess.CompletedProcess(a, 0, stdout=companion_setup.ACCESSIBILITY_COMPONENT, stderr="")
+        if a[:2] == ("shell", "ss"):
+            return subprocess.CompletedProcess(a, 0, stdout="LISTEN 0 0 [::ffff:127.0.0.1]:8765 *:*", stderr="")
+        return subprocess.CompletedProcess(a, 0, stdout="", stderr="")
+
+    class _Backend:  # stands in for AdbBackend
+        serial = "1.2.3.4:5"
+        def run_adb(self, *a):
+            return fake_run_adb(*a)
+    class _Conn:
+        def ensure(self): pass
+    monkeypatch.setattr(cli, "build_runtime", lambda cfg: (_Backend(), None, _Conn()))
+    rc = cli.main(["companion", "status", "--json"])
+    assert rc == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report == {"installed": True, "accessibility": True, "socket": True, "token_paired": True}

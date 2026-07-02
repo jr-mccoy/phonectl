@@ -254,3 +254,13 @@ def test_orchestrator_stops_on_failed_step(tmp_path, monkeypatch):
                                  prompt=(lambda m="": "n"), out=(lambda m: None), sleep=(lambda s: None))
     assert res["ok"] is False and res["steps"][-1]["name"] == "install"
     assert len(res["steps"]) == 1  # stopped, did not proceed
+
+
+def test_status_reports_state():
+    adb = FakeAdb([
+        (lambda a: a[:3] == ("shell", "pm", "list"), cp(out="package:com.phonectl.companion")),
+        (lambda a: a[:4] == ("shell", "settings", "get", "secure"), cp(out=cs.ACCESSIBILITY_COMPONENT)),
+        (lambda a: a[:2] == ("shell", "ss"), cp(out="LISTEN 0 0 [::ffff:127.0.0.1]:8765 *:*")),
+    ])
+    rep = cs.status(adb, {"companion_token": "t"})
+    assert rep == {"installed": True, "accessibility": True, "socket": True, "token_paired": True}

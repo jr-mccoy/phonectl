@@ -498,6 +498,9 @@ def _resolve_apk(explicit):
 
 def _cmd_companion_setup(args):
     cfg = config.load()
+    if getattr(args, "apk", None) and not os.path.exists(args.apk):
+        print(f"phonectl: apk not found: {args.apk}")
+        return 2
     apk = _resolve_apk(getattr(args, "apk", None))
     if apk is None:
         print("phonectl: no app-debug.apk found; pass --apk PATH")
@@ -518,14 +521,12 @@ def _cmd_companion_setup(args):
 def _cmd_companion_status(args):
     cfg = config.load()
     backend, _session, conn = build_runtime(cfg)
-    adb = backend.run_adb
-    installed = _companion_setup.PACKAGE in adb("shell", "pm", "list", "packages",
-                                                _companion_setup.PACKAGE).stdout
-    acc = _companion_setup.ACCESSIBILITY_COMPONENT in adb(
-        "shell", "settings", "get", "secure", "enabled_accessibility_services").stdout
-    up = _companion_setup._socket_up(adb)
-    report = {"installed": installed, "accessibility": acc, "socket": up,
-              "token_paired": bool(cfg.get("companion_token"))}
+    try:
+        conn.ensure()
+    except ConnectionError as e:
+        print(f"phonectl: {e}")
+        return 2
+    report = _companion_setup.status(backend.run_adb, cfg)
     print(json.dumps(report, indent=2) if getattr(args, "json", False)
           else "  " + "  ".join(f"{k}={v}" for k, v in report.items()))
     return 0
@@ -1704,7 +1705,8 @@ def build_parser() -> argparse.ArgumentParser:
     cst.add_argument("--yes", action="store_true")
     cst.add_argument("--json", action="store_true")
     cst.set_defaults(func=_cmd_companion_setup)
-    cstat = cp2sub.add_parser("status"); cstat.add_argument("--json", action="store_true")
+    cstat = cp2sub.add_parser("status")
+    cstat.add_argument("--json", action="store_true")
     cstat.set_defaults(func=_cmd_companion_status)
     cp2.set_defaults(func=lambda args: (cp2.print_help(), 2)[1])
 

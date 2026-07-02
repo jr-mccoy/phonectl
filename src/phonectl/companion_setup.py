@@ -165,6 +165,18 @@ def verify(cfg, *, negotiate=None, transport_factory=None) -> dict:
             "data": data}
 
 
+def status(adb, cfg) -> dict:
+    """Read-only companion state for `phonectl companion status` (no device mutation)."""
+    accessibility = ACCESSIBILITY_COMPONENT in adb(
+        "shell", "settings", "get", "secure", "enabled_accessibility_services").stdout
+    return {
+        "installed": _installed(adb),
+        "accessibility": accessibility,
+        "socket": _socket_up(adb),
+        "token_paired": bool(cfg.get("companion_token")),
+    }
+
+
 def run_companion_setup(adb, cfg, *, apk_path, assume_yes=False,
                         prompt=input, out=print, sleep=time.sleep, verify_kwargs=None) -> dict:
     steps: list = []
