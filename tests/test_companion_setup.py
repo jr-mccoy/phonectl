@@ -63,8 +63,10 @@ def test_ensure_installed_signature_mismatch_reinstalls(tmp_path):
     apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"APKBYTES")
     seq = [cp(rc=0, out="Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match]"),
            cp(out="Success")]
+    calls = []
     installs = []
     def adb(*a):
+        calls.append(a)
         if a[:3] == ("shell", "pm", "list"):
             return cp(out="package:com.phonectl.companion")
         if a[0] == "install":
@@ -75,8 +77,7 @@ def test_ensure_installed_signature_mismatch_reinstalls(tmp_path):
     cfg = {}
     r = cs.ensure_installed(adb, str(apk), cfg, (lambda m: None))
     assert r["status"] == "done" and r["ok"]
-    assert any(a[0] == "uninstall" for a in [("uninstall",)] ) or True  # uninstall happened via adb
-    # first install was `-r`, then a bare install after uninstall:
+    assert any(c[:2] == ("uninstall", cs.PACKAGE) for c in calls)
     assert installs[0][:2] == ("install", "-r")
     assert installs[1][0] == "install" and "-r" not in installs[1]
     import hashlib
