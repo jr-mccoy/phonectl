@@ -555,3 +555,35 @@ def test_idempotency_cache_sweeps_expired_on_store(tmp_path, monkeypatch):
                            now=lambda: clock["t"])
     assert len(runtime._idempotency_cache) == 1
     assert "k4" in runtime._idempotency_cache
+
+
+def test_stop_check_failclosed_when_companion_configured_but_unreachable(tmp_path, monkeypatch):
+    # Finding 8: kill_switch_active swallows check exceptions, so the check
+    # itself must treat "configured but unreachable" as stopped.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import config as _config
+    from phonectl.providers.transport import LoopbackTransport
+
+    unreachable = LoopbackTransport({}, available=False)
+    env = runtime.run_action(
+        "tap", lambda b, s: {}, "i=0",
+        build=lambda cfg: (_ for _ in ()).throw(AssertionError("must not build")),
+        yes=True, cfg=_config.load(), companion_transport=unreachable,
+    )
+    assert env["ok"] is False
+    assert env["error"]["code"] == "stopped"
+
+
+def test_run_action_consults_configured_companion_from_cfg(tmp_path, monkeypatch):
+    # A companion configured via companion_port must be consulted by every
+    # run_action call even when the caller does not pass companion_transport —
+    # otherwise the companion STOP flag never gates CLI/MCP/daemon actions.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    cfg = {"companion_port": 1, "companion_timeout": 0.05}  # nothing listens on port 1
+    env = runtime.run_action(
+        "tap", lambda b, s: {}, "i=0",
+        build=lambda cfg: (_ for _ in ()).throw(AssertionError("must not build")),
+        yes=True, cfg=cfg,
+    )
+    assert env["ok"] is False
+    assert env["error"]["code"] == "stopped"

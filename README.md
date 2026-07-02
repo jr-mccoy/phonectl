@@ -724,8 +724,11 @@ The companion APK's persistent "Stop phonectl" notification and Quick-Settings t
 
 The precedence rule: **file sentinel OR companion stop flag blocks**. The file kill-switch is the
 hard guarantee (survives APK crashes); the companion flag is the low-latency path for the running
-session. A flaky companion socket never wedges the CLI — socket exceptions in extra checks are
-swallowed and treated as "not stopped".
+session. The companion check **fails closed**: when a companion is configured
+(`companion_port` set) but unreachable or erroring at the moment an action is gated, the action is
+refused as `stopped` rather than silently proceeding. If the companion is intentionally offline,
+unset `companion_port` (or fix connectivity) to act over ADB alone — a setup with no companion
+configured never consults this check.
 
 ```bash
 # File-based kill switch (always available, no companion needed)

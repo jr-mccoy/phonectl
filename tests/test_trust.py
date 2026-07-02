@@ -52,3 +52,24 @@ def test_gated_provider_filters_and_delegates():
     assert g.capabilities()["act_set_text_native"] is False
     assert g.capabilities()["act_gesture_native"] is True
     assert g.semantic_action("n", "click")["performed"] == ("n", "click")
+
+
+def test_companion_stopped_failclosed_when_unreachable():
+    # Finding 8: a companion that is configured but unreachable at the moment
+    # the STOP check runs must be read as stopped, not silently "not stopped".
+    t = LoopbackTransport({}, available=False)
+    assert trust.companion_stopped(t) is True
+
+
+def test_companion_stopped_failclosed_when_handshake_raises():
+    class ExplodingTransport:
+        def request(self, *a, **kw):
+            raise OSError("connection reset")
+
+    assert trust.companion_stopped(ExplodingTransport()) is True
+
+
+def test_companion_stopped_false_when_reachable_and_running():
+    t = LoopbackTransport({"handshake": lambda p: {
+        "version": 1, "capabilities": {}, "stopped": False}})
+    assert trust.companion_stopped(t) is False

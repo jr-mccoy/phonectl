@@ -32,7 +32,15 @@ def negotiate(transport, *, timeout: float = 2.0) -> Handshake:
 
 
 def companion_stopped(transport, *, timeout: float = 1.0) -> bool:
-    return negotiate(transport, timeout=timeout).stopped
+    """True if the companion reports STOP — or cannot be asked (Finding 8).
+
+    This check only runs when a companion transport is configured, so an
+    unreachable/erroring companion at the moment STOP is checked fails closed
+    (treated as stopped) rather than silently proceeding. "No companion
+    configured" never reaches this path.
+    """
+    hs = negotiate(transport, timeout=timeout)
+    return hs.stopped or not hs.reachable
 
 
 def gate_capabilities(advertised: dict, enabled: dict) -> dict:
