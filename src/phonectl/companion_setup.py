@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 import xml.etree.ElementTree as ET
 
+from phonectl import config as _config
+
 PACKAGE = "com.phonectl.companion"
 ACCESSIBILITY_COMPONENT = f"{PACKAGE}/{PACKAGE}.service.CompanionAccessibilityService"
 LIFECYCLE_COMPONENT = f"{PACKAGE}/.service.LifecycleReceiver"
@@ -92,3 +94,27 @@ def ensure_notifications(adb, out) -> dict:
         result = step("notifications", "done", "granted POST_NOTIFICATIONS")
     out(_NOTIF_LISTENER_HINT)
     return result
+
+
+def read_token_via_runas(adb) -> "str | None":
+    res = adb("shell", "run-as", PACKAGE, "cat", PREFS_REL)
+    if res.returncode != 0:
+        return None
+    return parse_token(res.stdout)
+
+
+def acquire_token(adb, cfg, out, *, prompt) -> dict:
+    if cfg.get("companion_token"):
+        return step("token", "skipped", "companion_token already set")
+    token = read_token_via_runas(adb)
+    source = "run-as"
+    if not token:
+        adb("shell", "am", "start", "-n", f"{PACKAGE}/.ui.SettingsActivity")
+        out("Copy the token from the companion app's Pairing section.")
+        token = prompt("Paste companion token: ").strip()
+        source = "prompt"
+    if not token:
+        return step("token", "failed", "no token acquired", ok=False)
+    cfg["companion_token"] = token
+    _config.save(cfg)
+    return step("token", "done", f"paired via {source}")

@@ -129,3 +129,28 @@ def test_ensure_notifications_skips_when_granted():
     r = cs.ensure_notifications(adb, (lambda m: None))
     assert r["status"] == "skipped"
     assert not any(a[:3] == ("shell", "pm", "grant") for a in adb.calls)
+
+def test_read_token_via_runas_success():
+    adb = FakeAdb([(lambda a: "run-as" in a, cp(out=XML_OK))])
+    assert cs.read_token_via_runas(adb) == "abc123"
+
+def test_read_token_via_runas_denied_returns_none():
+    adb = FakeAdb([(lambda a: "run-as" in a, cp(rc=1, err="run-as: not debuggable"))])
+    assert cs.read_token_via_runas(adb) is None
+
+def test_acquire_token_runas(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: "run-as" in a, cp(out=XML_OK))])
+    cfg = {}
+    r = cs.acquire_token(adb, cfg, (lambda m: None), prompt=(lambda m="": "SHOULD_NOT_BE_USED"))
+    assert r["status"] == "done" and cfg["companion_token"] == "abc123"
+    from phonectl import config
+    assert config.load()["companion_token"] == "abc123"
+
+def test_acquire_token_prompt_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: "run-as" in a, cp(rc=1, err="not debuggable"))])
+    cfg = {}
+    r = cs.acquire_token(adb, cfg, (lambda m: None), prompt=(lambda m="": "  pasted-tok  "))
+    assert r["status"] == "done" and cfg["companion_token"] == "pasted-tok"
+    assert any(a[:3] == ("shell", "am", "start") for a in adb.calls)  # app launched for the user
