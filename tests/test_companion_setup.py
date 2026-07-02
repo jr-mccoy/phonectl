@@ -222,6 +222,25 @@ def test_verify_unreachable_fails():
                   transport_factory=lambda *a, **k: object())
     assert r["status"] == "failed" and not r["ok"]
 
+def test_verify_none_port_falls_back_to_default():
+    seen = {}
+    def fake_factory(host, port, *, token=None):
+        seen["port"] = port
+        return object()
+    cfg = {"companion_token": "t", "companion_port": None}  # as config.load() seeds it
+    r = cs.verify(cfg, negotiate=lambda t, **k: _HS(True, False, {}),
+                  transport_factory=fake_factory)
+    assert r["status"] == "done" and seen["port"] == cs.DEFAULT_PORT
+
+def test_start_server_skip_persists_port(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), _listening())])
+    cfg = {}
+    r = cs.start_server(adb, "tok", cfg, (lambda m: None), assume_yes=True,
+                        prompt=(lambda m="": "n"), sleep=(lambda s: None))
+    assert r["status"] == "skipped"
+    assert cfg["companion_port"] == cs.DEFAULT_PORT
+
 
 def test_orchestrator_runs_all_steps_happy(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))

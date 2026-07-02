@@ -506,7 +506,11 @@ def _cmd_companion_setup(args):
         print("phonectl: no app-debug.apk found; pass --apk PATH")
         return 2
     backend, _session, conn = build_runtime(cfg)
-    conn.ensure()
+    try:
+        conn.ensure()
+    except ConnectionError as e:
+        print(f"phonectl: {e}")
+        return 2
     res = _companion_setup.run_companion_setup(
         backend.run_adb, cfg, apk_path=apk, assume_yes=getattr(args, "yes", False))
     if getattr(args, "json", False):

@@ -6,6 +6,7 @@ Device contact goes through an injected ``adb(*args) -> CompletedProcess`` seam
 from __future__ import annotations
 
 import hashlib
+import shlex
 import time
 import xml.etree.ElementTree as ET
 
@@ -128,12 +129,15 @@ def _socket_up(adb, port=DEFAULT_PORT) -> bool:
 def start_server(adb, token, cfg, out, *, assume_yes, prompt,
                  sleep=time.sleep, attempts=10) -> dict:
     if _socket_up(adb):
+        cfg["companion_host"] = "127.0.0.1"
+        cfg["companion_port"] = DEFAULT_PORT
+        _config.save(cfg)
         return step("server", "skipped", f"socket :{DEFAULT_PORT} already listening")
     out(f"This starts the companion's remote-control socket on 127.0.0.1:{DEFAULT_PORT}.")
     if not _confirm(assume_yes, prompt, "start companion server"):
         return step("server", "failed", "declined (re-run with --yes)", ok=False)
     adb("shell", "am", "broadcast", "-a", START_ACTION,
-        "--es", TOKEN_EXTRA, token, "-n", LIFECYCLE_COMPONENT)
+        "--es", TOKEN_EXTRA, shlex.quote(token), "-n", LIFECYCLE_COMPONENT)
     for _ in range(attempts):
         if _socket_up(adb):
             cfg["companion_host"] = "127.0.0.1"
@@ -152,7 +156,7 @@ def verify(cfg, *, negotiate=None, transport_factory=None) -> dict:
         from phonectl.providers.transport import SocketTransport
         transport_factory = SocketTransport
     t = transport_factory(cfg.get("companion_host", "127.0.0.1"),
-                          int(cfg.get("companion_port", DEFAULT_PORT)),
+                          int(cfg.get("companion_port") or DEFAULT_PORT),
                           token=cfg.get("companion_token"))
     hs = negotiate(t, timeout=3.0)
     caps = hs.capabilities or {}
