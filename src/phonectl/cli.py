@@ -375,7 +375,8 @@ def _cmd_scroll_until(args):
         lambda b, s: actuator.scroll_until(b, s, direction,
                                             text=text, selector=sel,
                                             max_scrolls=max_scrolls,
-                                            within_i=within_i),
+                                            within_i=within_i,
+                                            halt=audit.kill_switch_active),
         {"direction": direction, "text": text},
     )
 

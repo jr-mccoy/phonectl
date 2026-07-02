@@ -481,3 +481,31 @@ def test_phone_macro_status_empty(tmp_path, monkeypatch):
     build, _ = make_build()
     env = mcp_server.call_tool("phone_macro_status", {}, build)
     assert env["ok"] is True and env["data"]["runs"] == []
+
+
+# ── Finding 6: scroll_until must route through the run_action choke-point ────
+
+def test_scroll_until_mcp_routes_through_run_action(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b, _ = make_build()
+    env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1)
+    assert env["ok"] is True and env["verb"] == "scroll_until"
+    # the funnel audits every action; a direct actuator call would not
+    assert (tmp_path / "actions.jsonl").exists()
+
+
+def test_scroll_until_mcp_respects_kill_switch(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    (tmp_path / "STOP").write_text("")
+    b, backend = make_build()
+    env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1)
+    assert env["ok"] is False and env["error"]["code"] == "stopped"
+    assert backend.taps == []
+
+
+def test_scroll_until_mcp_supports_dry_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b, backend = make_build()
+    env = mcp_server.scroll_until_mcp(b, direction="down", text="x", dry_run=True)
+    assert env["ok"] is True and env["dry_run"] is True
+    assert backend.taps == []

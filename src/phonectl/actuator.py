@@ -161,11 +161,15 @@ def scroll(backend, session, direction: str, *,
 
 def scroll_until(backend, session, direction: str, *,
                  text=None, selector=None, max_scrolls: int = 10,
-                 within_i=None, sleep=time.sleep) -> dict:
+                 within_i=None, sleep=time.sleep, halt=None) -> dict:
     if text is None and selector is None:
         raise ValueError("scroll_until requires text or selector")
     from phonectl import ui_parser
     for _ in range(max_scrolls):
+        # `halt` re-checks the kill switch between iterations: the funnel gates
+        # the loop once at entry, but STOP engaged mid-loop must still bite.
+        if halt is not None and halt():
+            raise errors.StoppedError("scroll_until halted (kill switch STOP present)")
         snap = observer.observe(backend, session)
         elements = snap.get("elements", [])
         if text is not None and any(e.get("text") == text for e in elements):
