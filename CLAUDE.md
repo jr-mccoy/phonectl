@@ -29,9 +29,13 @@ and MCP are frontends; the daemon is optional but preferred when running.
 ## Current state (summary — detail via `crumb resume` + roadmap)
 
 Phases 1–6 ✅ complete (implemented + green), plus the companion APK (✅ shipped,
-`com.phonectl.companion`, Plans 4.5–4.8). 579 tests pass (1 skipped), stdlib-only runtime
+`com.phonectl.companion`, Plans 4.5–4.8). 628 tests pass (1 skipped), stdlib-only runtime
 (optional `mcp` extra). Core validated on a real Samsung Galaxy S25 Ultra over Wireless
-Debugging. **Next: Phase 7.1 (Shizuku provider).** Phase X (eval suite) has no plan yet.
+Debugging. Adversarial review 2026-07 (`docs/adversarial-review-2026-07.md`): Findings
+1, 2, 4, 5, 6, 7, 8, 12, 15 fixed; Kotlin-side findings (3, 9, 10, 14, 16) still open.
+**Next: Phase 7.1 (Shizuku provider).** Phase X (eval suite) has no plan yet.
+⚠️ Default mode is now `confirm` (safe-by-default); tests that exercise actions must
+opt into `mode: auto` explicitly.
 
 ## Commands
 

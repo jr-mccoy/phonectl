@@ -3,7 +3,17 @@
 _What matters right now. Lifespan: days to ~2 weeks. Keep it short and true._
 
 ## Current Focus
-Evaluating crumb-kit 0.1.1 workflow
+Remediating the 2026-07 adversarial review. Python-side immediate fixes are done
+(Findings 4, 5, 6, 7, 8, 12, 15 on top of #40's 1 & 2 — see the remediation-status
+block in `docs/adversarial-review-2026-07.md`). Remaining: Kotlin/companion findings
+(3, 9, 10, 14, 16 — need an Android build + on-device validation), cross-process
+idempotency (11), provider fallback (13), then Phase 7.1 (Shizuku).
+
+**Behavior changes to remember:** default mode is now `confirm` (auto is opt-in;
+setup wizard seeds confirm); unknown companion capability keys default disabled;
+a configured-but-unreachable companion fails closed as `stopped` — and run_action
+now builds the companion transport from cfg itself, so the companion STOP flag
+actually gates every action.
 
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp

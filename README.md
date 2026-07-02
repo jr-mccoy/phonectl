@@ -1009,9 +1009,7 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 
 ## Status
 
-The observe-act-observe core (library + CLI) is implemented and unit-tested. The real-device connectivity proof (build-step-zero: pairing `adb` inside PRoot against `adbd` over the loopback) and the end-to-end smoke run are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure.
-
-Features deferred to follow-on work: `phonectl setup` interactive wizard, MCP server wrapper, richer provider graph, macro runtime, and AccessibilityService APK backend.
+Phases 1–6 of the platform roadmap are implemented and unit-tested: structured results and capabilities, selector/tree observation, resilience and the setup wizard, the `run_action` single-writer funnel with risk policy and audit v2, the provider/capability graph (clipboard, intents, packages, gestures, extraction, Termux:API), the companion APK event providers (accessibility, notifications, OCR), the daemon/event runtime, and the macro engine with progressive autonomy. The real-device connectivity proof and end-to-end smoke runs are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure and [docs/superpowers/phonectl-platform-roadmap.md](docs/superpowers/phonectl-platform-roadmap.md) for phase status.
 
 ## Selector targeting and tree observation
 
