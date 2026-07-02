@@ -20,6 +20,13 @@ def test_capabilities_all_false_when_unavailable():
     assert all(v is False for v in p.capabilities().values())
 
 
+def test_companion_does_not_advertise_observe_screenshot():
+    # Finding 16: companion screencap writes only under its own (cross-UID unreadable) app
+    # storage, so advertising observe_screenshot would dead-end registry.screencap — ADB owns it.
+    p = AccessibilityProvider(LoopbackTransport({}))
+    assert p.capabilities()["observe_screenshot"] is False
+
+
 # --- Task 3: native tree + ui_dump ---
 
 def _native_handler(_params):

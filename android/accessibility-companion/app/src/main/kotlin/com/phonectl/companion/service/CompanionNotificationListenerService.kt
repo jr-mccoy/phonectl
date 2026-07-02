@@ -45,8 +45,13 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
     // --- notifications_list ---
 
-    private fun notificationsList(): JSONObject {
-        val items = activeNotificationsSafe().map { toNotifData(it) }
+    private fun notificationsList(state: TrustState): JSONObject {
+        // Guarded-app protection covers reads too (Finding 10): a guarded app's notification
+        // content (balances, OTPs, message bodies) never reaches the transport.
+        val items = Notifications.filterGuarded(
+            activeNotificationsSafe().map { toNotifData(it) },
+            state.guardedPackages(),
+        )
         return Notifications.list(items)
     }
 
@@ -107,9 +112,16 @@ class CompanionNotificationListenerService : NotificationListenerService() {
 
     // --- notifications_dismiss ---
 
-    private fun dismiss(params: JSONObject): JSONObject {
+    private fun dismiss(params: JSONObject, state: TrustState): JSONObject {
         val key = params.optString("key", "")
-        Notifications.requireActive(activeNotificationsSafe().map { toNotifData(it) }, key)
+        val datas = activeNotificationsSafe().map { toNotifData(it) }
+        // Dismissing a guarded app's notification is an action on it — refuse like reply
+        // (Finding 10). Checked before the resolver so a guarded match returns guarded_action.
+        val source = Notifications.packageForKey(datas, key)
+        if (ActionGate.isGuarded(source, state.guardedPackages())) {
+            throw MethodException("guarded_action", "dismiss refused for guarded app '$source'")
+        }
+        Notifications.requireActive(datas, key)
         cancelNotification(key)
         return JSONObject().put("dismissed", true)
     }
@@ -130,9 +142,9 @@ class CompanionNotificationListenerService : NotificationListenerService() {
             fun svc(): CompanionNotificationListenerService =
                 instance ?: throw IllegalStateException("notification listener not connected")
             return mapOf(
-                "notifications_list" to { _ -> svc().notificationsList() },
+                "notifications_list" to { _ -> svc().notificationsList(state) },
                 "notifications_reply" to { p -> svc().reply(p, state) },
-                "notifications_dismiss" to { p -> svc().dismiss(p) },
+                "notifications_dismiss" to { p -> svc().dismiss(p, state) },
             )
         }
 

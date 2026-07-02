@@ -29,10 +29,13 @@ class AccessibilityProvider:
     def capabilities(self) -> dict:
         if not self.is_available():
             return caps_mod.make()
+        # observe_screenshot intentionally NOT advertised (Finding 16): the companion now writes
+        # screenshots only under its own app storage, which this process (a different Android
+        # UID) cannot read — advertising it would just dead-end registry.screencap. ADB serves it.
         return caps_mod.make(
             observe_ui_native=True, observe_ui_events=True,
             act_set_text_native=True, act_gesture_native=True, act_semantic_action=True,
-            observe_ui_tree=True, observe_screenshot=True,
+            observe_ui_tree=True,
             act_tap=True, act_type=True, act_key=True, launch_app=True,
         )
 

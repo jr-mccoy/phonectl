@@ -92,4 +92,12 @@ object Notifications {
      */
     fun packageForKey(items: List<NotifData>, key: String): String? =
         items.firstOrNull { it.key == key }?.pkg
+
+    /**
+     * Drop notifications from guarded apps before serialization (Finding 10): guarded protection
+     * must cover reads, not just actions — a banking app's notification content (balances, OTPs)
+     * is exactly what the guarded list exists to keep out of agent-visible output.
+     */
+    fun filterGuarded(items: List<NotifData>, guarded: Set<String>): List<NotifData> =
+        items.filterNot { it.pkg in guarded }
 }

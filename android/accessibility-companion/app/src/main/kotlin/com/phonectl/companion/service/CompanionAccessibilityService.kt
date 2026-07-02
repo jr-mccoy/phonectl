@@ -20,6 +20,7 @@ import com.phonectl.companion.accessibility.NodeData
 import com.phonectl.companion.accessibility.NodeId
 import com.phonectl.companion.accessibility.ObserveFlags
 import com.phonectl.companion.accessibility.PasswordGuard
+import com.phonectl.companion.accessibility.ScreencapPaths
 import com.phonectl.companion.accessibility.SemanticActions
 import com.phonectl.companion.accessibility.WindowData
 import com.phonectl.companion.state.ActionGate
@@ -78,13 +79,22 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     // --- observe_native ---
 
-    private fun observeNative(): JSONObject {
+    private fun observeNative(state: TrustState): JSONObject {
+        // Guarded protection covers observation, not just actions (Finding 10): refuse reading a
+        // guarded foreground app's tree outright, and drop guarded windows (split-screen) from an
+        // otherwise-allowed observation.
+        requireUnguardedForeground(state, what = "observation")
+        val guarded = state.guardedPackages()
         // Capture the generation BEFORE walking: if the tree mutates mid-walk the event bumps the
         // counter and a later action carrying this token is (correctly, conservatively) stale.
         val generation = treeGeneration.get()
         val windows = mutableListOf<WindowData>()
         for (window in safeWindows()) {
             val root = window.root ?: continue
+            if (ActionGate.isGuarded(root.packageName?.toString(), guarded)) {
+                root.recycle()
+                continue
+            }
             val nodes = mutableListOf<NodeData>()
             walk(root, window.id, emptyList(), nodes)
             windows.add(
@@ -109,10 +119,17 @@ class CompanionAccessibilityService : AccessibilityService() {
         try { windows ?: emptyList() } catch (e: Exception) { emptyList() }
 
     /** Refuse gesture/text actions in guarded apps (foreground-service SPEC §7.6). */
-    private fun requireUnguarded(state: TrustState) {
+    private fun requireUnguarded(state: TrustState) = requireUnguardedForeground(state, "actions")
+
+    /**
+     * Refuse when the current foreground package is guarded. Shared by the action verbs and — per
+     * Finding 10 — by the observation/capture surfaces (observe_native, screencap, ocr_screen):
+     * a guarded app must be unreadable, not just untouchable.
+     */
+    private fun requireUnguardedForeground(state: TrustState, what: String) {
         val pkg = currentPackage()
         if (ActionGate.isGuarded(pkg, state.guardedPackages())) {
-            throw MethodException("guarded_action", "actions are refused in '$pkg'")
+            throw MethodException("guarded_action", "$what refused in guarded app '$pkg'")
         }
     }
 
@@ -323,11 +340,32 @@ class CompanionAccessibilityService : AccessibilityService() {
         return bitmapRef.get() ?: throw MethodException("screencap_unavailable", "screenshot failed")
     }
 
-    private fun ocrScreen(): JSONObject = OcrHandler.ocrBitmap(captureScreenshotBitmap())
+    private fun ocrScreen(state: TrustState): JSONObject {
+        // The screen's pixels include the guarded app's content — refuse like observe (Finding 10).
+        requireUnguardedForeground(state, what = "screen OCR")
+        return OcrHandler.ocrBitmap(captureScreenshotBitmap())
+    }
 
-    private fun screencap(params: JSONObject): JSONObject {
-        val path = params.optString("path", "")
-        if (path.isBlank()) throw MethodException("screencap_unavailable", "no path")
+    /**
+     * Writable screenshot roots (Finding 16): the companion's own files/cache dirs (internal and
+     * app-specific external). Canonicalized so the pure prefix check cannot be tricked.
+     */
+    private fun screencapRoots(): List<String> =
+        listOfNotNull(filesDir, cacheDir, getExternalFilesDir(null), externalCacheDir)
+            .mapNotNull { runCatching { it.canonicalPath }.getOrNull() }
+
+    private fun screencap(params: JSONObject, state: TrustState): JSONObject {
+        requireUnguardedForeground(state, what = "screencap")
+        val requested = params.optString("path", "")
+        if (requested.isBlank()) throw MethodException("screencap_unavailable", "no path")
+        val path = runCatching { File(requested).canonicalPath }.getOrNull()
+            ?: throw MethodException("path_rejected", "cannot resolve the requested path")
+        if (!ScreencapPaths.isAllowed(path, screencapRoots())) {
+            throw MethodException(
+                "path_rejected",
+                "screencap writes only under the companion's own storage",
+            )
+        }
         val latch = CountDownLatch(1)
         val ok = AtomicBoolean(false)
         takeScreenshot(
@@ -415,15 +453,21 @@ class CompanionAccessibilityService : AccessibilityService() {
             fun svc(): CompanionAccessibilityService =
                 instance ?: throw IllegalStateException("accessibility service not connected")
             return mapOf(
-                "observe_native" to { _ -> svc().observeNative() },
+                "observe_native" to { _ -> svc().observeNative(state) },
                 "gesture" to { p -> svc().run { requireUnguarded(state); gesture(p) }; JSONObject().put("applied", true) },
                 "key" to { p -> svc().run { requireUnguarded(state); key(p) }; JSONObject().put("applied", true) },
                 "set_text" to { p -> svc().run { requireUnguarded(state); setText(p) }; JSONObject().put("applied", true) },
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
-                "screencap" to { p -> svc().screencap(p) },
-                "ocr_screen" to { _ -> svc().ocrScreen() },
-                "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
+                "screencap" to { p -> svc().screencap(p, state) },
+                "ocr_screen" to { _ -> svc().ocrScreen(state) },
+                // Guarded packages are filtered out of the event stream (Finding 10).
+                "events" to { p ->
+                    svc().events.queryJson(
+                        p.optLong("since", 0), p.optInt("max", 50),
+                        excludePackages = state.guardedPackages(),
+                    )
+                },
             )
         }
 
