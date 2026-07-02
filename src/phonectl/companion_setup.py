@@ -163,3 +163,26 @@ def verify(cfg, *, negotiate=None, transport_factory=None) -> dict:
     on = sorted(k for k, v in caps.items() if v)
     return {**step("verify", "done", f"reachable; {len(on)} caps: {', '.join(on)}"),
             "data": data}
+
+
+def run_companion_setup(adb, cfg, *, apk_path, assume_yes=False,
+                        prompt=input, out=print, sleep=time.sleep, verify_kwargs=None) -> dict:
+    steps: list = []
+
+    def record(result):
+        steps.append(result)
+        return result["ok"]
+
+    if not record(ensure_installed(adb, apk_path, cfg, out)):
+        return {"ok": False, "steps": steps}
+    if not record(ensure_accessibility(adb, out, assume_yes=assume_yes, prompt=prompt)):
+        return {"ok": False, "steps": steps}
+    record(ensure_notifications(adb, out))  # never fatal
+    if not record(acquire_token(adb, cfg, out, prompt=prompt)):
+        return {"ok": False, "steps": steps}
+    token = cfg.get("companion_token")
+    if not record(start_server(adb, token, cfg, out, assume_yes=assume_yes,
+                               prompt=prompt, sleep=sleep)):
+        return {"ok": False, "steps": steps}
+    record(verify(cfg, **(verify_kwargs or {})))
+    return {"ok": all(s["ok"] for s in steps), "steps": steps}

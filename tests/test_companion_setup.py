@@ -221,3 +221,36 @@ def test_verify_unreachable_fails():
                   negotiate=lambda t, **k: _HS(False, False, {}),
                   transport_factory=lambda *a, **k: object())
     assert r["status"] == "failed" and not r["ok"]
+
+
+def test_orchestrator_runs_all_steps_happy(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
+    def adb(*a):
+        if a[:3] == ("shell", "pm", "list"): return cp(out="")
+        if a[0] == "install": return cp(out="Success")
+        if a[:4] == ("shell", "settings", "get", "secure"): return cp(out="null")
+        if a[:3] == ("shell", "dumpsys", "package"): return cp(out="POST_NOTIFICATIONS: granted=true")
+        if "run-as" in a: return cp(out=XML_OK)
+        if a[:2] == ("shell", "ss"): return _listening()
+        return cp(out="")
+    res = cs.run_companion_setup(
+        adb, {}, apk_path=str(apk), assume_yes=True,
+        prompt=(lambda m="": "n"), out=(lambda m: None), sleep=(lambda s: None),
+        verify_kwargs={"negotiate": lambda t, **k: _HS(True, False, {"observe_ui_native": True}),
+                       "transport_factory": lambda *a, **k: object()})
+    assert res["ok"] is True
+    assert [s["name"] for s in res["steps"]] == \
+        ["install", "accessibility", "notifications", "token", "server", "verify"]
+
+def test_orchestrator_stops_on_failed_step(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
+    def adb(*a):
+        if a[:3] == ("shell", "pm", "list"): return cp(out="")
+        if a[0] == "install": return cp(rc=1, err="INSTALL_FAILED")  # fail at step 1
+        return cp(out="")
+    res = cs.run_companion_setup(adb, {}, apk_path=str(apk), assume_yes=True,
+                                 prompt=(lambda m="": "n"), out=(lambda m: None), sleep=(lambda s: None))
+    assert res["ok"] is False and res["steps"][-1]["name"] == "install"
+    assert len(res["steps"]) == 1  # stopped, did not proceed
