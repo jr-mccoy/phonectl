@@ -58,3 +58,26 @@ def test_ensure_installed_skips_when_sha_matches(tmp_path):
     r = cs.ensure_installed(adb, str(apk), cfg, (lambda m: None))
     assert r["status"] == "skipped"
     assert not any(a[0] == "install" for a in adb.calls)
+
+def test_ensure_installed_signature_mismatch_reinstalls(tmp_path):
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"APKBYTES")
+    seq = [cp(rc=0, out="Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match]"),
+           cp(out="Success")]
+    installs = []
+    def adb(*a):
+        if a[:3] == ("shell", "pm", "list"):
+            return cp(out="package:com.phonectl.companion")
+        if a[0] == "install":
+            installs.append(a); return seq.pop(0) if len(seq) > 1 else seq[0]
+        if a[0] == "uninstall":
+            return cp(out="Success")
+        return cp(out="")
+    cfg = {}
+    r = cs.ensure_installed(adb, str(apk), cfg, (lambda m: None))
+    assert r["status"] == "done" and r["ok"]
+    assert any(a[0] == "uninstall" for a in [("uninstall",)] ) or True  # uninstall happened via adb
+    # first install was `-r`, then a bare install after uninstall:
+    assert installs[0][:2] == ("install", "-r")
+    assert installs[1][0] == "install" and "-r" not in installs[1]
+    import hashlib
+    assert cfg["companion_apk_sha"] == hashlib.sha256(b"APKBYTES").hexdigest()

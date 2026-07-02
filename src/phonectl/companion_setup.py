@@ -47,11 +47,11 @@ def ensure_installed(adb, apk_path, cfg, out) -> dict:
     if _installed(adb) and cfg.get("companion_apk_sha") == sha:
         return step("install", "skipped", f"{PACKAGE} already current")
     res = adb("install", "-r", apk_path)
-    if res.returncode != 0 and "signatures do not match" in (res.stdout + res.stderr).lower():
+    if "signatures do not match" in (res.stdout + res.stderr).lower():
         out("signature mismatch — uninstalling old build (resets token + grants)")
         adb("uninstall", PACKAGE)
         res = adb("install", apk_path)
     if res.returncode != 0 or "Success" not in res.stdout:
-        return step("install", "failed", res.stderr.strip() or res.stdout.strip(), ok=False)
+        return step("install", "failed", res.stderr.strip() or res.stdout.strip() or "adb install failed", ok=False)
     cfg["companion_apk_sha"] = sha
     return step("install", "done", f"installed {apk_path}")
