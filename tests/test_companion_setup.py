@@ -1,8 +1,24 @@
 from phonectl import companion_setup as cs
+import subprocess
 
 XML_OK = ('<?xml version="1.0"?><map>'
           '<string name="companion_token">abc123</string>'
           '<boolean name="cap_observe_ui_native" value="true"/></map>')
+
+
+class FakeAdb:
+    """Maps a matcher predicate over args -> CompletedProcess; records calls."""
+    def __init__(self, rules):  # rules: list[(predicate, CompletedProcess)]
+        self.rules = rules; self.calls = []
+    def __call__(self, *args):
+        self.calls.append(args)
+        for pred, res in self.rules:
+            if pred(args):
+                return res
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+def cp(rc=0, out="", err=""):
+    return subprocess.CompletedProcess([], rc, stdout=out, stderr=err)
 
 def test_parse_token_extracts_value():
     assert cs.parse_token(XML_OK) == "abc123"
@@ -19,3 +35,26 @@ def test_parse_token_garbage_returns_none():
 def test_step_shape():
     assert cs.step("verify", "done", "ok") == {
         "name": "verify", "ok": True, "status": "done", "message": "ok"}
+
+def test_ensure_installed_installs_when_absent(tmp_path):
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"APKBYTES")
+    adb = FakeAdb([
+        (lambda a: a[:3] == ("shell", "pm", "list"), cp(out="")),        # not listed
+        (lambda a: a[0] == "install", cp(out="Success")),
+    ])
+    cfg = {}; out = []
+    r = cs.ensure_installed(adb, str(apk), cfg, out.append)
+    assert r["status"] == "done" and r["ok"]
+    assert any(a[0] == "install" for a in adb.calls)
+    import hashlib
+    assert cfg["companion_apk_sha"] == hashlib.sha256(b"APKBYTES").hexdigest()
+
+def test_ensure_installed_skips_when_sha_matches(tmp_path):
+    apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"APKBYTES")
+    import hashlib
+    cfg = {"companion_apk_sha": hashlib.sha256(b"APKBYTES").hexdigest()}
+    adb = FakeAdb([(lambda a: a[:3] == ("shell", "pm", "list"),
+                    cp(out="package:com.phonectl.companion"))])
+    r = cs.ensure_installed(adb, str(apk), cfg, (lambda m: None))
+    assert r["status"] == "skipped"
+    assert not any(a[0] == "install" for a in adb.calls)
