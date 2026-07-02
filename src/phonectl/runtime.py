@@ -288,12 +288,16 @@ def _run_action_body(
                 )
             snap = fn(backend, session)
             provider = getattr(backend, "last_used", None) or "adb"
+            # Finding 13: when the registry fell through to a lower-priority provider, say so —
+            # the agent must be able to detect a provider switch (coordinate semantics differ).
+            fallback = list(getattr(backend, "last_fallback", []) or [])
+            extra = {"provider_fallback": fallback} if fallback else {}
             for bucket in ratelimit.buckets_for(verb, risk["risk_level"]):
                 history.append({"bucket": bucket, "ts": ts})
             _save_rate(history)
             log(verb, target, snap, request_id=rid, cfg=cfg)
             return results.ok(
-                capability=f"ui.{verb}", provider=provider, data=snap, **risk, **base
+                capability=f"ui.{verb}", provider=provider, data=snap, **extra, **risk, **base
             )
         except errors.PhonectlError as e:
             return results.err(e, **getattr(e, "lock_state", {}), **base)

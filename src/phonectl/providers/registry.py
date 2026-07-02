@@ -5,14 +5,34 @@ from phonectl import capabilities as caps_mod
 from phonectl import errors
 
 
+# Provider exceptions that are POLICY REFUSALS, not runtime failures (Finding 13): the companion
+# refusing because an app is guarded or its STOP is engaged must propagate — falling through to
+# ADB would bypass the very protection the companion enforced.
+_NO_FALLBACK = (
+    errors.StoppedError,
+    errors.GuardedActionError,
+    errors.ConfirmationRequiredError,
+    errors.StaleSnapshotError,
+    errors.RateLimitError,
+    errors.BusyError,
+    errors.DeviceLockedError,
+)
+
+
 class ProviderRegistry:
     def __init__(self, providers) -> None:
         self._providers = list(providers)
         self._last_used: str | None = None
+        self._last_fallback: list = []
 
     @property
     def last_used(self) -> str | None:
         return self._last_used
+
+    @property
+    def last_fallback(self) -> list:
+        """Providers skipped on the most recent delegated call: [{provider, error}, ...]."""
+        return self._last_fallback
 
     def for_capability(self, cap: str):
         for p in self._providers:
@@ -54,33 +74,59 @@ class ProviderRegistry:
         self._last_used = type(p).__name__
         return p
 
+    def _delegate(self, cap: str, call):
+        """Run ``call`` against providers advertising ``cap`` in priority order, falling through
+        to the next one on runtime failure (Finding 13: a companion that advertises a capability
+        but dies mid-request must not hard-fail when ADB can serve). Policy refusals
+        (_NO_FALLBACK) propagate. ``last_used`` reports who actually served the call;
+        ``last_fallback`` records who was skipped and why."""
+        candidates = [p for p in self._providers if p.capabilities().get(cap)]
+        if not candidates:
+            raise errors.CapabilityUnavailableError(
+                f"no provider registered for capability {cap!r}"
+            )
+        self._last_fallback = []
+        last_exc = None
+        for p in candidates:
+            try:
+                result = call(p)
+                self._last_used = type(p).__name__
+                return result
+            except _NO_FALLBACK:
+                self._last_used = type(p).__name__
+                raise
+            except Exception as exc:
+                self._last_fallback.append({"provider": type(p).__name__, "error": str(exc)})
+                last_exc = exc
+        raise last_exc
+
     # Backend Protocol delegation
     def ui_dump(self) -> str:
-        return self._require("observe_ui_tree").ui_dump()
+        return self._delegate("observe_ui_tree", lambda p: p.ui_dump())
 
     def window_dump(self) -> str:
-        return self._require("observe_ui_tree").window_dump()
+        return self._delegate("observe_ui_tree", lambda p: p.window_dump())
 
     def wm_size(self):
-        return self._require("observe_ui_tree").wm_size()
+        return self._delegate("observe_ui_tree", lambda p: p.wm_size())
 
     def screencap(self, path: str) -> str:
-        return self._require("observe_screenshot").screencap(path)
+        return self._delegate("observe_screenshot", lambda p: p.screencap(path))
 
     def input_tap(self, x: int, y: int) -> None:
-        self._require("act_tap").input_tap(x, y)
+        self._delegate("act_tap", lambda p: p.input_tap(x, y))
 
     def input_text(self, text: str) -> None:
-        self._require("act_type").input_text(text)
+        self._delegate("act_type", lambda p: p.input_text(text))
 
     def input_swipe(self, x1, y1, x2, y2, ms: int = 200) -> None:
-        self._require("act_tap").input_swipe(x1, y1, x2, y2, ms)
+        self._delegate("act_tap", lambda p: p.input_swipe(x1, y1, x2, y2, ms))
 
     def input_key(self, keycode: str) -> None:
-        self._require("act_key").input_key(keycode)
+        self._delegate("act_key", lambda p: p.input_key(keycode))
 
     def launch(self, package: str) -> None:
-        self._require("launch_app").launch(package)
+        self._delegate("launch_app", lambda p: p.launch(package))
 
     def get_state(self) -> str:
         return self._require("requires_adb").get_state()
