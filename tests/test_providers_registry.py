@@ -132,3 +132,68 @@ def test_getattr_raises_when_no_adb_provider():
     r = ProviderRegistry([])
     with pytest.raises(AttributeError):
         r.wake()
+
+
+# --- Finding 13: runtime fallback to the next capable provider ---
+
+class BrokenProv:
+    """Advertises capabilities but fails at call time (companion crashed mid-request)."""
+
+    def __init__(self, exc=None):
+        self._exc = exc or errors.ObserveError("companion died mid-request")
+
+    def capabilities(self):
+        return _caps(act_tap=True, observe_ui_tree=True)
+
+    def ui_dump(self):
+        raise self._exc
+
+    def input_tap(self, x, y):
+        raise self._exc
+
+
+def test_action_falls_back_when_first_provider_raises():
+    broken, adb = BrokenProv(), FakeAdbProv()
+    FakeAdbProv._tapped = None
+    r = ProviderRegistry([broken, adb])
+    r.input_tap(3, 4)
+    assert FakeAdbProv._tapped == (3, 4)
+    # The provider field must report who actually served the call, not who was asked first.
+    assert r.last_used == "FakeAdbProv"
+
+
+def test_fallback_is_recorded_for_audit():
+    r = ProviderRegistry([BrokenProv(), FakeAdbProv()])
+    r.ui_dump()
+    assert r.last_fallback == [
+        {"provider": "BrokenProv", "error": "companion died mid-request"}
+    ]
+    # A call that succeeds first try leaves no fallback record.
+    clean = ProviderRegistry([FakeAdbProv()])
+    clean.ui_dump()
+    assert clean.last_fallback == []
+
+
+def test_all_capable_providers_failing_reraises_last_error():
+    r = ProviderRegistry([BrokenProv(), BrokenProv()])
+    with pytest.raises(errors.ObserveError):
+        r.ui_dump()
+
+
+def test_policy_refusals_do_not_fall_back():
+    # A guarded/stopped refusal is the companion enforcing policy, not a provider failure —
+    # falling through to ADB would BYPASS the protection. It must propagate.
+    for exc in (errors.GuardedActionError("guarded"), errors.StoppedError("stopped")):
+        refusing = BrokenProv(exc=exc)
+        adb = FakeAdbProv()
+        FakeAdbProv._tapped = None
+        r = ProviderRegistry([refusing, adb])
+        with pytest.raises(type(exc)):
+            r.input_tap(1, 1)
+        assert FakeAdbProv._tapped is None  # ADB was never consulted
+
+
+def test_no_capable_provider_still_raises_capability_unavailable():
+    r = ProviderRegistry([FakeProv("A", _caps(read_clipboard=True))])
+    with pytest.raises(errors.CapabilityUnavailableError):
+        r.input_tap(0, 0)

@@ -3,11 +3,12 @@ package com.phonectl.companion.state
 import org.json.JSONObject
 
 /**
- * The capability keys this MVP companion advertises in `handshake.capabilities`.
+ * The capability keys this companion advertises in `handshake.capabilities`.
  *
  * These are exactly the keys the Python side recognizes (src/phonectl/capabilities.py) for the
- * AccessibilityService companion. Notification (4.2) and OCR (4.4) keys are intentionally omitted
- * this cut — their Python providers degrade cleanly when the keys are absent.
+ * AccessibilityService companion: the MVP accessibility keys plus the notification (Plan 4.6)
+ * and OCR (Plan 4.7) keys, all shipped with handlers. The Python providers degrade cleanly when
+ * a key is absent or toggled off.
  *
  * Pure (no Android dependency) so the handshake shape is exercised by JVM contract tests against
  * the foreground-service SPEC §3 example and tests/test_trust.py.
@@ -99,9 +100,11 @@ object Capabilities {
 }
 
 /**
- * STOP-sentinel parity (foreground-service SPEC §4): the emergency stop is engaged when EITHER the
- * in-app flag is set OR the `$PHONECTL_HOME/STOP` sentinel file exists. The file is the hard
- * guarantee (survives APK crashes); the in-app flag is the low-latency path for the running session.
+ * STOP combination (foreground-service SPEC §4): the emergency stop is engaged when EITHER the
+ * in-app flag is set OR an explicitly configured sentinel file exists. The in-app SharedPrefs
+ * flag is the authoritative on-device state (Finding 3 — the APK's UID can never read Termux's
+ * `$PHONECTL_HOME/STOP`, so the Python-side file is a separate, independent stop); the optional
+ * file only ever widens the stop.
  */
 object StopSentinel {
     fun stopped(inAppFlag: Boolean, stopFileExists: Boolean): Boolean = inAppFlag || stopFileExists

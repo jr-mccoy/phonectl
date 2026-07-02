@@ -14,6 +14,26 @@ def next_request_id() -> str:
     return uuid.uuid4().hex
 
 
+# Companion error codes -> the typed phonectl error hierarchy. `stopped` matters most: the
+# companion dispatcher now enforces its STOP flag on-device (Finding 3), and callers must see
+# that as the same StoppedError the local kill switch raises, not a generic failure.
+def raise_companion_error(err: dict):
+    """Raise the typed error matching a companion error envelope's ``code``."""
+    from phonectl import errors
+    code = (err or {}).get("code", "")
+    message = (err or {}).get("message", "companion error")
+    exc = {
+        "stopped": errors.StoppedError,
+        "guarded_action": errors.GuardedActionError,
+        "capability_disabled": errors.CapabilityUnavailableError,
+        "unauthorized": errors.UnauthorizedError,
+        "unknown_method": errors.UnknownMethodError,
+        # Finding 9: the observation the action was reasoned over no longer matches the tree.
+        "stale_generation": errors.StaleSnapshotError,
+    }.get(code, errors.PhonectlError)
+    raise exc(message)
+
+
 @runtime_checkable
 class Transport(Protocol):
     def request(self, method: str, params: dict, *, request_id: str, timeout: float) -> dict: ...

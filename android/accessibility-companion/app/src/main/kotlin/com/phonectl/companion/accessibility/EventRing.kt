@@ -40,10 +40,14 @@ class EventRing(private val capacity: Int = 200) {
         return selected to cursor
     }
 
-    fun queryJson(since: Long, max: Int): JSONObject {
+    /**
+     * [excludePackages] drops events from guarded apps (Finding 10) AFTER selection, so the
+     * cursor still advances past them and polling never re-delivers a guarded event.
+     */
+    fun queryJson(since: Long, max: Int, excludePackages: Set<String> = emptySet()): JSONObject {
         val (events, cursor) = query(since, max)
         val arr = Json.arr(
-            events.map {
+            events.filter { it.pkg !in excludePackages }.map {
                 JSONObject()
                     .put("seq", it.seq)
                     .put("type", it.type)

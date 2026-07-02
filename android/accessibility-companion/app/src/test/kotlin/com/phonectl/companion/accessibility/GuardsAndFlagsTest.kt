@@ -3,6 +3,7 @@ package com.phonectl.companion.accessibility
 import com.phonectl.companion.json.NotifData
 import com.phonectl.companion.json.Notifications
 import com.phonectl.companion.state.ActionGate
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -50,6 +51,67 @@ class GuardsAndFlagsTest {
         assertFalse(ActionGate.isGuarded(Notifications.packageForKey(items, "k-chat"), guarded))
         // Unknown key resolves to null → not guarded (falls through to the not_found resolver).
         assertFalse(ActionGate.isGuarded(Notifications.packageForKey(items, "nope"), guarded))
+    }
+
+    // --- Finding 10: guarded-app protection covers observation, not just actions ---
+
+    @Test
+    fun observeNativeRefusesGuardedApp() {
+        // The same gate that refuses gestures also refuses reading a guarded app's UI tree — a
+        // banking app on the guarded list must not be observable, not just untappable.
+        val guarded = setOf("com.bank.app")
+        assertTrue(ActionGate.isGuarded("com.bank.app", guarded))
+        assertFalse(ActionGate.isGuarded("com.example.notes", guarded))
+    }
+
+    @Test
+    fun eventsFromGuardedPackagesAreFiltered() {
+        val ring = EventRing()
+        ring.add("content_changed", "com.bank.app", ts = 1)
+        ring.add("view_clicked", "com.chat.app", ts = 2)
+        ring.add("window_state_changed", "com.bank.app", ts = 3)
+        val j = ring.queryJson(since = 0, max = 50, excludePackages = setOf("com.bank.app"))
+        val events = j.getJSONArray("events")
+        assertEquals(1, events.length())
+        assertEquals("com.chat.app", events.getJSONObject(0).getString("package"))
+        // Cursor still advances past filtered events so polling does not re-deliver them.
+        assertEquals(3L, j.getLong("cursor"))
+    }
+
+    @Test
+    fun guardedNotificationsAreFilteredFromList() {
+        val items = listOf(
+            NotifData(key = "k-bank", pkg = "com.bank.app", title = "Balance", text = "secret",
+                category = null, postTime = 0L, actions = emptyList()),
+            NotifData(key = "k-chat", pkg = "com.chat.app", title = "Hi", text = "yo",
+                category = null, postTime = 0L, actions = emptyList()),
+        )
+        val visible = Notifications.filterGuarded(items, setOf("com.bank.app"))
+        assertEquals(listOf("k-chat"), visible.map { it.key })
+        // Empty guarded set is the identity.
+        assertEquals(items, Notifications.filterGuarded(items, emptySet()))
+    }
+
+    // --- Finding 16: screencap writes only under app-owned roots ---
+
+    @Test
+    fun screencapRejectsPathsOutsideAppDir() {
+        val roots = listOf("/data/data/com.phonectl.companion/files",
+            "/data/data/com.phonectl.companion/cache")
+        assertFalse(ScreencapPaths.isAllowed("/sdcard/DCIM/steal.png", roots))
+        assertFalse(ScreencapPaths.isAllowed("/data/data/com.other.app/files/x.png", roots))
+        // Prefix tricks must not pass: sibling dir sharing the root as a string prefix.
+        assertFalse(ScreencapPaths.isAllowed("/data/data/com.phonectl.companion/files-evil/x.png", roots))
+        // Relative paths are never allowed (the service canonicalizes, but stay fail-closed).
+        assertFalse(ScreencapPaths.isAllowed("files/x.png", roots))
+        assertFalse(ScreencapPaths.isAllowed("", roots))
+    }
+
+    @Test
+    fun screencapAllowsPathsUnderAppRoots() {
+        val roots = listOf("/data/data/com.phonectl.companion/files")
+        assertTrue(ScreencapPaths.isAllowed("/data/data/com.phonectl.companion/files/shot.png", roots))
+        assertTrue(ScreencapPaths.isAllowed("/data/data/com.phonectl.companion/files/sub/shot.png", roots))
     }
 
     @Test

@@ -14,11 +14,13 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.phonectl.companion.accessibility.EventRing
+import com.phonectl.companion.accessibility.Generation
 import com.phonectl.companion.accessibility.NativeTreeJson
 import com.phonectl.companion.accessibility.NodeData
 import com.phonectl.companion.accessibility.NodeId
 import com.phonectl.companion.accessibility.ObserveFlags
 import com.phonectl.companion.accessibility.PasswordGuard
+import com.phonectl.companion.accessibility.ScreencapPaths
 import com.phonectl.companion.accessibility.SemanticActions
 import com.phonectl.companion.accessibility.WindowData
 import com.phonectl.companion.state.ActionGate
@@ -31,6 +33,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -43,6 +46,13 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     private val events = EventRing()
 
+    /**
+     * Tree-generation token (Finding 9): bumped on every tree-mutating accessibility event.
+     * observe_native returns the current value; set_text/semantic refuse a request whose echoed
+     * generation no longer matches, so an action is bound to the observation it was reasoned over.
+     */
+    private val treeGeneration = AtomicLong(0)
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -50,6 +60,11 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        ) {
+            treeGeneration.incrementAndGet()
+        }
         val type = eventTypeName(event.eventType) ?: return
         val pkg = event.packageName?.toString() ?: ""
         events.add(type, pkg, event.eventTime)
@@ -64,10 +79,22 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     // --- observe_native ---
 
-    private fun observeNative(): JSONObject {
+    private fun observeNative(state: TrustState): JSONObject {
+        // Guarded protection covers observation, not just actions (Finding 10): refuse reading a
+        // guarded foreground app's tree outright, and drop guarded windows (split-screen) from an
+        // otherwise-allowed observation.
+        requireUnguardedForeground(state, what = "observation")
+        val guarded = state.guardedPackages()
+        // Capture the generation BEFORE walking: if the tree mutates mid-walk the event bumps the
+        // counter and a later action carrying this token is (correctly, conservatively) stale.
+        val generation = treeGeneration.get()
         val windows = mutableListOf<WindowData>()
         for (window in safeWindows()) {
             val root = window.root ?: continue
+            if (ActionGate.isGuarded(root.packageName?.toString(), guarded)) {
+                root.recycle()
+                continue
+            }
             val nodes = mutableListOf<NodeData>()
             walk(root, window.id, emptyList(), nodes)
             windows.add(
@@ -85,16 +112,24 @@ class CompanionAccessibilityService : AccessibilityService() {
         // `flags` key — native_tree.to_compat_xml ignores it.
         return NativeTreeJson.tree(windows, dm.widthPixels, dm.heightPixels)
             .put("flags", ObserveFlags.compute(windows))
+            .put("generation", generation)
     }
 
     private fun safeWindows(): List<AccessibilityWindowInfo> =
         try { windows ?: emptyList() } catch (e: Exception) { emptyList() }
 
     /** Refuse gesture/text actions in guarded apps (foreground-service SPEC §7.6). */
-    private fun requireUnguarded(state: TrustState) {
+    private fun requireUnguarded(state: TrustState) = requireUnguardedForeground(state, "actions")
+
+    /**
+     * Refuse when the current foreground package is guarded. Shared by the action verbs and — per
+     * Finding 10 — by the observation/capture surfaces (observe_native, screencap, ocr_screen):
+     * a guarded app must be unreadable, not just untouchable.
+     */
+    private fun requireUnguardedForeground(state: TrustState, what: String) {
         val pkg = currentPackage()
         if (ActionGate.isGuarded(pkg, state.guardedPackages())) {
-            throw MethodException("guarded_action", "actions are refused in '$pkg'")
+            throw MethodException("guarded_action", "$what refused in guarded app '$pkg'")
         }
     }
 
@@ -213,6 +248,7 @@ class CompanionAccessibilityService : AccessibilityService() {
     // --- set_text ---
 
     private fun setText(params: JSONObject) {
+        Generation.requireFresh(Generation.requested(params), treeGeneration.get())
         val text = params.optString("text", "")
         val node = when (params.optString("mode", "set")) {
             "type" -> findFocusedEditable()
@@ -243,6 +279,7 @@ class CompanionAccessibilityService : AccessibilityService() {
     // --- semantic ---
 
     private fun semantic(params: JSONObject): JSONObject {
+        Generation.requireFresh(Generation.requested(params), treeGeneration.get())
         val action = params.optString("action", "")
         if (!SemanticActions.isSupported(action)) {
             throw MethodException("unsupported_action", "unknown semantic action '$action'")
@@ -303,11 +340,32 @@ class CompanionAccessibilityService : AccessibilityService() {
         return bitmapRef.get() ?: throw MethodException("screencap_unavailable", "screenshot failed")
     }
 
-    private fun ocrScreen(): JSONObject = OcrHandler.ocrBitmap(captureScreenshotBitmap())
+    private fun ocrScreen(state: TrustState): JSONObject {
+        // The screen's pixels include the guarded app's content — refuse like observe (Finding 10).
+        requireUnguardedForeground(state, what = "screen OCR")
+        return OcrHandler.ocrBitmap(captureScreenshotBitmap())
+    }
 
-    private fun screencap(params: JSONObject): JSONObject {
-        val path = params.optString("path", "")
-        if (path.isBlank()) throw MethodException("screencap_unavailable", "no path")
+    /**
+     * Writable screenshot roots (Finding 16): the companion's own files/cache dirs (internal and
+     * app-specific external). Canonicalized so the pure prefix check cannot be tricked.
+     */
+    private fun screencapRoots(): List<String> =
+        listOfNotNull(filesDir, cacheDir, getExternalFilesDir(null), externalCacheDir)
+            .mapNotNull { runCatching { it.canonicalPath }.getOrNull() }
+
+    private fun screencap(params: JSONObject, state: TrustState): JSONObject {
+        requireUnguardedForeground(state, what = "screencap")
+        val requested = params.optString("path", "")
+        if (requested.isBlank()) throw MethodException("screencap_unavailable", "no path")
+        val path = runCatching { File(requested).canonicalPath }.getOrNull()
+            ?: throw MethodException("path_rejected", "cannot resolve the requested path")
+        if (!ScreencapPaths.isAllowed(path, screencapRoots())) {
+            throw MethodException(
+                "path_rejected",
+                "screencap writes only under the companion's own storage",
+            )
+        }
         val latch = CountDownLatch(1)
         val ok = AtomicBoolean(false)
         takeScreenshot(
@@ -343,33 +401,39 @@ class CompanionAccessibilityService : AccessibilityService() {
 
     // --- shared node lookup ---
 
+    /**
+     * Resolve a node id across all windows, refusing ambiguity (Finding 9): resource ids are not
+     * unique (list rows share them), and silently acting on the first match targets the wrong
+     * node. Two or more matches raise `ambiguous_node_id`; zero returns null (caller raises
+     * `node_not_found`).
+     */
     private fun findById(nodeId: String): AccessibilityNodeInfo? {
         if (nodeId.isBlank()) return null
+        val matches = mutableListOf<AccessibilityNodeInfo>()
         for (window in safeWindows()) {
             val root = window.root ?: continue
-            val match = findByIdRec(root, window.id, emptyList(), nodeId)
-            if (match != null) {
-                root.recycle()
-                return match
-            }
+            collectById(root, window.id, emptyList(), nodeId, matches)
             root.recycle()
         }
-        return null
+        if (matches.size > 1) {
+            matches.forEach { it.recycle() }
+            NodeId.requireUnambiguous(matches.size, nodeId) // throws ambiguous_node_id
+        }
+        return matches.firstOrNull()
     }
 
-    private fun findByIdRec(
+    private fun collectById(
         node: AccessibilityNodeInfo, windowId: Int, path: List<Int>, target: String,
-    ): AccessibilityNodeInfo? {
+        out: MutableList<AccessibilityNodeInfo>,
+    ) {
         if (NodeId.resolve(node.viewIdResourceName, windowId, path) == target) {
-            return AccessibilityNodeInfo.obtain(node)
+            out.add(AccessibilityNodeInfo.obtain(node))
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val match = findByIdRec(child, windowId, path + i, target)
+            collectById(child, windowId, path + i, target, out)
             child.recycle()
-            if (match != null) return match
         }
-        return null
     }
 
     private fun nodeActionStrings(node: AccessibilityNodeInfo): List<String> =
@@ -389,15 +453,21 @@ class CompanionAccessibilityService : AccessibilityService() {
             fun svc(): CompanionAccessibilityService =
                 instance ?: throw IllegalStateException("accessibility service not connected")
             return mapOf(
-                "observe_native" to { _ -> svc().observeNative() },
+                "observe_native" to { _ -> svc().observeNative(state) },
                 "gesture" to { p -> svc().run { requireUnguarded(state); gesture(p) }; JSONObject().put("applied", true) },
                 "key" to { p -> svc().run { requireUnguarded(state); key(p) }; JSONObject().put("applied", true) },
                 "set_text" to { p -> svc().run { requireUnguarded(state); setText(p) }; JSONObject().put("applied", true) },
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
-                "screencap" to { p -> svc().screencap(p) },
-                "ocr_screen" to { _ -> svc().ocrScreen() },
-                "events" to { p -> svc().events.queryJson(p.optLong("since", 0), p.optInt("max", 50)) },
+                "screencap" to { p -> svc().screencap(p, state) },
+                "ocr_screen" to { _ -> svc().ocrScreen(state) },
+                // Guarded packages are filtered out of the event stream (Finding 10).
+                "events" to { p ->
+                    svc().events.queryJson(
+                        p.optLong("since", 0), p.optInt("max", 50),
+                        excludePackages = state.guardedPackages(),
+                    )
+                },
             )
         }
 

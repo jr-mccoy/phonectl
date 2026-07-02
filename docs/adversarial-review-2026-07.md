@@ -6,9 +6,18 @@
 risk + tel/sms critical, safe defaults (`mode: confirm`, unknown caps disabled),
 scroll_until through `run_action` with mid-loop STOP checks, intent/launch shell
 quoting, fail-closed companion STOP check (now actually wired into `run_action`),
-clipboard audit length surrogate, uniform exit codes. Still open: **3, 9, 10, 14, 16**
-(Kotlin/companion — need an Android build), **11, 13** (cross-process idempotency,
-provider fallback), and the longer-term human-only sensitive-action policy layer.
+clipboard audit length surrogate, uniform exit codes. Findings **3, 9, 10, 11, 13,
+14, 16** fixed on `claude/system-companion-app-improve-ru7udk` — on-device STOP gate
+in the companion dispatcher (SharedPrefs authoritative, inert env STOP-file fallback
+removed), tree-generation tokens binding set_text/semantic to their observation +
+ambiguous-node-id refusal, guarded-app checks on observe/screencap/OCR/events/
+notification reads, screencap constrained to companion-owned storage (Python stops
+advertising companion `observe_screenshot`), token-authenticated LifecycleReceiver,
+cross-process idempotency store + `action.lock` flock, and registry runtime fallback
+with truthful `provider` fields (policy refusals never fall back). ⚠️ The Kotlin-side
+fixes compile-and-test only via an Android build — JVM tests written but **not yet
+executed**, and the on-device smoke matrix has not been re-run. Still open: the
+longer-term human-only sensitive-action policy layer (roadmap item 16).
 **Scope:** Full system — Python CLI, provider architecture, MCP interface, daemon, macro
 engine, Android companion APK/specs, transport/trust model, docs, tests, packaging.
 **Method:** Firsthand source reading of every core layer plus the companion Kotlin, a full

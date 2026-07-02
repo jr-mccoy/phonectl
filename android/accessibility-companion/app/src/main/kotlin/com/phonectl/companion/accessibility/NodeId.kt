@@ -20,6 +20,20 @@ object NodeId {
 
     fun resolve(viewIdResourceName: String?, windowId: Int, childPath: List<Int>): String =
         viewIdResourceName?.takeIf { it.isNotBlank() } ?: pathId(windowId, childPath)
+
+    /**
+     * Refuse ambiguous lookups (Finding 9): `viewIdResourceName` is not unique (list rows share
+     * ids), and acting on "the first match" silently targets the wrong node. Zero matches is not
+     * an error here — the caller raises `node_not_found` for that case.
+     */
+    fun requireUnambiguous(matchCount: Int, nodeId: String) {
+        if (matchCount > 1) {
+            throw com.phonectl.companion.transport.MethodException(
+                "ambiguous_node_id",
+                "node id '$nodeId' matches $matchCount nodes — refine the target and re-observe",
+            )
+        }
+    }
 }
 
 /**

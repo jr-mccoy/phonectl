@@ -23,8 +23,10 @@ import com.phonectl.companion.transport.Server
  * Foreground service hosting the loopback NDJSON [Server] and the persistent "Stop phonectl"
  * notification (foreground-service SPEC §1/§4).
  *
- * The Stop action does NOT kill the process — it only flips `stopped=true`, which the Python side
- * re-reads on the next `handshake` cycle and enforces via audit.kill_switch_active. Resume clears it.
+ * The Stop action does NOT kill the process — it only flips `stopped=true`, which the dispatcher
+ * enforces on-device for every method (Finding 3: any direct client gets a `stopped` error) and
+ * which the Python side additionally re-reads via `handshake` and enforces through
+ * audit.kill_switch_active. Resume clears it.
  */
 class CompanionForegroundService : Service() {
 
@@ -72,10 +74,13 @@ class CompanionForegroundService : Service() {
         // sink records method + outcome only — never request payloads (SPEC §9). The shared-secret
         // token (Finding 2) is required on every request except `ping`: loopback is not a UID
         // boundary on Android, so the token — not the bind address — keeps other local apps out.
+        // The STOP gate (Finding 3) re-reads state.isStopped() per request so every method fails
+        // closed on-device while stopped, independent of the Python client.
         val dispatcher = Dispatcher(
             methods,
             Capabilities.methodGate(state),
             expectedToken = state.companionToken(),
+            stopped = state::isStopped,
         ) { line ->
             android.util.Log.i(TRANSPORT_LOG_TAG, line)
         }

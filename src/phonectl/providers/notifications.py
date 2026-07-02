@@ -5,7 +5,7 @@ import time
 
 from phonectl import capabilities as caps_mod
 from phonectl import errors
-from phonectl.providers.transport import next_request_id
+from phonectl.providers.transport import next_request_id, raise_companion_error
 
 
 def parse_notification(raw: dict, *, source: str) -> dict:
@@ -78,7 +78,7 @@ class NotificationsProvider:
         if resp.get("request_id") != rid:
             raise errors.ObserveError("stale companion response for notifications")
         if not resp.get("ok"):
-            raise errors.PhonectlError(resp.get("error", {}).get("message", "companion error"))
+            raise_companion_error(resp.get("error", {}))
         return resp.get("data", {})
 
     def list(self, package: str | None = None) -> list:

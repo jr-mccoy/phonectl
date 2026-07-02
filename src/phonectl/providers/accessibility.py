@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from phonectl import capabilities as caps_mod
 from phonectl import errors
-from phonectl.providers.transport import next_request_id
+from phonectl.providers.transport import next_request_id, raise_companion_error
 
 
 SUPPORTED_SEMANTIC_ACTIONS = frozenset({
@@ -16,6 +16,9 @@ class AccessibilityProvider:
     def __init__(self, transport, *, timeout: float = 2.0) -> None:
         self._t = transport
         self._timeout = timeout
+        # Tree-generation token from the last observe_native (Finding 9). Threaded into
+        # set_text/semantic so the companion can refuse actions reasoned over a stale tree.
+        self._last_generation = None
 
     def is_available(self) -> bool:
         try:
@@ -26,10 +29,13 @@ class AccessibilityProvider:
     def capabilities(self) -> dict:
         if not self.is_available():
             return caps_mod.make()
+        # observe_screenshot intentionally NOT advertised (Finding 16): the companion now writes
+        # screenshots only under its own app storage, which this process (a different Android
+        # UID) cannot read — advertising it would just dead-end registry.screencap. ADB serves it.
         return caps_mod.make(
             observe_ui_native=True, observe_ui_events=True,
             act_set_text_native=True, act_gesture_native=True, act_semantic_action=True,
-            observe_ui_tree=True, observe_screenshot=True,
+            observe_ui_tree=True,
             act_tap=True, act_type=True, act_key=True, launch_app=True,
         )
 
@@ -41,14 +47,21 @@ class AccessibilityProvider:
                 f"stale companion response: expected {rid}, got {resp.get('request_id')}"
             )
         if not resp.get("ok"):
-            err = resp.get("error", {})
-            raise errors.ActionError(err.get("message", "companion error"))
+            raise_companion_error(resp.get("error", {}))
         return resp.get("data", {})
 
     # --- Task 3: native tree + compat XML ---
 
     def observe_native(self) -> dict:
-        return self._call("observe_native")
+        data = self._call("observe_native")
+        if "generation" in data:
+            self._last_generation = data["generation"]
+        return data
+
+    def _with_generation(self, params: dict) -> dict:
+        if self._last_generation is not None:
+            params["generation"] = self._last_generation
+        return params
 
     def ui_dump(self) -> str:
         from phonectl import native_tree
@@ -76,10 +89,11 @@ class AccessibilityProvider:
         self._call("key", {"keycode": keycode})
 
     def input_text(self, text):
-        self._call("set_text", {"text": text, "mode": "type"})
+        self._call("set_text", self._with_generation({"text": text, "mode": "type"}))
 
     def set_text_native(self, node_id, text):
-        self._call("set_text", {"node_id": node_id, "text": text, "mode": "set"})
+        self._call("set_text",
+                   self._with_generation({"node_id": node_id, "text": text, "mode": "set"}))
 
     def launch(self, package):
         self._call("launch", {"package": package})
@@ -96,7 +110,8 @@ class AccessibilityProvider:
     def semantic_action(self, node_id, action) -> dict:
         if action not in SUPPORTED_SEMANTIC_ACTIONS:
             raise ValueError(f"unsupported semantic action {action!r}")
-        return self._call("semantic", {"node_id": node_id, "action": action})
+        return self._call("semantic",
+                          self._with_generation({"node_id": node_id, "action": action}))
 
     # --- Task 6: UI event polling ---
 

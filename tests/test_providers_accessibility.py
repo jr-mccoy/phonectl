@@ -1,7 +1,7 @@
 import pytest
+from phonectl import errors, ui_parser
 from phonectl.providers.accessibility import AccessibilityProvider
 from phonectl.providers.transport import LoopbackTransport
-from phonectl import ui_parser
 
 
 # --- Task 2: capabilities ---
@@ -18,6 +18,13 @@ def test_capabilities_all_relevant_true_when_available():
 def test_capabilities_all_false_when_unavailable():
     p = AccessibilityProvider(LoopbackTransport({}, available=False))
     assert all(v is False for v in p.capabilities().values())
+
+
+def test_companion_does_not_advertise_observe_screenshot():
+    # Finding 16: companion screencap writes only under its own (cross-UID unreadable) app
+    # storage, so advertising observe_screenshot would dead-end registry.screencap — ADB owns it.
+    p = AccessibilityProvider(LoopbackTransport({}))
+    assert p.capabilities()["observe_screenshot"] is False
 
 
 # --- Task 3: native tree + ui_dump ---
@@ -90,6 +97,95 @@ def test_semantic_action_rejects_unknown_action_locally():
     with pytest.raises(ValueError):
         AccessibilityProvider(t).semantic_action("n1", "teleport")
     assert all(m != "semantic" for m, _ in t.sent)  # never contacted companion
+
+
+# --- Finding 9: actions carry the generation of the observation they were reasoned over ---
+
+def _native_with_generation(gen):
+    def handler(_params):
+        data = _native_handler({})
+        data["generation"] = gen
+        return data
+    return handler
+
+
+def test_set_text_native_threads_last_observed_generation():
+    t = RecordingTransport()
+    t._handlers["observe_native"] = _native_with_generation(7)
+    p = AccessibilityProvider(t)
+    p.observe_native()
+    p.set_text_native("n2", "hello")
+    method, params = t.sent[-1]
+    assert method == "set_text"
+    assert params["generation"] == 7
+
+
+def test_semantic_action_threads_last_observed_generation():
+    t = RecordingTransport()
+    t._handlers["observe_native"] = _native_with_generation(3)
+    t._handlers["semantic"] = lambda p: {"performed": p["action"]}
+    p = AccessibilityProvider(t)
+    p.observe_native()
+    p.semantic_action("n1", "click")
+    assert t.sent[-1][1]["generation"] == 3
+
+
+def test_generation_omitted_before_first_observation():
+    # No observation yet -> no token to bind to; the companion allows opted-out callers.
+    t = RecordingTransport()
+    AccessibilityProvider(t).set_text_native("n2", "hello")
+    assert "generation" not in t.sent[-1][1]
+
+
+def test_reobserve_updates_the_threaded_generation():
+    t = RecordingTransport()
+    p = AccessibilityProvider(t)
+    t._handlers["observe_native"] = _native_with_generation(1)
+    p.observe_native()
+    t._handlers["observe_native"] = _native_with_generation(2)
+    p.observe_native()
+    p.set_text_native("n2", "hello")
+    assert t.sent[-1][1]["generation"] == 2
+
+
+def test_stale_generation_maps_to_stale_snapshot_error():
+    p = AccessibilityProvider(ErrorTransport("stale_generation", "re-observe"))
+    with pytest.raises(errors.StaleSnapshotError):
+        p.set_text_native("n1", "hi")
+
+
+# --- Finding 3: companion error envelopes map to the typed error hierarchy ---
+
+class ErrorTransport(LoopbackTransport):
+    """Fake companion that answers every request with a fixed error envelope."""
+
+    def __init__(self, code, message="refused"):
+        super().__init__({})
+        self._code, self._message = code, message
+
+    def request(self, method, params, *, request_id, timeout):
+        return {"ok": False, "request_id": request_id, "version": 1,
+                "error": {"code": self._code, "message": self._message}}
+
+
+@pytest.mark.parametrize("code,exc", [
+    ("stopped", errors.StoppedError),                     # on-device STOP gate (Finding 3)
+    ("guarded_action", errors.GuardedActionError),
+    ("capability_disabled", errors.CapabilityUnavailableError),
+    ("unauthorized", errors.UnauthorizedError),
+    ("unknown_method", errors.UnknownMethodError),
+    ("handler_error", errors.PhonectlError),              # anything else stays typed but generic
+])
+def test_companion_error_codes_map_to_typed_errors(code, exc):
+    p = AccessibilityProvider(ErrorTransport(code))
+    with pytest.raises(exc):
+        p.input_tap(1, 2)
+
+
+def test_companion_stopped_error_is_not_swallowed_as_generic():
+    p = AccessibilityProvider(ErrorTransport("stopped", "companion emergency stop is engaged"))
+    with pytest.raises(errors.StoppedError):
+        p.set_text_native("n1", "hi")
 
 
 # --- Task 6: UI event polling ---

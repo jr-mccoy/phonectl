@@ -28,6 +28,13 @@ typealias Method = (JSONObject) -> JSONObject
  * caller cannot even probe which methods exist. Null (unpaired) leaves the socket open, matching
  * the JVM contract tests; the on-device service always supplies one (SharedPrefsTrustState).
  *
+ * [stopped] is the emergency-stop probe (Finding 3). It is re-read on EVERY request so the gate
+ * tracks the live TrustState, and it is enforced here — on-device, before any handler runs — not
+ * delegated to the Python client: a direct socket client acting despite STOP gets a `stopped`
+ * error for every method except the `ping` liveness probe and `handshake` (which is how the
+ * Python side learns `stopped=true` in the first place). Defaults to never-stopped for the pure
+ * JVM contract tests; the foreground service wires `state::isStopped`.
+ *
  * [log] receives a one-line audit record per request: the method name and outcome **only** —
  * `method=<name> outcome=ok` or `method=<name> outcome=err code=<code>`. It is NEVER passed the
  * request `params` or the response `data`, so typed text / reply bodies cannot reach the log
@@ -38,6 +45,7 @@ class Dispatcher(
     private val methods: Map<String, Method>,
     private val gate: (String) -> String? = { null },
     private val expectedToken: String? = null,
+    private val stopped: () -> Boolean = { false },
     private val log: (String) -> Unit = {},
 ) {
 
@@ -64,6 +72,13 @@ class Dispatcher(
         // stays open for liveness; every other method must present the paired token.
         if (expectedToken != null && method != "ping" && req.optString("token", "") != expectedToken) {
             return fail(requestId, method, "unauthorized", "missing or invalid token")
+        }
+
+        // Emergency-stop gate (Finding 3): enforced on-device so a direct client cannot act while
+        // STOP is engaged. `ping` stays open for liveness; `handshake` stays open because its
+        // `stopped` flag is how the Python side observes the stop in the first place.
+        if (method != "ping" && method != "handshake" && stopped()) {
+            return fail(requestId, method, "stopped", "companion emergency stop is engaged")
         }
 
         val handler = methods[method]

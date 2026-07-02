@@ -79,6 +79,23 @@ def test_observe_ui_returns_ok_envelope():
     assert env["data"]["elements"][0]["text"] == "Wi-Fi"
 
 
+def test_observe_reports_true_provider():
+    # Finding 13: the provider field reflects who actually served the observation, not a
+    # hardcoded "adb" — the agent must detect provider switches (coordinate semantics differ).
+    class NamedBackend(FakeBackend):
+        last_used = "AccessibilityProvider"
+
+    build, _ = make_build(NamedBackend())
+    env = mcp_server.observe_ui(build)
+    assert env["provider"] == "AccessibilityProvider"
+
+
+def test_observe_provider_defaults_to_adb_without_registry():
+    build, _ = make_build()  # plain FakeBackend has no last_used
+    env = mcp_server.observe_ui(build)
+    assert env["provider"] == "adb"
+
+
 def test_find_returns_candidates_and_confidence():
     build, _ = make_build()
     env = mcp_server.find(build, selector={"text": "Wi-Fi"})

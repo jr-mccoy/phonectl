@@ -3,17 +3,33 @@
 _What matters right now. Lifespan: days to ~2 weeks. Keep it short and true._
 
 ## Current Focus
-Remediating the 2026-07 adversarial review. Python-side immediate fixes are done
-(Findings 4, 5, 6, 7, 8, 12, 15 on top of #40's 1 & 2 — see the remediation-status
-block in `docs/adversarial-review-2026-07.md`). Remaining: Kotlin/companion findings
-(3, 9, 10, 14, 16 — need an Android build + on-device validation), cross-process
-idempotency (11), provider fallback (13), then Phase 7.1 (Shizuku).
+2026-07 adversarial review remediation is code-complete: all sixteen findings are
+fixed (1–2 in PR #40; 4–8, 12, 15 on `claude/system-improvement-emxdl8`; 3, 9, 10,
+11, 13, 14, 16 on `claude/system-companion-app-improve-ru7udk`). ⚠️ Validation debt
+on the last branch: the Python suite was NOT run (session constraint) and the Kotlin
+JVM tests need an Android build; re-run `pytest -v`, a Gradle test build, and the
+on-device smoke matrix before merging. Then: the human-only sensitive-action policy
+layer (review roadmap item 16) and Phase 7.1 (Shizuku).
 
 **Behavior changes to remember:** default mode is now `confirm` (auto is opt-in;
 setup wizard seeds confirm); unknown companion capability keys default disabled;
 a configured-but-unreachable companion fails closed as `stopped` — and run_action
 now builds the companion transport from cfg itself, so the companion STOP flag
 actually gates every action.
+
+**New behavior from the companion/system branch:** the companion dispatcher refuses
+every method except ping/handshake while stopped (on-device fail-closed; SharedPrefs
+is the authoritative stop — the env-based STOP-file fallback was inert cross-UID and
+is gone); observe_native returns a tree `generation` that set_text/semantic must echo
+(`stale_generation` → StaleSnapshotError) and ambiguous node ids are refused; guarded
+apps are unreadable (observe/screencap/OCR/events/notifications), not just
+untouchable; companion screencap writes only under its own storage so the Python
+provider no longer advertises observe_screenshot; LifecycleReceiver broadcasts need
+`--es token <paired-token>`; idempotency + the single-writer lock persist to
+$PHONECTL_HOME (idempotency.json / action.lock flock); the registry falls back to the
+next capable provider on runtime failure (never on policy refusals) and envelopes
+carry truthful `provider` + `provider_fallback`. Companion error codes now map to
+typed errors (fixed latent `errors.ActionError` AttributeError).
 
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp

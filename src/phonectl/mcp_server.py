@@ -23,12 +23,18 @@ def _default_build(cfg):
     return build_runtime(cfg)
 
 
+def _provider(backend) -> str:
+    # Finding 13: report the provider that actually served the last call — hardcoding "adb"
+    # hid registry fallbacks (and the agent can't detect a coordinate-semantics switch).
+    return getattr(backend, "last_used", None) or "adb"
+
+
 def observe_ui(build=_default_build, *, tree=False, relations=False, screenshot=False, snap_path=None) -> dict:
     try:
         backend, session, conn = build(config.load())
         conn.ensure()
         snap = observer.observe(backend, session, tree=tree, relations=relations, screenshot=screenshot, snap_path=snap_path)
-        return results.ok(capability="ui.observe", provider="adb", data=snap)
+        return results.ok(capability="ui.observe", provider=_provider(backend), data=snap)
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -54,7 +60,7 @@ def find(build=_default_build, *, selector) -> dict:
                 "siblings": (rel.get("siblings", {}) or {}).get(str(i), []),
             })
         confidence = 1.0 if len(matches) == 1 else (round(1 / len(matches), 3) if matches else 0.0)
-        return results.ok(capability="ui.find", provider="adb", data={"candidates": candidates, "confidence": confidence})
+        return results.ok(capability="ui.find", provider=_provider(backend), data={"candidates": candidates, "confidence": confidence})
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -62,7 +68,8 @@ def find(build=_default_build, *, selector) -> dict:
 def capabilities(build=_default_build) -> dict:
     backend, _session, _conn = build(config.load())
     caps = backend.capabilities()
-    return results.ok(capability="capabilities", provider="adb", data={"capabilities": caps, "summary": capmod.describe(caps)})
+    # The capability map is the registry's merged view across all providers, not ADB's alone.
+    return results.ok(capability="capabilities", provider="registry", data={"capabilities": caps, "summary": capmod.describe(caps)})
 
 
 def _action_cfg(dry_run: bool) -> dict:
@@ -273,7 +280,7 @@ def extract_list(build=_default_build, *, container_index=None) -> dict:
         conn.ensure()
         snap = observer.observe(backend, session)
         rows = ui_parser.extract_list(snap["elements"], container_i=container_index)
-        return results.ok(capability="extraction.list", provider="adb", data={"rows": rows})
+        return results.ok(capability="extraction.list", provider=_provider(backend), data={"rows": rows})
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -284,7 +291,7 @@ def extract_form(build=_default_build) -> dict:
         conn.ensure()
         snap = observer.observe(backend, session, relations=True)
         fields = ui_parser.extract_form(snap["elements"], relations=snap.get("relations"))
-        return results.ok(capability="extraction.form", provider="adb", data={"fields": fields})
+        return results.ok(capability="extraction.form", provider=_provider(backend), data={"fields": fields})
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -295,7 +302,7 @@ def get_focused_field(build=_default_build) -> dict:
         conn.ensure()
         snap = observer.observe(backend, session)
         el = ui_parser.get_focused_field(snap["elements"])
-        return results.ok(capability="extraction.focused_field", provider="adb", data={"element": el})
+        return results.ok(capability="extraction.focused_field", provider=_provider(backend), data={"element": el})
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -306,7 +313,7 @@ def find_text(build=_default_build, *, pattern) -> dict:
         conn.ensure()
         snap = observer.observe(backend, session)
         matches = ui_parser.find_by_text_regex(snap["elements"], pattern)
-        return results.ok(capability="extraction.find", provider="adb", data={"matches": matches})
+        return results.ok(capability="extraction.find", provider=_provider(backend), data={"matches": matches})
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
@@ -342,7 +349,7 @@ def policy_explain(build=_default_build, *, verb="tap", index=None, selector=Non
             target = {"x": x, "y": y}
         else:
             target = {}
-        return results.ok(capability="policy.explain", provider="adb", data=policy.explain(snap, verb, target, config.load()))
+        return results.ok(capability="policy.explain", provider=_provider(backend), data=policy.explain(snap, verb, target, config.load()))
     except errors.PhonectlError as e:
         return results.err(e, **getattr(e, "lock_state", {}))
 
