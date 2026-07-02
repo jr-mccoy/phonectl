@@ -6,13 +6,18 @@ import java.io.File
 import java.security.SecureRandom
 
 /**
- * On-device [TrustState] backed by SharedPreferences, with STOP-sentinel parity against the
- * `$PHONECTL_HOME/STOP` file.
+ * On-device [TrustState] backed by SharedPreferences.
  *
- * Capability toggles default to enabled (foreground-service SPEC §6). The stop state is true if
- * either the in-app flag is set or the sentinel file exists (best-effort: the APK can only read
- * the file when its path is reachable from the app sandbox; the Python side checks its own copy
- * regardless, so this is the low-latency mirror, not the sole guarantee).
+ * The SharedPreferences `stopped` flag is the companion's AUTHORITATIVE stop state (Finding 3):
+ * the APK runs under its own Android UID and can never read Termux's `$PHONECTL_HOME/STOP`
+ * sentinel, so no env-based file fallback is attempted — pretending otherwise made the "hard
+ * guarantee" silently inert. The Python side keeps checking its own STOP file; the two stops are
+ * independent and EITHER halts actions (Python via kill_switch_active, companion via the
+ * dispatcher's stop gate). An explicit sentinel path can still be configured via
+ * [setStopFilePath] for setups where a shared, app-readable location exists; it widens the stop
+ * (OR), never narrows it.
+ *
+ * Capability toggles default to enabled (foreground-service SPEC §6).
  */
 class SharedPrefsTrustState(context: Context) : TrustState {
 
@@ -44,7 +49,11 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         prefs.edit().putStringSet(KEY_GUARDED, packages).apply()
     }
 
-    /** Optional override for the STOP sentinel path; empty falls back to env/default discovery. */
+    /**
+     * Optional explicit STOP sentinel path (empty disables the file check). No env-based
+     * discovery: `System.getenv("PHONECTL_HOME")` is Termux's variable, never the APK's, so a
+     * fallback through it could only ever return null while implying file-level parity existed.
+     */
     fun setStopFilePath(path: String) {
         prefs.edit().putString(KEY_STOP_FILE, path).apply()
     }
@@ -73,11 +82,8 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         return runCatching { File(path).exists() }.getOrDefault(false)
     }
 
-    private fun resolveStopFilePath(): String? {
-        prefs.getString(KEY_STOP_FILE, null)?.takeIf { it.isNotBlank() }?.let { return it }
-        System.getenv("PHONECTL_HOME")?.takeIf { it.isNotBlank() }?.let { return "$it/STOP" }
-        return null
-    }
+    private fun resolveStopFilePath(): String? =
+        prefs.getString(KEY_STOP_FILE, null)?.takeIf { it.isNotBlank() }
 
     companion object {
         const val PREFS = "phonectl_companion"

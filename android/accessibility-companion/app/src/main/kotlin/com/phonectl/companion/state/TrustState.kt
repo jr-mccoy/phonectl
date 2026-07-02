@@ -11,7 +11,10 @@ interface TrustState {
     /** A capability key (Capabilities.MVP_KEYS) is enabled by the user. Defaults to enabled. */
     fun isCapabilityEnabled(key: String): Boolean
 
-    /** Emergency stop engaged — in-app flag OR `$PHONECTL_HOME/STOP` sentinel (StopSentinel). */
+    /**
+     * Emergency stop engaged — the in-app flag (authoritative), OR an explicitly configured
+     * sentinel file (StopSentinel). Enforced on-device by the dispatcher's stop gate (Finding 3).
+     */
     fun isStopped(): Boolean
 
     /** Packages on which gesture/text actions are refused with `guarded_action` (SPEC §7.6). */

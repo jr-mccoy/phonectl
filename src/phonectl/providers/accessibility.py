@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from phonectl import capabilities as caps_mod
 from phonectl import errors
-from phonectl.providers.transport import next_request_id
+from phonectl.providers.transport import next_request_id, raise_companion_error
 
 
 SUPPORTED_SEMANTIC_ACTIONS = frozenset({
@@ -41,8 +41,7 @@ class AccessibilityProvider:
                 f"stale companion response: expected {rid}, got {resp.get('request_id')}"
             )
         if not resp.get("ok"):
-            err = resp.get("error", {})
-            raise errors.ActionError(err.get("message", "companion error"))
+            raise_companion_error(resp.get("error", {}))
         return resp.get("data", {})
 
     # --- Task 3: native tree + compat XML ---

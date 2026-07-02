@@ -1,7 +1,7 @@
 import pytest
+from phonectl import errors, ui_parser
 from phonectl.providers.accessibility import AccessibilityProvider
 from phonectl.providers.transport import LoopbackTransport
-from phonectl import ui_parser
 
 
 # --- Task 2: capabilities ---
@@ -90,6 +90,40 @@ def test_semantic_action_rejects_unknown_action_locally():
     with pytest.raises(ValueError):
         AccessibilityProvider(t).semantic_action("n1", "teleport")
     assert all(m != "semantic" for m, _ in t.sent)  # never contacted companion
+
+
+# --- Finding 3: companion error envelopes map to the typed error hierarchy ---
+
+class ErrorTransport(LoopbackTransport):
+    """Fake companion that answers every request with a fixed error envelope."""
+
+    def __init__(self, code, message="refused"):
+        super().__init__({})
+        self._code, self._message = code, message
+
+    def request(self, method, params, *, request_id, timeout):
+        return {"ok": False, "request_id": request_id, "version": 1,
+                "error": {"code": self._code, "message": self._message}}
+
+
+@pytest.mark.parametrize("code,exc", [
+    ("stopped", errors.StoppedError),                     # on-device STOP gate (Finding 3)
+    ("guarded_action", errors.GuardedActionError),
+    ("capability_disabled", errors.CapabilityUnavailableError),
+    ("unauthorized", errors.UnauthorizedError),
+    ("unknown_method", errors.UnknownMethodError),
+    ("handler_error", errors.PhonectlError),              # anything else stays typed but generic
+])
+def test_companion_error_codes_map_to_typed_errors(code, exc):
+    p = AccessibilityProvider(ErrorTransport(code))
+    with pytest.raises(exc):
+        p.input_tap(1, 2)
+
+
+def test_companion_stopped_error_is_not_swallowed_as_generic():
+    p = AccessibilityProvider(ErrorTransport("stopped", "companion emergency stop is engaged"))
+    with pytest.raises(errors.StoppedError):
+        p.set_text_native("n1", "hi")
 
 
 # --- Task 6: UI event polling ---

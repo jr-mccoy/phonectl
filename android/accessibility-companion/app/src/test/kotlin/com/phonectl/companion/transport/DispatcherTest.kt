@@ -210,6 +210,64 @@ class DispatcherTest {
         assertTrue(resp.getBoolean("ok"))
     }
 
+    // --- on-device STOP gate (Finding 3) ---
+
+    private val stopGateMethods = mapOf<String, Method>(
+        "ping" to { _ -> JSONObject().put("pong", true) },
+        "handshake" to { _ -> JSONObject().put("stopped", true) },
+        "observe_native" to { _ -> JSONObject().put("observed", true) },
+        "gesture" to { _ -> JSONObject().put("applied", true) },
+        "key" to { _ -> JSONObject().put("applied", true) },
+        "set_text" to { _ -> JSONObject().put("applied", true) },
+        "semantic" to { _ -> JSONObject().put("performed", "click") },
+        "launch" to { _ -> JSONObject().put("launched", true) },
+        "screencap" to { _ -> JSONObject().put("path", "/x.png") },
+        "ocr_screen" to { _ -> JSONObject().put("regions", true) },
+        "events" to { _ -> JSONObject().put("events", true) },
+        "notifications_list" to { _ -> JSONObject().put("notifications", true) },
+        "notifications_reply" to { _ -> JSONObject().put("sent", true) },
+        "notifications_dismiss" to { _ -> JSONObject().put("dismissed", true) },
+        "ocr_image" to { _ -> JSONObject().put("regions", true) },
+    )
+
+    @Test
+    fun dispatcherRefusesAllActionMethodsWhenStopped() {
+        // Enforcement must be on-device (fail closed), not delegated to the Python client:
+        // a direct socket client gets `stopped` for every method while STOP is engaged.
+        val d = Dispatcher(stopGateMethods, stopped = { true })
+        for (method in stopGateMethods.keys - setOf("ping", "handshake")) {
+            val resp = JSONObject(d.handleLine(request(method))!!)
+            assertFalse("$method must be refused while stopped", resp.getBoolean("ok"))
+            assertEquals("stopped", resp.getJSONObject("error").getString("code"))
+        }
+    }
+
+    @Test
+    fun handshakeAndPingStillAllowedWhenStopped() {
+        // The Python side learns about STOP via handshake.stopped; ping stays open for liveness.
+        val d = Dispatcher(stopGateMethods, stopped = { true })
+        assertTrue(JSONObject(d.handleLine(request("ping"))!!).getBoolean("ok"))
+        assertTrue(JSONObject(d.handleLine(request("handshake"))!!).getBoolean("ok"))
+    }
+
+    @Test
+    fun stopGateReReadsStateOnEveryRequest() {
+        var stopped = false
+        val d = Dispatcher(stopGateMethods, stopped = { stopped })
+        assertTrue(JSONObject(d.handleLine(request("gesture"))!!).getBoolean("ok"))
+        stopped = true
+        val resp = JSONObject(d.handleLine(request("gesture"))!!)
+        assertEquals("stopped", resp.getJSONObject("error").getString("code"))
+    }
+
+    @Test
+    fun stoppedTakesPrecedenceOverCapabilityGate() {
+        val gate = Capabilities.methodGate(TrustStateStub(disabled = setOf("notifications_reply")))
+        val d = Dispatcher(stopGateMethods, gate, stopped = { true })
+        val resp = JSONObject(d.handleLine(request("notifications_reply"))!!)
+        assertEquals("stopped", resp.getJSONObject("error").getString("code"))
+    }
+
     // --- no-payload logging (Plan 4.8 Task 2 / SPEC §9) ---
 
     @Test

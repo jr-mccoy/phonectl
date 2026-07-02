@@ -99,9 +99,11 @@ object Capabilities {
 }
 
 /**
- * STOP-sentinel parity (foreground-service SPEC §4): the emergency stop is engaged when EITHER the
- * in-app flag is set OR the `$PHONECTL_HOME/STOP` sentinel file exists. The file is the hard
- * guarantee (survives APK crashes); the in-app flag is the low-latency path for the running session.
+ * STOP combination (foreground-service SPEC §4): the emergency stop is engaged when EITHER the
+ * in-app flag is set OR an explicitly configured sentinel file exists. The in-app SharedPrefs
+ * flag is the authoritative on-device state (Finding 3 — the APK's UID can never read Termux's
+ * `$PHONECTL_HOME/STOP`, so the Python-side file is a separate, independent stop); the optional
+ * file only ever widens the stop.
  */
 object StopSentinel {
     fun stopped(inAppFlag: Boolean, stopFileExists: Boolean): Boolean = inAppFlag || stopFileExists
