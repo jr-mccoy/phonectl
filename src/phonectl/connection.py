@@ -36,7 +36,7 @@ class Connection:
             self.connect(serial)
             if self.backend.get_state() == "device":
                 return
-        raise ConnectionError(GUIDANCE)
+        self.rediscover()  # mdns/probe/scan fallback; raises GUIDANCE if no live device
 
     def _try_connect(self, addr: str) -> bool:
         self.connect(addr)

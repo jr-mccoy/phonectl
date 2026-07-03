@@ -93,3 +93,19 @@ def test_rediscover_skips_open_non_device_ports(tmp_path, monkeypatch):
     cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
     addr = Connection(b, cfg).rediscover()
     assert addr == "192.168.0.109:43091"
+
+def test_ensure_auto_recovers_via_scan(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = ScanBackend(open_ports=[43091], target="192.168.0.109:43091")
+    cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
+    Connection(b, cfg).ensure()  # must not raise
+    assert b.serial == "192.168.0.109:43091"
+    assert config.load()["serial"] == "192.168.0.109:43091"
+
+def test_ensure_raises_guidance_when_scan_finds_nothing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = ScanBackend(open_ports=[], target="192.168.0.109:43091")
+    cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
+    with pytest.raises(ConnectionError) as e:
+        Connection(b, cfg).ensure()
+    assert GUIDANCE in str(e.value)
