@@ -1,9 +1,16 @@
 import shlex
+import selectors
 import socket
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from phonectl import capabilities, ui_parser
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - non-unix platforms
+    resource = None
 
 
 def _default_port_probe(ip: str, port: int, timeout: float) -> bool:
@@ -17,21 +24,80 @@ def _default_port_probe(ip: str, port: int, timeout: float) -> bool:
         s.close()
 
 
+def _fd_budget(default: int = 256) -> int:
+    """Best-effort available file descriptors (raises soft limit toward hard)."""
+    if resource is None:
+        return default
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if soft < hard:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+            soft = hard
+        return soft
+    except (ValueError, OSError):
+        return default
+
+
+def _scan_via_selectors(ip, ports, timeout):
+    """Non-blocking concurrent connect scan. Fires a batch of connects at once and
+    waits a single timeout window, so filtered (dropped) ports wait in parallel,
+    not in series. Wall-clock ~= (num_batches * timeout), independent of workers."""
+    batch = max(64, min(_fd_budget() - 64, 2000))
+    open_ports = []
+    for i in range(0, len(ports), batch):
+        sel = selectors.DefaultSelector()
+        pending = {}
+        for p in ports[i:i + batch]:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setblocking(False)
+            if s.connect_ex((ip, p)) == 0:
+                open_ports.append(p)  # immediate connect (rare)
+                s.close()
+                continue
+            try:
+                sel.register(s, selectors.EVENT_WRITE, p)
+                pending[s] = p
+            except (KeyError, ValueError, OSError):
+                s.close()
+        end = time.monotonic() + timeout
+        while pending:
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                break
+            events = sel.select(remaining)
+            if not events:
+                break
+            for key, _ in events:
+                s = key.fileobj
+                if s.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) == 0:
+                    open_ports.append(key.data)
+                sel.unregister(s)
+                s.close()
+                del pending[s]
+        for s in pending:
+            sel.unregister(s)
+            s.close()
+        sel.close()
+    return sorted(open_ports)
+
+
 class AdbBackend:
     def __init__(self, serial=None, runner=subprocess.run, port_probe=None):
         self.serial = serial
         self._runner = runner
         self._port_probe = port_probe or _default_port_probe
 
-    def scan_ports(self, ip, ports, *, timeout=0.3, workers=200):
+    def scan_ports(self, ip, ports, *, timeout=0.1, workers=200):
         ports = list(ports)
         if not ports:
             return []
-        probe = self._port_probe
-        with ThreadPoolExecutor(max_workers=min(workers, len(ports))) as ex:
-            pairs = ex.map(lambda p: (p, probe(ip, p, timeout)), ports)
-            open_ports = [p for p, is_open in pairs if is_open]
-        return sorted(open_ports)
+        if self._port_probe is not _default_port_probe:
+            # Injected probe (tests): simple thread fan-out, one call per port.
+            probe = self._port_probe
+            with ThreadPoolExecutor(max_workers=min(workers, len(ports))) as ex:
+                pairs = ex.map(lambda p: (p, probe(ip, p, timeout)), ports)
+                return sorted(p for p, is_open in pairs if is_open)
+        return _scan_via_selectors(ip, ports, timeout)
 
     def _base(self) -> list[str]:
         return ["adb", "-s", self.serial] if self.serial else ["adb"]

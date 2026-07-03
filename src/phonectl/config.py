@@ -15,7 +15,7 @@ DEFAULTS: dict = {
     "poll_interval": 0.5,       # job_poll cadence
     "job_queue_max": 8,         # pending-job FIFO depth; over -> BusyError
     "idempotency_ttl": 300.0,   # how long a finished job stays dedupe-eligible
-    "scan_range": [30000, 50000],  # [start, end] port band for reconnect self-heal scan
+    "scan_range": [32768, 61000],  # Linux/Android ephemeral band adbd binds within (self-heal scan)
 }
 
 # None-defaulted keys that must still coerce to int (their default is None, so the

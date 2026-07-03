@@ -327,3 +327,24 @@ def test_scan_ports_empty_when_none_open():
 def test_scan_ports_empty_input():
     b = AdbBackend(port_probe=lambda ip, port, timeout: True)
     assert b.scan_ports("192.168.0.109", []) == []
+
+
+def test_scan_ports_default_probe_finds_real_listener():
+    # Exercises the real selectors-based scan path (no injected probe) against a
+    # live loopback listener; a just-released port is treated as closed.
+    import socket as _socket
+    srv = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    open_port = srv.getsockname()[1]
+    tmp = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    tmp.bind(("127.0.0.1", 0))
+    closed_port = tmp.getsockname()[1]
+    tmp.close()
+    try:
+        b = AdbBackend()  # default socket probe -> selectors path
+        found = b.scan_ports("127.0.0.1", [open_port, closed_port], timeout=0.5)
+        assert open_port in found
+        assert closed_port not in found
+    finally:
+        srv.close()

@@ -74,14 +74,25 @@ def __init__(self, serial=None, runner=subprocess.run, port_probe=None):
     ...
     self._port_probe = port_probe or _default_port_probe   # injectable seam (mirrors `runner`)
 
-def scan_ports(self, ip, ports, *, timeout=0.3, workers=200) -> list[int]:
+def scan_ports(self, ip, ports, *, timeout=0.1, workers=200) -> list[int]:
     """Return the sorted list of ports open on `ip`, probed concurrently."""
 ```
 
 - `_default_port_probe(ip, port, timeout) -> bool` uses `socket.connect_ex` (stdlib). Returns `True` on open.
-- `scan_ports` fans `self._port_probe` over `ports` via `concurrent.futures.ThreadPoolExecutor(workers)` and
-  collects the open ports. Refused ports return near-instantly, so a ~20k-port range completes in ~seconds.
-- Tests inject a `port_probe` that consults an in-memory open-set — no sockets, no device.
+  It is also the **sentinel** for the default path: `scan_ports` branches on `self._port_probe is
+  _default_port_probe`.
+- **Default path — `selectors` (non-blocking), not threads.** On-device measurement (§6.1) showed a
+  thread-per-port blocking scan is unusable over the phone's Wi-Fi interface: closed ports are *filtered*
+  (silently dropped) rather than RST, so each blocking connect burns the full timeout, and 512–1500 worker
+  threads add catastrophic GIL/scheduling overhead (74–546s for the ephemeral range). The default path instead
+  uses `_scan_via_selectors(ip, ports, timeout)`: it fires a batch of non-blocking `connect_ex` calls
+  (batch size = FD budget − 64, capped 2000; soft `RLIMIT_NOFILE` raised toward hard best-effort) and waits a
+  single `selectors` window per batch, so filtered ports wait *in parallel*. Wall-clock ≈ num_batches ×
+  timeout, independent of worker count — **~10s for the full 32768–61000 band at timeout 0.1**.
+- **Injected-probe path — threads (tests only).** When a custom `port_probe` is supplied, `scan_ports` fans it
+  over `ports` via `ThreadPoolExecutor(workers)` — simple, one call per port. Tests inject a probe that
+  consults an in-memory open-set (no sockets, no device); a separate test exercises the real `selectors` path
+  against a live loopback listener.
 
 ### 4.2 `Connection.rediscover()` (connection.py)
 
@@ -93,8 +104,9 @@ last_port → serial → mdns_services → probe_ports → scan_ports(ip, scan_r
 ```
 
 - `ip` from the existing `_device_ip()` helper.
-- `scan_range` from `cfg["scan_range"]` (default `[30000, 50000]`); the scanned iterable is
-  `range(start, end + 1)`.
+- `scan_range` from `cfg["scan_range"]` (default `[32768, 61000]` — the full Linux/Android ephemeral band adbd
+  binds within; a narrower band risks missing a port that landed high, e.g. 53601/60948 observed on-device);
+  the scanned iterable is `range(start, end + 1)`.
 - Each open port `p` → `_try_connect(f"{ip}:{p}")` (existing method: connects, persists config, returns
   `get_state() == "device"`). First success returns its addr. Ports already tried (`last_port`/`serial`) may
   be skipped to avoid redundant connects.
@@ -107,8 +119,8 @@ is only reached when the stored-serial reconnect has already failed.
 
 ### 4.4 Config (config.py)
 
-Add to `DEFAULTS`: `"scan_range": [30000, 50000]`. `scan_timeout`/`workers` remain method defaults (not
-config surface — YAGNI).
+Add to `DEFAULTS`: `"scan_range": [32768, 61000]`. `timeout`/`workers` remain method defaults (not config
+surface — YAGNI).
 
 ## 5. Error handling
 
@@ -129,6 +141,22 @@ Stdlib-only, injected seams, no real device or sockets. TDD, one commit per task
    and config is updated; scan finds nothing → raises `GUIDANCE`.
 4. **Regression** — all five existing `tests/test_connection.py` cases stay green (the `StateBackend` double
    lacks `scan_ports`, so the `getattr`-guarded branch is skipped — old behavior preserved).
+5. **Real selectors path** — a test scans a live loopback listener (default probe, no injection) and asserts
+   the listening port is found and a just-released port is not.
+
+### 6.1 On-device verification (2026-07-03, Galaxy S25 Ultra)
+
+Validated end-to-end against the physical device — the repo rule is "don't claim device behavior you haven't
+run on-device," and this pass materially changed the design:
+
+- **`./pc reconnect`** with a poisoned (dead) config serial scanned, found the live adbd port, connected, and
+  persisted it in **~8s**, no manual input.
+- **`./pc observe`** auto-recovered through `ensure()` → `rediscover()` → scan in **~18s**, then reported
+  device state (screen locked → correctly refused to act — safe-by-default, connection healed).
+- **Scan-strategy finding (drove §4.1):** the initial `ThreadPoolExecutor` design took **54.8s** for
+  30000–50000 and hung `observe`; high-thread variants were far worse (74–546s). The `selectors` rewrite does
+  the full 32768–61000 band in **~10.5s** at timeout 0.1. Live adbd ports observed spanned 41491–53601,
+  confirming the range must cover the whole ephemeral band.
 
 ## 7. Backend-isolation note
 
