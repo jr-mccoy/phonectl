@@ -14,9 +14,14 @@ ambiguous-node-id refusal, guarded-app checks on observe/screencap/OCR/events/
 notification reads, screencap constrained to companion-owned storage (Python stops
 advertising companion `observe_screenshot`), token-authenticated LifecycleReceiver,
 cross-process idempotency store + `action.lock` flock, and registry runtime fallback
-with truthful `provider` fields (policy refusals never fall back). ⚠️ The Kotlin-side
-fixes compile-and-test only via an Android build — JVM tests written but **not yet
-executed**, and the on-device smoke matrix has not been re-run. Still open: the
+with truthful `provider` fields (policy refusals never fall back). ✅ The Kotlin-side fixes are
+**compiled and JVM-unit-tested green on CI**: the `android.yml` workflow ran
+`./gradlew assembleDebug test` on the `master` merge commit `fb4db55` (Actions run
+28605014626, 2026-07-02), building the debug APK and executing the new JVM tests
+(`GenerationTest`, `GuardsAndFlagsTest`, `LifecycleAuthTest`, `DispatcherTest`).
+⚠️ Still not exercised on a real Android runtime: instrumented tests
+(`connectedAndroidTest` — CI runs no emulator) and the manual on-device smoke
+matrix. Still open: the
 longer-term human-only sensitive-action policy layer (roadmap item 16).
 **Scope:** Full system — Python CLI, provider architecture, MCP interface, daemon, macro
 engine, Android companion APK/specs, transport/trust model, docs, tests, packaging.
