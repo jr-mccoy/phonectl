@@ -17,6 +17,10 @@ DEFAULTS: dict = {
     "idempotency_ttl": 300.0,   # how long a finished job stays dedupe-eligible
 }
 
+# None-defaulted keys that must still coerce to int (their default is None, so the
+# isinstance(default, int) branch below can't catch them).
+_NUMERIC_NONE_KEYS = frozenset({"companion_port"})
+
 
 def config_dir() -> Path:
     base = os.environ.get("PHONECTL_HOME")
@@ -45,3 +49,21 @@ def get_mode(cfg: dict) -> str:
     # Safe-by-default (Finding 5): actions require confirmation until the user
     # explicitly opts into auto (config set mode auto / setup wizard).
     return cfg.get("mode", "confirm")
+
+
+def coerce_and_set(cfg: dict, key: str, raw: str) -> dict:
+    if key not in DEFAULTS:
+        raise KeyError(f"unknown config key: {key!r}")
+    default = DEFAULTS[key]
+    if isinstance(default, bool):
+        value = str(raw).strip().lower() in ("1", "true", "yes", "on")
+    elif isinstance(default, int):
+        value = int(raw)
+    elif isinstance(default, float):
+        value = float(raw)
+    elif key in _NUMERIC_NONE_KEYS:
+        value = int(raw)
+    else:  # None/str default -> keep as string (e.g. companion_token, serial)
+        value = raw
+    cfg[key] = value
+    return cfg

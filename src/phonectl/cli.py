@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import glob as _glob
 import json
+import os
 from phonectl import (
     __version__,
     actuator,
@@ -16,6 +18,7 @@ from phonectl import (
     diagnostics,
     ui_parser,
 )
+from phonectl import companion_setup as _companion_setup
 from phonectl.adb_backend import AdbBackend
 from phonectl.providers.registry import ProviderRegistry
 from phonectl.providers.termux import TermuxApiProvider
@@ -481,6 +484,74 @@ def _cmd_setup(args):
     cfg = config.load()
     backend, session, conn = build_runtime(cfg)
     return setup_mod.run_module(args.module, conn)
+
+
+def _resolve_apk(explicit):
+    if explicit:
+        return explicit
+    candidates = []
+    for base in (os.path.expanduser("~/Download"), "/sdcard/Download",
+                 "/storage/emulated/0/Download"):
+        candidates += _glob.glob(os.path.join(base, "**", "app-debug.apk"), recursive=True)
+    return max(candidates, key=os.path.getmtime) if candidates else None
+
+
+def _cmd_companion_setup(args):
+    cfg = config.load()
+    if getattr(args, "apk", None) and not os.path.exists(args.apk):
+        print(f"phonectl: apk not found: {args.apk}")
+        return 2
+    apk = _resolve_apk(getattr(args, "apk", None))
+    if apk is None:
+        print("phonectl: no app-debug.apk found; pass --apk PATH")
+        return 2
+    backend, _session, conn = build_runtime(cfg)
+    try:
+        conn.ensure()
+    except ConnectionError as e:
+        print(f"phonectl: {e}")
+        return 2
+    res = _companion_setup.run_companion_setup(
+        backend.run_adb, cfg, apk_path=apk, assume_yes=getattr(args, "yes", False))
+    if getattr(args, "json", False):
+        print(json.dumps(res, indent=2))
+    else:
+        for s in res["steps"]:
+            print(f"  [{s['status']}] {s['name']}: {s['message']}")
+        print("phonectl: companion setup " + ("OK" if res["ok"] else "FAILED"))
+    return 0 if res["ok"] else 1
+
+
+def _cmd_companion_status(args):
+    cfg = config.load()
+    backend, _session, conn = build_runtime(cfg)
+    try:
+        conn.ensure()
+    except ConnectionError as e:
+        print(f"phonectl: {e}")
+        return 2
+    report = _companion_setup.status(backend.run_adb, cfg)
+    print(json.dumps(report, indent=2) if getattr(args, "json", False)
+          else "  " + "  ".join(f"{k}={v}" for k, v in report.items()))
+    return 0
+
+
+def _cmd_config_get(args):
+    cfg = config.load()
+    print(json.dumps(cfg.get(args.key)) if getattr(args, "json", False) else cfg.get(args.key))
+    return 0
+
+
+def _cmd_config_set(args):
+    cfg = config.load()
+    try:
+        config.coerce_and_set(cfg, args.key, args.value)
+    except KeyError as e:
+        print(f"phonectl: {e}")
+        return 2
+    config.save(cfg)
+    print(f"phonectl: {args.key} = {cfg[args.key]}")
+    return 0
 
 
 def _cmd_policy(args):
@@ -1606,6 +1677,19 @@ def build_parser() -> argparse.ArgumentParser:
     getir.set_defaults(func=_cmd_get_text_in_region)
     ge.set_defaults(func=lambda args: (ge.print_help(), 2)[1])
 
+    # config subcommand group
+    cfgp = sub.add_parser("config")
+    cfgsub = cfgp.add_subparsers(dest="config_cmd")
+    cg = cfgsub.add_parser("get")
+    cg.add_argument("key")
+    cg.add_argument("--json", action="store_true")
+    cg.set_defaults(func=_cmd_config_get)
+    cset = cfgsub.add_parser("set")
+    cset.add_argument("key")
+    cset.add_argument("value")
+    cset.set_defaults(func=_cmd_config_set)
+    cfgp.set_defaults(func=lambda args: (cfgp.print_help(), 2)[1])
+
     # device subcommand group
     dv = sub.add_parser("device")
     dvsub = dv.add_subparsers(dest="device_cmd")
@@ -1616,6 +1700,19 @@ def build_parser() -> argparse.ArgumentParser:
     dvw.add_argument("--json", action="store_true")
     dvw.set_defaults(func=_cmd_device_wifi)
     dv.set_defaults(func=lambda args: (dv.print_help(), 2)[1])
+
+    # companion subcommand group (Task 12)
+    cp2 = sub.add_parser("companion")
+    cp2sub = cp2.add_subparsers(dest="companion_cmd")
+    cst = cp2sub.add_parser("setup")
+    cst.add_argument("--apk", default=None)
+    cst.add_argument("--yes", action="store_true")
+    cst.add_argument("--json", action="store_true")
+    cst.set_defaults(func=_cmd_companion_setup)
+    cstat = cp2sub.add_parser("status")
+    cstat.add_argument("--json", action="store_true")
+    cstat.set_defaults(func=_cmd_companion_status)
+    cp2.set_defaults(func=lambda args: (cp2.print_help(), 2)[1])
 
     # tts subcommand group
     tt = sub.add_parser("tts")

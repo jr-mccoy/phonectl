@@ -164,3 +164,29 @@ steps are explicitly flagged and never run in CI.
   `capture_selector` / `capture_failure`) are implemented and tested but not yet wired into the daemon
   run-record path; activation requires action-record enrichment (selector `matched_i` + `app_version`/`locale`
   context) and is deferred with the selector-library override work (Phase 7+).
+
+## 10. Companion setup (`phonectl companion setup`) — implemented
+
+✅ Done: `docs/superpowers/plans/2026-07-02-phonectl-companion-setup.md` (design spec:
+`docs/superpowers/specs/2026-07-02-phonectl-companion-startup-design.md`). `phonectl companion
+setup` is the idempotent one-command bring-up for the Phase 4 companion APK — install → enable
+AccessibilityService → grant `POST_NOTIFICATIONS` → acquire the pairing token → start the socket
+server → verify with an authenticated handshake — gated by `--yes`/y-N confirmation on the
+grant/start steps. `phonectl companion status` and `phonectl config get`/`config set` shipped
+alongside it. See the README's "Companion setup" section for usage.
+
+Follow-ups intentionally left out of scope (each needs its own plan):
+
+1. **ADB Wireless-Debugging port-rotation reconnect.** Port rotation, dead mDNS, and reconnect
+   handling is a separate connection-layer concern. Candidate directions: one-time USB
+   `adb tcpip <fixed-port>`, persistent `rediscover()` on every command, or a dedicated `phonectl
+   reconnect` flow. `companion setup` assumes a live adb connection and only surfaces `device
+   offline` today.
+2. **Approach A — phonectl-minted pushed token (v2).** Release-build token automation via a
+   phonectl-minted secret pushed at first pair (replacing `adb run-as` / manual paste for
+   non-debug builds). Requires an APK/Kotlin change (a TOFU first-pair path) — a natural v2 once
+   an Android build loop exists.
+3. **Kotlin Finding-5 gap.** `Capabilities.DEFAULT_ENABLED = true` was never flipped in the
+   companion app — it still ships **all** capabilities enabled by default. The Python-side half of
+   Finding 5 (safe-by-default gating) landed; the companion-side default does not yet match it.
+   Independent of companion setup — file as its own remediation.

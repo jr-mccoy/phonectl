@@ -641,6 +641,72 @@ surface, message contract, permissions, and error codes.
 
 ---
 
+## Companion setup
+
+`phonectl companion setup` is the one-command bring-up for the companion APK: install the APK,
+enable the AccessibilityService, grant `POST_NOTIFICATIONS`, acquire the pairing token, start the
+socket server, and verify the connection with an authenticated handshake. It's **idempotent** —
+each step checks whether it's already done and skips if so, so re-running it is safe.
+
+```bash
+phonectl companion setup                                # auto-detects the newest app-debug.apk
+phonectl companion setup --apk /path/to/app-debug.apk    # use an explicit APK path
+phonectl companion setup --yes                           # non-interactive: accept the grant/start prompts
+phonectl companion setup --json                          # structured step-by-step result envelope
+```
+
+| Command | What it does |
+|---|---|
+| `phonectl companion setup [--apk PATH] [--yes] [--json]` | Installs → enables AccessibilityService → grants notifications → pairs token → starts server → verifies |
+| `phonectl companion status [--json]` | Read-only report: `installed`, `accessibility`, `socket`, `token_paired` |
+
+When `--apk` is omitted, phonectl auto-detects the newest `app-debug.apk` under `~/Download`,
+`/sdcard/Download`, or `/storage/emulated/0/Download`; if none is found it exits `2` and asks for
+`--apk PATH`. Each run prints one line per step (`install`, `accessibility`, `notifications`,
+`token`, `server`, `verify`) with a `skipped`/`done`/`failed` status.
+
+The `accessibility` and `server` steps grant or start something on-device, so — same safe-by-default
+posture as every other mutating command — they print what they're about to do first and require
+`--yes`, or an interactive `y/N` confirmation, before proceeding.
+
+**Token acquisition:** on a debug build, the token is read automatically off-device via
+`adb shell run-as com.phonectl.companion cat shared_prefs/phonectl_companion.xml` — no prompt
+needed. On other builds `run-as` doesn't work for a release-signed package, so phonectl opens the
+companion's Pairing screen instead and prompts you to paste the token shown there.
+
+**The one manual step `setup` can't automate:** enabling **Notification access**
+(`NotificationListenerService`) for the companion app — there is no `adb`/secure-settings
+equivalent for this toggle. `companion setup` prints a reminder to open the companion app and tap
+**Notification access** yourself; everything else in the flow is automated.
+
+```bash
+phonectl companion status --json
+# {
+#   "installed": true,
+#   "accessibility": true,
+#   "socket": true,
+#   "token_paired": true
+# }
+```
+
+### `config get` / `config set`
+
+Typed access to `~/.config/phonectl/config.json` keys (`companion_port`, `companion_host`,
+`companion_token`, `companion_timeout`, and the rest of the config defaults table):
+
+```bash
+phonectl config get companion_port
+phonectl config get companion_port --json
+phonectl config set companion_port 8765
+phonectl config set companion_host 127.0.0.1
+```
+
+`config get` returns the raw value (`null` if unset). `config set` validates the key against the
+known config defaults and coerces the value to that key's declared type (bool/int/float/str),
+exiting `2` with `unknown config key` for anything not in the defaults table.
+
+---
+
 ## Companion transport & trust controls
 
 The companion APK communicates with phonectl over a **loopback TCP socket** — a newline-delimited
