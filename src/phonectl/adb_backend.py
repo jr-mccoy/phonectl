@@ -1,12 +1,37 @@
 import shlex
+import socket
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
 from phonectl import capabilities, ui_parser
 
+
+def _default_port_probe(ip: str, port: int, timeout: float) -> bool:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        return s.connect_ex((ip, port)) == 0
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
 class AdbBackend:
-    def __init__(self, serial=None, runner=subprocess.run):
+    def __init__(self, serial=None, runner=subprocess.run, port_probe=None):
         self.serial = serial
         self._runner = runner
+        self._port_probe = port_probe or _default_port_probe
+
+    def scan_ports(self, ip, ports, *, timeout=0.3, workers=200):
+        ports = list(ports)
+        if not ports:
+            return []
+        probe = self._port_probe
+        with ThreadPoolExecutor(max_workers=min(workers, len(ports))) as ex:
+            pairs = ex.map(lambda p: (p, probe(ip, p, timeout)), ports)
+            open_ports = [p for p, is_open in pairs if is_open]
+        return sorted(open_ports)
 
     def _base(self) -> list[str]:
         return ["adb", "-s", self.serial] if self.serial else ["adb"]

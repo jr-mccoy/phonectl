@@ -307,3 +307,23 @@ def test_run_adb_returns_full_result_with_serial():
     res = b.run_adb("shell", "true")
     assert calls == [["adb", "-s", "1.2.3.4:5", "shell", "true"]]
     assert (res.returncode, res.stdout, res.stderr) == (7, "OUT", "ERR")
+
+
+def test_scan_ports_returns_sorted_open_ports():
+    opened = {43091, 8765}
+    def fake_probe(ip, port, timeout):
+        assert ip == "192.168.0.109"
+        return port in opened
+    b = AdbBackend(port_probe=fake_probe)
+    result = b.scan_ports("192.168.0.109", [50000, 8765, 40000, 43091])
+    assert result == [8765, 43091]
+
+
+def test_scan_ports_empty_when_none_open():
+    b = AdbBackend(port_probe=lambda ip, port, timeout: False)
+    assert b.scan_ports("192.168.0.109", [1, 2, 3]) == []
+
+
+def test_scan_ports_empty_input():
+    b = AdbBackend(port_probe=lambda ip, port, timeout: True)
+    assert b.scan_ports("192.168.0.109", []) == []
