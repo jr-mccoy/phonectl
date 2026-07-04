@@ -10,13 +10,18 @@ unit tests), cross-checked surprising responses against source, isolated root ca
 minimal repro. Most of the surface worked correctly end-to-end (index-based `tap`, `type`
 sending raw keystrokes, `launch` auto-reobserving, the rate limiter genuinely blocking a
 second high-risk verb, audit log redacting typed text to `<N chars>`, a hand-written 6-step
-macro executing correctly). Two reproducible bugs surfaced; both still open.
+macro executing correctly). Two reproducible bugs surfaced; **both fixed 2026-07-04**
+(see the Status line under each finding).
 
 ---
 
 ## Finding 1 — `autonomy grant --expires N` produces a dead-on-arrival grant
 
 **Severity:** High · **Area:** CLI / Macro Autonomy Gate
+**Status:** ✅ Fixed 2026-07-04 — the CLI now converts `--expires N` to `now + N` before
+calling `grant()` / the `autonomy_grant` RPC (whose `expires_at` param was already
+absolute-epoch semantics). Regression tests cover grant-visible-immediately,
+lapse-after-duration, and absolute-timestamp-over-RPC.
 
 **Problem.** `phonectl autonomy grant <macro> --max-risk <level> --expires N` treats `N` as
 an absolute Unix epoch timestamp instead of "N seconds from now". `cli.py` passes
@@ -75,6 +80,11 @@ passes the duration.
 ## Finding 2 — `macro run` can report a client-side timeout after the run already succeeded
 
 **Severity:** Medium · **Area:** Daemon RPC / Macro Engine
+**Status:** ✅ Fixed 2026-07-04 — took option 2: `macro_run` is now an async daemon job
+(`JobRegistry`, like `act`/`observe`), and the CLI drives it via `submit_and_wait` with
+short poll RPCs (overall deadline config `macro_timeout`, default 600 s; on expiry the
+envelope reports the job still running with the id to query). Also serializes macro steps
+under the daemon's single-writer lock, which the old synchronous handler bypassed.
 
 **Problem.** Running a multi-step macro (6 steps: `launch` + 5 `tap`s) via
 `phonectl macro run <path> --yes --json` over the daemon returned:

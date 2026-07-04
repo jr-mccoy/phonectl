@@ -44,7 +44,9 @@ class DaemonClient:
         acc = self.call(method, params)
         if not acc.get("ok"):
             return acc                                   # unreachable / busy / timeout
-        job_id = acc["data"]["job_id"]
+        job_id = acc.get("data", {}).get("job_id")
+        if job_id is None:
+            return acc          # older daemon ran the method synchronously
         deadline = now() + overall_timeout
         while now() < deadline:
             polled = self.call("job_poll", {"job_id": job_id})

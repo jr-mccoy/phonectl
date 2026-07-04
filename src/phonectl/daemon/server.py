@@ -144,7 +144,6 @@ class DaemonServer:
             )
 
         from phonectl.macro import schema as _mschema
-        from phonectl.macro.engine import Engine as _Engine, CancellationToken as _Token
 
         @self.registry.register("macro_validate")
         def _macro_validate(params, ctx):
@@ -154,14 +153,12 @@ class DaemonServer:
 
         @self.registry.register("macro_run")
         def _macro_run(params, ctx):
-            macro = _mschema.parse(params["macro"])
-            token = _Token()
-            eng = _Engine(build=lambda cfg: self._warm_triple(), cfg=self._cfg)
-            env = eng.run(macro, token=token, yes=bool(params.get("yes", False)))
-            rid = env.get("data", {}).get("run_id")
-            if rid:
-                self._macro_tokens.pop(rid, None)
-            return env
+            # Async job, like act/observe: a multi-step macro runs for minutes,
+            # far past any client RPC deadline, and must hold the single-writer
+            # lock while it drives the device (Finding 2, 2026-07-04).
+            job_id = self.jobs.submit("macro_run", dict(params))
+            return results.ok(capability="daemon.job_accepted",
+                              data={"job_id": job_id, "status": "accepted"})
 
         @self.registry.register("macro_cancel")
         def _macro_cancel(params, ctx):
@@ -267,7 +264,21 @@ class DaemonServer:
                 return self._run_observe(params)
             if method == "find":
                 return self._run_find(params)
+            if method == "macro_run":
+                return self._run_macro(params)
             return results.err(("internal_error", f"no run-fn for {method!r}"))
+
+    def _run_macro(self, params):
+        from phonectl.macro import schema as _mschema
+        from phonectl.macro.engine import Engine, CancellationToken
+        macro = _mschema.parse(params["macro"])
+        token = CancellationToken()
+        eng = Engine(build=lambda cfg: self._warm_triple(), cfg=self._cfg)
+        env = eng.run(macro, token=token, yes=bool(params.get("yes", False)))
+        rid = env.get("data", {}).get("run_id")
+        if rid:
+            self._macro_tokens.pop(rid, None)
+        return env
 
     def _run_act(self, params):
         from phonectl import runtime
