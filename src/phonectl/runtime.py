@@ -99,15 +99,24 @@ def _new_request_id() -> str:
     return uuid.uuid4().hex
 
 
+_transport_cache: dict = {}   # (host, port, token) -> SocketTransport
+
+
 def _companion_transport_from_cfg(cfg):
     """A configured companion (companion_port set) is consulted for its STOP
-    flag on every action, without each caller having to wire the transport."""
+    flag on every action, without each caller having to wire the transport.
+    Memoized per (host, port, token) so a long-lived process (the daemon)
+    reuses one transport — and its persistent connection — across actions."""
     port = cfg.get("companion_port")
     if not port:
         return None
-    from phonectl.providers.transport import SocketTransport
-    return SocketTransport(cfg.get("companion_host", "127.0.0.1"), int(port),
-                           token=cfg.get("companion_token"))
+    key = (cfg.get("companion_host", "127.0.0.1"), int(port), cfg.get("companion_token"))
+    transport = _transport_cache.get(key)
+    if transport is None:
+        from phonectl.providers import transport as _tmod
+        transport = _transport_cache[key] = _tmod.SocketTransport(
+            key[0], key[1], token=key[2])
+    return transport
 
 
 def _rate_path():
@@ -216,7 +225,17 @@ def _run_action_body(
         try:
             backend, session, conn = build(cfg)
             conn.ensure()
-            observer.observe(backend, session)
+            # Opt-in (action_observe_ttl > 0): a session snapshot no older than
+            # the window — typically the previous action's post-act observe in a
+            # daemon loop — already describes the screen the caller targeted, so
+            # policy can run on it without paying another observe round trip.
+            # Default 0 keeps the safe behavior: always re-observe before acting.
+            observe_ttl = cfg.get("action_observe_ttl", 0.0) or 0
+            last = getattr(session, "last", None)
+            fresh = (observe_ttl > 0 and last is not None
+                     and now() - last.get("observed_at", 0.0) <= observe_ttl)
+            if not fresh:
+                observer.observe(backend, session)
             decision = policy.explain(session.last, verb, target, cfg)
             risk = {
                 "risk_level": decision["risk_level"],

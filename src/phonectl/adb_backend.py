@@ -124,8 +124,41 @@ class AdbBackend:
         res = self._runner(cmd, capture_output=True)
         return res._bytes if hasattr(res, "_bytes") else res.stdout
 
+    # Separator line between the UI hierarchy and the window section of the
+    # combined observe dump. Chosen to never occur in either dump's output.
+    OBSERVE_SEP = "__PHONECTL_WINDOW__"
+    # Everything observe()/ui_parser read out of `dumpsys window`: focused
+    # window/app plus the keyguard + secure markers. Filtering device-side
+    # keeps the combined dump from shipping the full multi-hundred-KB window
+    # dump over the (wireless) link every observe.
+    _WINDOW_GREP = ("mCurrentFocus|mFocusedApp|mDreamingLockscreen"
+                    "|mShowingLockscreen|KeyguardServiceDelegate"
+                    "|secure=|KeyguardSecure=")
+    _WINDOW_KEYWORDS = ("mCurrentFocus", "mFocusedApp", "Lockscreen",
+                        "Keyguard", "secure=")
+
     def ui_dump(self) -> str:
         return self._adb("exec-out", "uiautomator", "dump", "/dev/tty")
+
+    def observe_dump(self):
+        """UI hierarchy + the window-state lines observe() needs, in ONE adb
+        round trip instead of two (the round trip is the dominant per-action
+        cost over Wireless Debugging).
+
+        Returns ``(xml, window)``; ``window`` is None whenever the combined
+        form did not yield a usable window section (old shell, grep missing),
+        in which case the caller must fetch `dumpsys window` separately —
+        never parse a junk section as "unlocked"."""
+        cmd = ("uiautomator dump /dev/tty; echo {sep}; "
+               "dumpsys window | grep -E '{pat}'").format(
+                   sep=self.OBSERVE_SEP, pat=self._WINDOW_GREP)
+        out = self._adb("exec-out", cmd)
+        xml, sep, window = out.partition(self.OBSERVE_SEP)
+        if not sep:
+            return out, None
+        if not any(k in window for k in self._WINDOW_KEYWORDS):
+            return xml, None
+        return xml, window
 
     def screencap(self, path: str) -> str:
         data = self._adb_bytes("exec-out", "screencap", "-p")
@@ -135,6 +168,14 @@ class AdbBackend:
 
     def window_dump(self) -> str:
         return self._adb("shell", "dumpsys", "window")
+
+    def window_brief(self) -> str:
+        """Only the focus/keyguard lines of `dumpsys window` — all phonectl
+        parses — filtered device-side to spare the link the full dump."""
+        out = self._adb("shell", "dumpsys window | grep -E '{}'".format(self._WINDOW_GREP))
+        if not any(k in out for k in self._WINDOW_KEYWORDS):
+            return self.window_dump()   # grep unavailable/odd shell -> full dump
+        return out
 
     def wm_size(self) -> tuple[int, int]:
         cached = self._wm_size_cache

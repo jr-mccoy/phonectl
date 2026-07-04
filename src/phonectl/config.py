@@ -16,6 +16,8 @@ DEFAULTS: dict = {
     "job_queue_max": 8,         # pending-job FIFO depth; over -> BusyError
     "idempotency_ttl": 300.0,   # how long a finished job stays dedupe-eligible
     "scan_range": [32768, 61000],  # Linux/Android ephemeral band adbd binds within (self-heal scan)
+    "ensure_ttl": 5.0,          # trust the last good connection check this long; 0 = re-check every call
+    "action_observe_ttl": 0.0,  # reuse a pre-action snapshot at most this old; 0 = always re-observe (default)
 }
 
 # None-defaulted keys that must still coerce to int (their default is None, so the

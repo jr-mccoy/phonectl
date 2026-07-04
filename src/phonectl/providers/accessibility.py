@@ -19,6 +19,9 @@ class AccessibilityProvider:
         # Tree-generation token from the last observe_native (Finding 9). Threaded into
         # set_text/semantic so the companion can refuse actions reasoned over a stale tree.
         self._last_generation = None
+        # Screen size from the last native payload: serving wm_size() from it
+        # spares a second full-tree serialization on every observe.
+        self._last_screen = None
 
     def is_available(self) -> bool:
         try:
@@ -56,6 +59,9 @@ class AccessibilityProvider:
         data = self._call("observe_native")
         if "generation" in data:
             self._last_generation = data["generation"]
+        screen = data.get("screen")
+        if screen and "width" in screen and "height" in screen:
+            self._last_screen = (int(screen["width"]), int(screen["height"]))
         return data
 
     def _with_generation(self, params: dict) -> dict:
@@ -67,14 +73,24 @@ class AccessibilityProvider:
         from phonectl import native_tree
         return native_tree.to_compat_xml(self.observe_native())
 
+    def observe_dump(self):
+        """Compat XML from ONE observe_native RPC; window is None because the
+        companion has no view of the keyguard/focused-window record — the
+        registry augments it from the ADB provider. The payload's screen size
+        is cached so the wm_size() in the same observe costs no second RPC."""
+        return self.ui_dump(), None
+
     def window_dump(self) -> str:
         return ""
 
     def wm_size(self):
-        data = self.observe_native()
-        screen = data.get("screen")
-        if screen and "width" in screen and "height" in screen:
-            return (int(screen["width"]), int(screen["height"]))
+        # Refreshed by every observe_native; between observes the physical
+        # size is as constant as ADB's own wm_size cache assumes.
+        if self._last_screen is not None:
+            return self._last_screen
+        self.observe_native()
+        if self._last_screen is not None:
+            return self._last_screen
         raise errors.CapabilityUnavailableError("companion did not report screen size")
 
     # --- Task 4: gesture dispatch + ACTION_SET_TEXT ---

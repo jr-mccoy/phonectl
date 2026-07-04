@@ -105,7 +105,41 @@ class ProviderRegistry:
         return self._delegate("observe_ui_tree", lambda p: p.ui_dump())
 
     def window_dump(self) -> str:
-        return self._delegate("observe_ui_tree", lambda p: p.window_dump())
+        def _call(p):
+            out = p.window_dump()
+            if not out:
+                out = self._window_via_adb(p) or out
+            return out
+        return self._delegate("observe_ui_tree", _call)
+
+    def observe_dump(self):
+        """(xml, window) from the winning observe_ui_tree provider — combined
+        single-round-trip form when the provider offers it, otherwise its own
+        ui_dump + window_dump. Selection stays per-provider so a higher-priority
+        tree source (companion) is never skipped for lacking the combined form."""
+        def _call(p):
+            fn = getattr(p, "observe_dump", None)
+            xml, window = fn() if fn is not None else (p.ui_dump(), p.window_dump())
+            if not window:
+                window = self._window_via_adb(p)
+            return xml, window
+        return self._delegate("observe_ui_tree", _call)
+
+    def _window_via_adb(self, serving):
+        """Focus/keyguard lines from the ADB provider when the tree provider has
+        no window view (the companion reads the tree natively and knows nothing
+        of the keyguard or the focused-window record — without this, snapshots
+        carried an empty app package and the guarded-package risk signal went
+        blind on the companion path). None when ADB can't help either; the
+        observation itself must survive an offline ADB."""
+        adb = self.for_capability("requires_adb")
+        if adb is None or adb is serving:
+            return None
+        brief = getattr(adb, "window_brief", None)
+        try:
+            return (brief() if brief is not None else adb.window_dump()) or None
+        except Exception:
+            return None
 
     def wm_size(self):
         return self._delegate("observe_ui_tree", lambda p: p.wm_size())

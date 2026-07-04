@@ -705,3 +705,106 @@ def test_run_action_consults_configured_companion_from_cfg(tmp_path, monkeypatch
     )
     assert env["ok"] is False
     assert env["error"]["code"] == "stopped"
+
+
+# ── action_observe_ttl: opt-in reuse of a fresh pre-action snapshot ──────────
+
+def _observe_counter(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        runtime.observer, "observe",
+        lambda b, s, **kw: (calls.append(1),
+                            s.set_snapshot({"hash": "h", "app": {"package": "com.x"},
+                                            "observed_at": 1000.0}))[1],
+    )
+    return calls
+
+
+def test_action_observe_ttl_reuses_fresh_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    calls = _observe_counter(monkeypatch)
+    sess = FakeSession()
+    sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}}, {"x": 1},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()),
+        cfg={"mode": "auto", "action_observe_ttl": 2.0},
+        now=lambda: 1001.0,   # snapshot is 1s old, inside the 2s window
+    )
+    assert env["ok"] is True
+    assert calls == []   # policy ran on the still-fresh snapshot
+
+
+def test_action_observe_ttl_default_always_reobserves(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    calls = _observe_counter(monkeypatch)
+    sess = FakeSession()
+    sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}}, {"x": 1},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()),
+        cfg={"mode": "auto"},
+        now=lambda: 1000.1,
+    )
+    assert env["ok"] is True
+    assert calls == [1]   # ttl unset -> unchanged safe default
+
+
+def test_action_observe_ttl_stale_snapshot_reobserves(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    calls = _observe_counter(monkeypatch)
+    sess = FakeSession()
+    sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}}, {"x": 1},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()),
+        cfg={"mode": "auto", "action_observe_ttl": 2.0},
+        now=lambda: 1010.0,   # 10s old > 2s window
+    )
+    assert env["ok"] is True
+    assert calls == [1]
+
+
+def test_action_observe_ttl_no_snapshot_reobserves(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    calls = _observe_counter(monkeypatch)
+    sess = FakeSession()   # sess.last is None
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}}, {"x": 1},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()),
+        cfg={"mode": "auto", "action_observe_ttl": 2.0},
+        now=lambda: 1001.0,
+    )
+    assert env["ok"] is True
+    assert calls == [1]
+
+
+# ── companion transport reuse: one persistent transport per (host,port,token) ─
+
+def test_companion_transport_reused_across_actions(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    import phonectl.providers.transport as tmod
+    made = []
+
+    class FakeTransport:
+        def __init__(self, host, port, token=None):
+            made.append((host, port, token))
+
+        def request(self, method, params, *, request_id, timeout):
+            return {"ok": True, "request_id": request_id,
+                    "data": {"version": 1, "capabilities": {}, "stopped": False}}
+
+    monkeypatch.setattr(tmod, "SocketTransport", FakeTransport)
+    runtime._transport_cache.clear()
+    monkeypatch.setattr(
+        runtime.observer, "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h", "app": {"package": "com.x"}}),
+    )
+    cfg = {"mode": "auto", "companion_port": 8765, "companion_token": "tok"}
+    for _ in range(2):
+        env = runtime.run_action(
+            "tap", lambda b, s: {"hash": "a", "app": {"package": "com.x"}}, {"x": 1},
+            build=lambda c: (FakeBackend(), FakeSession(), FakeConn()), cfg=cfg,
+        )
+        assert env["ok"] is True
+    assert made == [("127.0.0.1", 8765, "tok")]   # built once, reused after

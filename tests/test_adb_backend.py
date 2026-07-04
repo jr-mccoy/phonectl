@@ -386,3 +386,96 @@ def test_scan_ports_default_probe_finds_real_listener():
         assert closed_port not in found
     finally:
         srv.close()
+
+
+# ── observe_dump: UI hierarchy + window state in ONE adb round trip ──────────
+
+_OD_XML = "<?xml version='1.0'?><hierarchy rotation=\"0\"></hierarchy>"
+_OD_WINDOW = "  mCurrentFocus=Window{a b com.android.settings/.Settings}\n"
+
+
+def _od_stdout(xml=_OD_XML, window=_OD_WINDOW):
+    return xml + "\n" + AdbBackend.OBSERVE_SEP + "\n" + window
+
+
+def test_observe_dump_is_one_adb_call_with_filtered_window():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=_od_stdout()))
+    xml, window = b.observe_dump()
+    assert len(calls) == 1
+    cmd = calls[0][0]
+    assert cmd[:4] == ["adb", "-s", "d", "exec-out"]
+    shell_cmd = cmd[4]
+    assert "uiautomator dump /dev/tty" in shell_cmd
+    assert "dumpsys window" in shell_cmd
+    assert "grep -E" in shell_cmd          # filtered device-side, not shipped whole
+    assert "<hierarchy" in xml
+    assert "mCurrentFocus" in window
+
+
+def test_observe_dump_filter_covers_every_parser_pattern():
+    # The device-side grep must keep every line ui_parser/observer read:
+    # focus, keyguard flags, delegate line, and secure markers.
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=_od_stdout()))
+    b.observe_dump()
+    shell_cmd = calls[0][0][4]
+    for pat in ("mCurrentFocus", "mFocusedApp", "mDreamingLockscreen",
+                "mShowingLockscreen", "KeyguardServiceDelegate", "secure="):
+        assert pat in shell_cmd
+
+
+def test_observe_dump_missing_separator_falls_back_to_none_window():
+    # A shell that ignored the compound command returns the plain dump; the
+    # caller must fetch the window separately rather than mis-split.
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=_OD_XML))
+    xml, window = b.observe_dump()
+    assert "<hierarchy" in xml
+    assert window is None
+
+
+def test_observe_dump_junk_window_section_returns_none():
+    # grep missing on the device -> error text instead of window lines. Never
+    # hand that to parse_lock_state (it would read as "unlocked").
+    calls = []
+    out = _od_stdout(window="grep: not found\n")
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=out))
+    xml, window = b.observe_dump()
+    assert "<hierarchy" in xml
+    assert window is None
+
+
+def test_observe_dump_keeps_lock_lines_for_parser():
+    from phonectl import ui_parser
+    locked = ("  mDreamingLockscreen=true\n"
+              "  KeyguardServiceDelegate showing=true secure=true\n")
+    b = AdbBackend(serial="d", runner=make_runner([], stdout=_od_stdout(window=locked)))
+    _xml, window = b.observe_dump()
+    ls = ui_parser.parse_lock_state(window)
+    assert ls["lock_state"] == "locked_secure"
+    assert ls["can_act"] is False
+
+
+def test_window_brief_is_filtered_device_side():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=_OD_WINDOW))
+    out = b.window_brief()
+    assert len(calls) == 1
+    shell_cmd = " ".join(calls[0][0])
+    assert "dumpsys window" in shell_cmd and "grep -E" in shell_cmd
+    assert "mCurrentFocus" in out
+
+
+def test_window_brief_falls_back_to_full_dump_on_junk():
+    # grep unavailable -> the filtered form yields no recognizable line; the
+    # full dump must be fetched rather than parsed junk reading as "unlocked".
+    outputs = ["grep: not found\n", "  mCurrentFocus=Window{a b com.x/.Y}\n"]
+    calls = []
+    def runner(cmd, **kwargs):
+        calls.append(cmd)
+        return FakeCompleted(stdout=outputs[len(calls) - 1])
+    b = AdbBackend(serial="d", runner=runner)
+    out = b.window_brief()
+    assert len(calls) == 2
+    assert "mCurrentFocus" in out
