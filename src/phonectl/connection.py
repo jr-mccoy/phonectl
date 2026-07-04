@@ -36,7 +36,7 @@ class Connection:
             self.connect(serial)
             if self.backend.get_state() == "device":
                 return
-        raise ConnectionError(GUIDANCE)
+        self.rediscover()  # mdns/probe/scan fallback; raises GUIDANCE if no live device
 
     def _try_connect(self, addr: str) -> bool:
         self.connect(addr)
@@ -65,6 +65,16 @@ class Connection:
                 return addr
             if n < len(ports) - 1:
                 sleep(0)
+        scan = getattr(self.backend, "scan_ports", None)
+        if scan is not None:
+            start, end = self.cfg.get("scan_range", [30000, 50000])
+            tried = {self.cfg.get("last_port"), self.cfg.get("serial")}
+            for port in scan(ip, range(start, end + 1)):
+                addr = f"{ip}:{port}"
+                if addr in tried:
+                    continue
+                if self._try_connect(addr):
+                    return addr
         shim = getattr(self.backend, "host_shim_runner", None)
         if shim is not None:
             alt = type(self.backend)(serial=self.backend.serial, runner=shim())
