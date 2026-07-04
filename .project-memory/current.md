@@ -40,6 +40,20 @@ dumps), `AdbBackend.wm_size` is cached (300s TTL, invalidated on serial change,
 50ms→poll_interval instead of a flat 0.5s. Unit-tested (719 green); an on-device
 smoke of the observe→act loop is still advisable before merging.
 
+**Perf/automaticity pass 2 (2026-07-04, branch
+`claude/system-performance-automaticity-vu7um4`):** observe now costs ONE adb
+round trip instead of two — `AdbBackend.observe_dump()` runs `uiautomator dump`
+plus a device-side-grepped `dumpsys window` in a single exec-out (falls back to
+split calls when the shell/grep can't; a junk window section is never parsed as
+"unlocked"). The registry delegates `observe_dump` per-provider so the companion
+tree still wins by priority. `Connection.ensure()` trusts a successful check for
+`ensure_ttl` (default 5 s; 0 disables) instead of spawning `adb get-state` every
+call. New opt-in `action_observe_ttl` (default 0 = off) lets daemon loops reuse
+the previous post-act snapshot for the next action's policy gate. A warm-daemon
+tap is now ~4 round trips (~2 with action_observe_ttl). All unit-tested; an
+on-device smoke (esp. the combined dump on the S25 Ultra's shell) is advisable
+before merging.
+
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp
 - 031e41a docs(companion): mark Phase 4 companion APK complete + cross-reference plans

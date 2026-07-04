@@ -1128,6 +1128,7 @@ The config file (`~/.config/phonectl/config.json`, or `$PHONECTL_HOME/config.jso
 | `serial` | Current ADB serial or Wireless Debugging `ip:port`. |
 | `last_port` | Last-known-good Wireless Debugging `ip:port`; `ensure()` and `reconnect` retry it first. |
 | `probe_ports` | Optional list of candidate Wireless Debugging ports for the bounded PRoot/Termux port-probe fallback. |
+| `ensure_ttl` | Seconds a successful connection check stays trusted before `ensure()` re-runs `adb get-state` (default `5.0`; `0` re-checks on every call). A link that drops inside the window surfaces as the next command's failure and self-heals on the first check after expiry. |
 
 Example:
 
@@ -1149,6 +1150,22 @@ phonectl reconnect                   # layered recovery: last_port/serial, mDNS,
 ```
 
 Without an explicit port, recovery tries the last-known-good address first, then `adb mdns services`, then any configured `probe_ports` on the same device IP. If every layer fails, it prints the normal setup guidance and exits nonzero.
+
+## Performance tuning
+
+Over Wireless Debugging the adb round trip dominates every operation, so `phonectl` spends round trips sparingly:
+
+- **Combined observe dump (automatic).** `observe` fetches the UI hierarchy and the window state (focused app + lock screen) in a **single** adb call, with the `dumpsys window` output filtered device-side down to the handful of lines the parsers read. If the device shell can't serve the combined form, `phonectl` transparently falls back to separate calls.
+- **`wm_size` caching (automatic).** The physical screen size is cached for 300 s and invalidated on serial change.
+- **`ensure_ttl`** (default `5.0`): how long a successful connection check stays trusted before the next `adb get-state`. Set `0` to re-check before every command.
+- **`action_observe_ttl`** (default `0` = off): opt-in for agent/daemon loops. When set (e.g. `1.0`), an action skips its pre-action observe if the session already holds a snapshot younger than the window — typically the previous action's post-act observe. Policy, risk, and rate limiting still run against that snapshot, and every action still **re-observes after acting**. Leave at `0` for one-shot CLI use (each CLI process starts with no snapshot, so it always observes anyway) or whenever you want policy to always see a freshly fetched screen:
+
+```bash
+phonectl config set action_observe_ttl 1.0   # daemon-driven agent loops
+phonectl config set ensure_ttl 0             # most conservative: re-check the link every command
+```
+
+With the daemon warm, a typical `tap` costs ~4 adb round trips (connection check + pre-observe + input + post-observe), dropping to ~2 in-window with `action_observe_ttl` set.
 
 ### Lock-state and idle-state behavior
 
