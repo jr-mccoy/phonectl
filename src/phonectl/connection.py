@@ -8,9 +8,16 @@ GUIDANCE = (
 )
 
 class Connection:
+    # Freshness window during which ensure() trusts the last successful check
+    # instead of spawning `adb get-state` again. Bounded staleness: a link that
+    # dies inside the window surfaces as the next command's failure, and the
+    # first ensure() after expiry re-checks and self-heals as before.
+    ENSURE_TTL = 5.0
+
     def __init__(self, backend, cfg: dict):
         self.backend = backend
         self.cfg = cfg
+        self._ensured_at = None
 
     def pair(self, addr: str, code: str) -> None:
         self.backend._adb("pair", addr, code)
@@ -23,7 +30,15 @@ class Connection:
             self.cfg["last_port"] = addr
             config.save(self.cfg)
 
-    def ensure(self) -> None:
+    def ensure(self, monotonic=time.monotonic) -> None:
+        ttl = self.cfg.get("ensure_ttl", self.ENSURE_TTL) or 0
+        if (ttl > 0 and self._ensured_at is not None
+                and monotonic() - self._ensured_at < ttl):
+            return
+        self._ensure_now()
+        self._ensured_at = monotonic()   # only stamped when _ensure_now succeeded
+
+    def _ensure_now(self) -> None:
         if self.backend.get_state() == "device":
             return
         wake = getattr(self.backend, "wake", None)

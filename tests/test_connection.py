@@ -109,3 +109,59 @@ def test_ensure_raises_guidance_when_scan_finds_nothing(tmp_path, monkeypatch):
     with pytest.raises(ConnectionError) as e:
         Connection(b, cfg).ensure()
     assert GUIDANCE in str(e.value)
+
+
+# ── ensure() freshness TTL: skip the per-action get-state round trip ─────────
+
+def test_ensure_within_ttl_skips_get_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = StateBackend(["device"])
+    calls = []
+    orig = b.get_state
+    b.get_state = lambda: (calls.append(1), orig())[1]
+    c = Connection(b, {"serial": "127.0.0.1:5555", "ensure_ttl": 5.0})
+    t = [100.0]
+    c.ensure(monotonic=lambda: t[0])
+    t[0] += 1.0
+    c.ensure(monotonic=lambda: t[0])   # inside the TTL window
+    assert len(calls) == 1
+
+
+def test_ensure_rechecks_after_ttl_expiry(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = StateBackend(["device"])
+    calls = []
+    orig = b.get_state
+    b.get_state = lambda: (calls.append(1), orig())[1]
+    c = Connection(b, {"serial": "127.0.0.1:5555", "ensure_ttl": 5.0})
+    t = [100.0]
+    c.ensure(monotonic=lambda: t[0])
+    t[0] += 6.0
+    c.ensure(monotonic=lambda: t[0])
+    assert len(calls) == 2
+
+
+def test_ensure_ttl_zero_always_checks(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = StateBackend(["device"])
+    calls = []
+    orig = b.get_state
+    b.get_state = lambda: (calls.append(1), orig())[1]
+    c = Connection(b, {"serial": "127.0.0.1:5555", "ensure_ttl": 0})
+    c.ensure()
+    c.ensure()
+    assert len(calls) == 2
+
+
+def test_ensure_failure_does_not_mark_fresh(tmp_path, monkeypatch):
+    # An ensure() that raised must not leave a freshness stamp behind: the
+    # next call has to re-check rather than assume a device that never was.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    b = StateBackend(["offline"])
+    b.mdns_services = lambda: []
+    b.scan_ports = lambda ip, ports, **kw: []
+    c = Connection(b, {"ensure_ttl": 5.0, "probe_ports": [], "scan_range": [1, 0]})
+    t = [100.0]
+    with pytest.raises(ConnectionError):
+        c.ensure(monotonic=lambda: t[0])
+    assert c._ensured_at is None
