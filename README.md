@@ -1167,6 +1167,15 @@ phonectl config set ensure_ttl 0             # most conservative: re-check the l
 
 With the daemon warm, a typical `tap` costs ~4 adb round trips (connection check + pre-observe + input + post-observe), dropping to ~2 in-window with `action_observe_ttl` set.
 
+### Companion-path performance
+
+With the companion APK paired, the fast path gets faster still — and it's all automatic:
+
+- **Persistent connections.** The companion server keeps connections open; the transport now reuses one TCP connection across requests instead of connect-per-RPC, with a preemptive reconnect before the server's idle timeout. Lost-response ambiguity is handled conservatively: read-only calls are retried on a fresh connection, gestures and `set_text` are never blindly replayed.
+- **Cached liveness.** Provider capability scans no longer ping the companion per delegated call; a 5 s liveness cache is refreshed by every successful RPC and invalidated by any transport failure.
+- **One tree serialization per observe.** A companion observe used to fetch the native tree twice (once for the elements, once for the screen size); it's now a single `observe_native` RPC.
+- **Lock/focus truth stays cheap.** The companion can't see the keyguard or the focused-window record, so the registry fills that in from adb's brief (device-side-filtered) window dump — one small adb call rather than a full `dumpsys window`, and the snapshot's `app.package` stays accurate for the `guarded_packages` policy signal.
+
 ### Lock-state and idle-state behavior
 
 Snapshots now include structured lock-state fields:

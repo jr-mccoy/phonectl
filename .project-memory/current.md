@@ -54,6 +54,21 @@ tap is now ~4 round trips (~2 with action_observe_ttl). All unit-tested; an
 on-device smoke (esp. the combined dump on the S25 Ultra's shell) is advisable
 before merging.
 
+**Companion-path pass (same branch, same day):** the companion's speed advantage
+was being squandered — connect-per-RPC (the Kotlin Server supports long-lived
+conns), a ping per provider per registry delegation, TWO observe_native
+tree serializations per observe, a full adb `dumpsys window` lock fallback, and
+(bug) snapshots with an EMPTY app.package that blinded the guarded_packages risk
+signal on the companion path. Fixed: SocketTransport persists one conn (20s
+reuse window < server's 30s idle-close; read-only methods may retry on a fresh
+conn, gesture/set_text never replayed), ping() has a 5s cache refreshed by any
+successful RPC, AccessibilityProvider.observe_dump() = one native RPC with
+wm_size served from the payload, the registry augments an empty window from
+AdbBackend.window_brief() (filtered dumpsys; offline adb no longer kills a
+companion observe), and runtime memoizes the STOP-check transport per
+(host,port,token). Handshake-per-action fail-closed STOP semantics unchanged.
+On-device smoke advisable: idle-reconnect behavior against the real companion.
+
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp
 - 031e41a docs(companion): mark Phase 4 companion APK complete + cross-reference plans
