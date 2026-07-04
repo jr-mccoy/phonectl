@@ -1171,7 +1171,15 @@ def _cmd_macro_run(args):
     doc = loader.load(args.path)
     client = _daemon_client(cfg)
     if client is not None:
-        env = client.call("macro_run", {"macro": doc, "yes": bool(getattr(args, "yes", False))})
+        # Submit-and-poll: a multi-step macro outlives the per-RPC deadline, so a
+        # plain call() reports a client-side timeout for a run that then succeeds
+        # (Finding 2, 2026-07-04). Each poll RPC stays short; on overall timeout
+        # the envelope says the job is still running and how to query it.
+        env = client.submit_and_wait(
+            "macro_run", {"macro": doc, "yes": bool(getattr(args, "yes", False))},
+            overall_timeout=cfg.get("macro_timeout", 600.0),
+            poll_interval=cfg.get("poll_interval", 0.5),
+        )
     else:
         macro = schema.parse(doc)
         eng = Engine(build=build_runtime, cfg=cfg, fn_for=macro_fn_for)

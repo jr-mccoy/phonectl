@@ -798,6 +798,24 @@ def test_macro_run_in_process(tmp_path, monkeypatch, capsys):
     assert rc == 0 and out["ok"] is True
 
 
+def test_macro_run_routes_through_submit_and_wait(tmp_path, monkeypatch, capsys):
+    # Over the daemon, macro run submits a job and polls it: a plain call()
+    # times out client-side while a long macro is still (successfully) running
+    # (Finding 2, 2026-07-04).
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient(submit_and_wait={"ok": True, "capability": "macro.run",
+        "data": {"run_id": "run_1", "outcome": "ok", "steps_run": 1}})
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    macro_path = tmp_path / "m.json"
+    macro_path.write_text(json.dumps(
+        {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}}]}))
+    rc = cli.main(["macro", "run", str(macro_path), "--yes", "--json"])
+    assert rc == 0
+    assert any(c[0] == "submit_and_wait" and c[1] == "macro_run" for c in fake.calls)
+    out = _json.loads(capsys.readouterr().out)
+    assert out["data"]["run_id"] == "run_1"
+
+
 def test_macro_status_empty(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)

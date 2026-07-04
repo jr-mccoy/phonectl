@@ -587,13 +587,19 @@ def test_macro_validate_reports_errors(tmp_path, monkeypatch):
     assert resp["ok"] is True and resp["data"]["valid"] is False and resp["data"]["errors"]
 
 
-def test_macro_run_executes_actions(tmp_path, monkeypatch):
+def test_macro_run_is_async_job(tmp_path, monkeypatch):
+    # macro_run must not execute in the handle_line thread: a multi-step macro
+    # blocks for minutes, past any client RPC deadline (Finding 2, 2026-07-04).
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     srv = _srv(tmp_path)
-    resp = json.loads(srv.handle_line(_req("macro_run",
-        {"macro": {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}, "i": 0}]}})))
-    assert resp["ok"] is True and resp["data"]["run_id"].startswith("run_")
+    acc, polled = _submit_run_poll(srv, "macro_run",
+        {"macro": {"name": "m", "actions": [{"type": "tap", "target": {"i": 0}, "i": 0}]}})
+    assert acc["data"]["status"] == "accepted"
+    env = polled["data"]["result"]
+    assert polled["data"]["status"] == "done"
+    assert env["ok"] is True and env["data"]["run_id"].startswith("run_")
+    assert env["data"]["steps_run"] == 1
 
 
 def test_macro_in_mutating_set():
