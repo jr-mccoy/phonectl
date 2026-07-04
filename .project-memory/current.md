@@ -31,6 +31,15 @@ next capable provider on runtime failure (never on policy refusals) and envelope
 carry truthful `provider` + `provider_fallback`. Companion error codes now map to
 typed errors (fixed latent `errors.ActionError` AttributeError).
 
+**Perf pass 2026-07-04** (branch `claude/system-performance-optimization-2x4rnm`):
+an action now costs ~6 adb round trips instead of ~10 — observe() fetches
+`dumpsys window` once (shared by lock check + focused-app parse, taken after the
+UI dump so app freshness is unchanged; lock check now also fail-fasts on error
+dumps), `AdbBackend.wm_size` is cached (300s TTL, invalidated on serial change,
+`wm_size_ttl=0` disables), and `DaemonClient.submit_and_wait` ramps polls
+50ms→poll_interval instead of a flat 0.5s. Unit-tested (719 green); an on-device
+smoke of the observe→act loop is still advisable before merging.
+
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp
 - 031e41a docs(companion): mark Phase 4 companion APK complete + cross-reference plans
