@@ -216,7 +216,17 @@ def _run_action_body(
         try:
             backend, session, conn = build(cfg)
             conn.ensure()
-            observer.observe(backend, session)
+            # Opt-in (action_observe_ttl > 0): a session snapshot no older than
+            # the window — typically the previous action's post-act observe in a
+            # daemon loop — already describes the screen the caller targeted, so
+            # policy can run on it without paying another observe round trip.
+            # Default 0 keeps the safe behavior: always re-observe before acting.
+            observe_ttl = cfg.get("action_observe_ttl", 0.0) or 0
+            last = getattr(session, "last", None)
+            fresh = (observe_ttl > 0 and last is not None
+                     and now() - last.get("observed_at", 0.0) <= observe_ttl)
+            if not fresh:
+                observer.observe(backend, session)
             decision = policy.explain(session.last, verb, target, cfg)
             risk = {
                 "risk_level": decision["risk_level"],
