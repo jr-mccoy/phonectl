@@ -66,3 +66,76 @@ def test_observe_opt_in_tree_and_relations():
     snap = observer.observe(CannedBackend(XML, WINDOW), s, tree=True, relations=True)
     assert snap["tree"]["class"]
     assert "siblings" in snap["relations"]
+
+
+# --- perf contract: observe must not multiply device round trips ---
+
+LOCKED_WINDOW = (
+    "  mDreamingLockscreen=true\n"
+    "  KeyguardServiceDelegate secure=true showing=true\n"
+    "  mCurrentFocus=Window{a b com.android.systemui/com.android.systemui.Keyguard}"
+)
+
+
+class CountingBackend(CannedBackend):
+    """Mirrors AdbBackend's shape: lock_state() costs a full window_dump too."""
+
+    def __init__(self, xml, window, size=(1080, 2400)):
+        super().__init__(xml, window, size)
+        self.window_dumps = 0
+        self.ui_dumps = 0
+
+    def ui_dump(self):
+        self.ui_dumps += 1
+        return super().ui_dump()
+
+    def window_dump(self):
+        self.window_dumps += 1
+        return super().window_dump()
+
+    def lock_state(self):
+        from phonectl import ui_parser
+        return ui_parser.parse_lock_state(self.window_dump())
+
+
+def test_observe_calls_window_dump_exactly_once():
+    b = CountingBackend(XML, WINDOW)
+    observer.observe(b, Session())
+    assert b.window_dumps == 1
+    assert b.ui_dumps == 1
+
+
+def test_observe_locked_raises_device_locked_with_lock_state():
+    from phonectl import errors
+    b = CountingBackend(XML, LOCKED_WINDOW)
+    with pytest.raises(errors.DeviceLockedError) as ei:
+        observer.observe(b, Session())
+    assert ei.value.lock_state["lock_state"] == "locked_secure"
+    assert ei.value.lock_state["can_act"] is False
+
+
+def test_observe_error_dump_while_locked_raises_without_retry_sleeps():
+    from phonectl import errors
+    b = CountingBackend("ERROR: could not get idle state.", LOCKED_WINDOW)
+    sleeps = []
+    with pytest.raises(errors.DeviceLockedError):
+        observer.observe(b, Session(), sleep=sleeps.append)
+    assert b.ui_dumps == 1        # locked is terminal: no point retrying the dump
+    assert sleeps == []
+
+
+def test_observe_error_dump_unlocked_retries_then_observe_error():
+    from phonectl import errors
+    b = CountingBackend("ERROR: could not get idle state.", WINDOW)
+    sleeps = []
+    with pytest.raises(errors.ObserveError):
+        observer.observe(b, Session(), attempts=3, settle=0.5, sleep=sleeps.append)
+    assert b.ui_dumps == 3
+    assert sleeps == [0.5, 0.5]
+
+
+def test_observe_app_parsed_from_same_single_dump():
+    b = CountingBackend(XML, WINDOW)
+    snap = observer.observe(b, Session())
+    assert snap["app"]["package"] == "com.android.settings"
+    assert b.window_dumps == 1
