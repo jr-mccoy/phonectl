@@ -86,6 +86,32 @@ def test_submit_and_wait_returns_inner_result_on_done():
     assert out["data"]["tapped"] is True
 
 
+def test_submit_and_wait_ramps_polls_up_to_poll_interval():
+    """Short actions must not pay a flat 0.5s poll tax: polling starts fast
+    (50ms) and doubles up to the configured poll_interval cap."""
+    def responder(method, params, rid):
+        if method == "act":
+            return {"ok": True, "request_id": rid, "version": PROTOCOL_VERSION,
+                    "data": {"job_id": "J2", "status": "accepted"}}
+        if method == "job_poll":
+            return {"ok": True, "request_id": rid, "version": PROTOCOL_VERSION,
+                    "data": {"status": "running", "result": None}}
+        raise AssertionError(method)
+
+    sleeps = []
+    clock = {"t": 0.0}
+
+    def fake_sleep(s):
+        sleeps.append(s)
+        clock["t"] += s
+
+    c = DaemonClient("127.0.0.1", 8799, transport=FakeTransport(responder))
+    c.submit_and_wait("act", {}, overall_timeout=3.0, poll_interval=0.5,
+                      sleep=fake_sleep, now=lambda: clock["t"])
+    assert sleeps[:5] == [0.05, 0.1, 0.2, 0.4, 0.5]
+    assert set(sleeps[5:]) == {0.5}   # capped at poll_interval from then on
+
+
 def test_submit_and_wait_caps_with_job_timeout():
     def responder(method, params, rid):
         if method == "act":
