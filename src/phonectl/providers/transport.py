@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json as _json
 import socket as _socket
+import threading as _threading
 import time as _time
 import uuid
 from typing import Protocol, runtime_checkable
@@ -61,15 +62,51 @@ class _SocketConn:
 
 
 class SocketTransport:
-    """Loopback TCP transport — newline-delimited JSON with stale-response protection."""
+    """Loopback TCP transport — newline-delimited JSON with stale-response protection.
+
+    Connections are reused across requests: the companion Server keeps them
+    open (30s idle-close), and a TCP connect + handler-thread spawn per RPC was
+    the dominant companion-path overhead. A cached conn is preemptively dropped
+    after REUSE_IDLE_S so a request never races the server's idle close."""
+
+    REUSE_IDLE_S = 20.0   # < the companion Server's 30s idleTimeoutMs
+    PING_TTL = 5.0        # liveness answer stays valid this long
+
+    # Methods safe to resend once over a fresh conn when a CACHED conn turns
+    # out dead mid-request: liveness/read-only, never device-mutating.
+    READ_ONLY_METHODS = frozenset({
+        "ping", "handshake", "version", "capabilities",
+        "observe_native", "events", "notifications_list",
+    })
 
     def __init__(self, host: str, port: int, *, version: int = 1, connect=None,
-                 token=None) -> None:
+                 token=None, monotonic=_time.monotonic) -> None:
         if host not in _LOOPBACK:
             raise ValueError(f"companion transport is loopback-only; refusing host {host!r}")
         self._host, self._port, self._version = host, port, version
         self._token = token
         self._connect = connect or (lambda h, p, t: _SocketConn(h, p, t))
+        self._monotonic = monotonic
+        self._lock = _threading.Lock()   # serialize: one socket, maybe many threads
+        self._conn = None
+        self._conn_used_at = 0.0
+        self._alive = None               # (stamped_at, bool) ping cache
+
+    def _drop_conn(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _checkout(self, timeout):
+        """(conn, reused) — the cached conn while it is fresh, else a new one."""
+        if (self._conn is not None
+                and self._monotonic() - self._conn_used_at < self.REUSE_IDLE_S):
+            return self._conn, True
+        self._drop_conn()
+        return self._connect(self._host, self._port, timeout), False
 
     def request(self, method: str, params: dict, *, request_id: str, timeout: float) -> dict:
         req = {"method": method, "params": params or {},
@@ -80,29 +117,87 @@ class SocketTransport:
         if self._token is not None:
             req["token"] = self._token
         line = _json.dumps(req)
-        conn = self._connect(self._host, self._port, timeout)
-        deadline = _time.monotonic() + timeout
+        with self._lock:
+            try:
+                return self._request_locked(method, line, request_id, timeout)
+            except Exception:
+                # Connect/send failure: remember the companion looked dead so
+                # capability scans stop re-probing for a beat, then propagate.
+                self._alive = (self._monotonic(), False)
+                raise
+
+    def _request_locked(self, method, line, request_id, timeout) -> dict:
+        conn, reused = self._checkout(timeout)
         try:
             conn.sendline(line)
-            while _time.monotonic() < deadline:
-                raw = conn.readline()
-                if not raw:
-                    break
-                try:
-                    resp = _json.loads(raw)
-                except _json.JSONDecodeError:
-                    continue
-                if resp.get("request_id") == request_id:
-                    return resp
-            return {"ok": False, "request_id": request_id,
-                    "error": {"code": "timeout", "message": f"no response for {method!r}"}}
-        finally:
+        except Exception:
+            if not reused:
+                raise
+            # The cached conn died under us. Without its trailing newline the
+            # NDJSON line was never dispatched, so a resend cannot double-run.
+            self._drop_conn()
+            conn, reused = self._connect(self._host, self._port, timeout), False
+            conn.sendline(line)
+        resp = self._read_response(conn, request_id, timeout)
+        if resp is not None:
+            self._conn = conn
+            self._conn_used_at = self._monotonic()
+            self._alive = (self._conn_used_at, True)
+            return resp
+        # No response: this conn's state is unknowable — never cache it.
+        self._conn = None
+        try:
             conn.close()
+        except Exception:
+            pass
+        if reused and method in self.READ_ONLY_METHODS:
+            # The send may or may not have been dispatched; read-only methods
+            # are safe to replay on a fresh conn. Mutating ones are NOT: fall
+            # through to the same timeout envelope a lost response yields.
+            conn = self._connect(self._host, self._port, timeout)
+            conn.sendline(line)
+            resp = self._read_response(conn, request_id, timeout)
+            if resp is not None:
+                self._conn = conn
+                self._conn_used_at = self._monotonic()
+                self._alive = (self._conn_used_at, True)
+                return resp
+            try:
+                conn.close()
+            except Exception:
+                pass
+        return {"ok": False, "request_id": request_id,
+                "error": {"code": "timeout", "message": f"no response for {method!r}"}}
+
+    def _read_response(self, conn, request_id, timeout):
+        deadline = _time.monotonic() + timeout
+        while _time.monotonic() < deadline:
+            raw = conn.readline()
+            if not raw:
+                return None
+            try:
+                resp = _json.loads(raw)
+            except _json.JSONDecodeError:
+                continue
+            if resp.get("request_id") == request_id:
+                return resp
+        return None
 
     def ping(self, *, timeout: float = 1.0) -> bool:
+        # Every registry delegation scans provider capabilities, and those scans
+        # ping. Serve repeats from a short cache instead of a socket round trip;
+        # any successful request() refreshes it, any failure invalidates it.
+        alive = self._alive
+        if alive is not None and self._monotonic() - alive[0] < self.PING_TTL:
+            return alive[1]
         rid = next_request_id()
-        resp = self.request("ping", {}, request_id=rid, timeout=timeout)
-        return bool(resp.get("ok"))
+        try:
+            resp = self.request("ping", {}, request_id=rid, timeout=timeout)
+            ok = bool(resp.get("ok"))
+        except Exception:
+            ok = False
+        self._alive = (self._monotonic(), ok)
+        return ok
 
 
 class LoopbackTransport:
