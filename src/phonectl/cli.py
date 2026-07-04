@@ -1260,16 +1260,21 @@ def _cmd_autonomy_grant(args):
     import time
     from phonectl.macro import autonomy
     cfg = config.load()
+    now = time.time()
+    # --expires is a duration ("N seconds from now"); the ledger stores an
+    # absolute epoch in expires_at, so convert here — the single frontend edge.
+    expires = getattr(args, "expires", None)
+    expires_at = (now + expires) if expires is not None else None
     env = _dispatch(
         "autonomy_grant",
         {"macro": args.macro, "max_risk": args.max_risk,
          "scope": getattr(args, "scope", "all"),
-         "expires_at": getattr(args, "expires", None)},
+         "expires_at": expires_at},
         lambda: results.ok(capability="autonomy.grant",
                            data=autonomy.grant(args.macro, max_risk=args.max_risk,
                                                scope=getattr(args, "scope", "all"),
-                                               expires_at=getattr(args, "expires", None),
-                                               now=time.time())),
+                                               expires_at=expires_at,
+                                               now=now)),
         cfg=cfg,
     )
     if getattr(args, "json", False):
@@ -1844,7 +1849,8 @@ def build_parser() -> argparse.ArgumentParser:
     atg.add_argument("--max-risk", required=True, dest="max_risk",
                      choices=["low", "medium", "high", "critical"])
     atg.add_argument("--scope", default="all")
-    atg.add_argument("--expires", type=float, default=None)
+    atg.add_argument("--expires", type=float, default=None,
+                     help="grant lifetime in seconds from now")
     atg.add_argument("--json", action="store_true")
     atg.set_defaults(func=_cmd_autonomy_grant)
     atr = atsub.add_parser("revoke")

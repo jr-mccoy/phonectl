@@ -866,6 +866,50 @@ def test_autonomy_grant_cli(tmp_path, monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert any(g["macro"] == "reply" for g in out["data"]["grants"])
 
+
+def test_autonomy_grant_expires_is_seconds_from_now(tmp_path, monkeypatch, capsys):
+    import time
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    before = time.time()
+    rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "medium",
+                   "--expires", "300", "--json"])
+    assert rc == 0
+    granted = json.loads(capsys.readouterr().out)
+    # --expires N means "N seconds from now": stored as absolute epoch, not raw N
+    assert granted["data"]["expires_at"] >= before + 300
+    rc = cli.main(["autonomy", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert any(g["macro"] == "reply" for g in out["data"]["grants"])
+
+
+def test_autonomy_grant_expires_lapses_after_duration(tmp_path, monkeypatch, capsys):
+    import time
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
+    real_now = time.time()
+    rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "medium",
+                   "--expires", "300", "--json"])
+    assert rc == 0
+    capsys.readouterr()  # drain the grant envelope
+    monkeypatch.setattr(time, "time", lambda: real_now + 301)
+    rc = cli.main(["autonomy", "list", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["data"]["grants"] == []
+
+
+def test_autonomy_grant_expires_sent_absolute_to_daemon(tmp_path, monkeypatch):
+    import time
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    fake = _FakeClient()
+    monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
+    before = time.time()
+    rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "medium",
+                   "--expires", "300", "--json"])
+    assert rc == 0
+    call = next(c for c in fake.calls if c[0] == "call" and c[1] == "autonomy_grant")
+    assert call[2]["expires_at"] >= before + 300
+
 # --- Companion handshake gating for notifications/OCR factories ---
 
 def test_make_notifications_provider_gates_disabled_observe_notifications(tmp_path, monkeypatch):
