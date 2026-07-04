@@ -139,3 +139,55 @@ def test_observe_app_parsed_from_same_single_dump():
     snap = observer.observe(b, Session())
     assert snap["app"]["package"] == "com.android.settings"
     assert b.window_dumps == 1
+
+
+# ── combined observe_dump: one round trip serves xml + window ────────────────
+
+class CombinedBackend(CannedBackend):
+    """Backend offering the single-round-trip combined dump."""
+    def __init__(self, xml, window, size=(1080, 2400)):
+        super().__init__(xml, window, size)
+        self.combined_calls = 0
+        self.ui_calls = 0
+        self.window_calls = 0
+
+    def observe_dump(self):
+        self.combined_calls += 1
+        return self._xml, self._window
+
+    def ui_dump(self):
+        self.ui_calls += 1
+        return self._xml
+
+    def window_dump(self):
+        self.window_calls += 1
+        return self._window
+
+
+def test_observe_prefers_combined_dump_and_skips_separate_calls():
+    b = CombinedBackend(XML, WINDOW)
+    snap = observer.observe(b, Session())
+    assert snap["app"]["package"] == "com.android.settings"
+    assert b.combined_calls == 1
+    assert b.ui_calls == 0
+    assert b.window_calls == 0   # window came out of the same round trip
+
+
+def test_observe_combined_none_window_falls_back_to_window_dump():
+    b = CombinedBackend(XML, WINDOW)
+    b.observe_dump = lambda: (XML, None)
+    snap = observer.observe(b, Session())
+    assert snap["app"]["package"] == "com.android.settings"
+    assert b.window_calls == 1   # combined form degraded -> separate fetch
+
+
+def test_observe_combined_locked_fail_fast_uses_combined_window():
+    locked = ("mCurrentFocus=Window{a b com.sec.android.app.launcher/.Launcher}\n"
+              "mDreamingLockscreen=true\nKeyguardServiceDelegate showing=true secure=true\n")
+    b = CombinedBackend("ERROR: could not get idle state.", locked)
+    import pytest as _pytest
+    from phonectl import errors
+    with _pytest.raises(errors.DeviceLockedError):
+        observer.observe(b, Session(), sleep=lambda s: None)
+    assert b.combined_calls == 1   # fail-fast on the first attempt
+    assert b.window_calls == 0     # lock check reused the combined window

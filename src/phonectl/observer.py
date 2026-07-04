@@ -27,6 +27,15 @@ def _window_dump(backend) -> str:
     return fn() if fn is not None else ""
 
 
+def _observe_dump(backend):
+    """(xml, window) — one device round trip when the backend supports the
+    combined dump; window is None when it must be fetched separately."""
+    fn = getattr(backend, "observe_dump", None)
+    if fn is not None:
+        return fn()
+    return backend.ui_dump(), None
+
+
 def _lock_state(backend, window_dump: str = "") -> dict:
     # Prefer parsing a dump the caller already paid for — `dumpsys window` is a
     # full device round trip, so observe() fetches it once and shares it between
@@ -52,14 +61,14 @@ def _raise_locked(ls: dict) -> None:
 def observe(backend, session, screenshot: bool = False, snap_path: str | None = None,
             tree: bool = False, relations: bool = False,
             attempts: int = 3, settle: float = 0.5, sleep=time.sleep) -> dict:
-    xml = ""
+    xml, window = "", None
     for attempt in range(attempts):
-        xml = backend.ui_dump()
+        xml, window = _observe_dump(backend)
         if not ui_parser.is_error_dump(xml):
             break
         # An error dump on a locked/asleep screen never heals by retrying:
         # check the lock now and fail fast with actionable guidance.
-        ls = _lock_state(backend, _window_dump(backend))
+        ls = _lock_state(backend, window or _window_dump(backend))
         if not ls["can_act"]:
             _raise_locked(ls)
         if attempt < attempts - 1:
@@ -67,9 +76,11 @@ def observe(backend, session, screenshot: bool = False, snap_path: str | None = 
     if ui_parser.is_error_dump(xml):
         raise errors.ObserveError("screen not idle — is it asleep or locked?")
 
-    # One `dumpsys window` serves both the lock check and the focused app.
-    # Taken after the UI dump so the reported app reflects the settled screen.
-    window = _window_dump(backend)
+    # One `dumpsys window` serves both the lock check and the focused app —
+    # ideally out of the same round trip as the UI dump (observe_dump), else
+    # fetched here, after the UI dump, so the app reflects the settled screen.
+    if not window:
+        window = _window_dump(backend)
     ls = _lock_state(backend, window)
     if not ls["can_act"]:
         _raise_locked(ls)
