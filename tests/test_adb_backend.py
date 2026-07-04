@@ -27,6 +27,44 @@ def test_wm_size_parses():
     b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"))
     assert b.wm_size() == (1080, 2400)
 
+
+def test_wm_size_is_cached_within_ttl():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"))
+    assert b.wm_size() == (1080, 2400)
+    assert b.wm_size() == (1080, 2400)
+    assert len(calls) == 1   # second call served from cache, no adb round trip
+
+
+def test_wm_size_cache_invalidated_on_serial_change():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"))
+    b.wm_size()
+    b.serial = "127.0.0.1:5555"   # reconnect to a (possibly different) device
+    b.wm_size()
+    assert len(calls) == 2
+
+
+def test_wm_size_cache_expires_after_ttl(monkeypatch):
+    import phonectl.adb_backend as mod
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"))
+    t = [1000.0]
+    monkeypatch.setattr(mod.time, "monotonic", lambda: t[0])
+    b.wm_size()
+    t[0] += b.WM_SIZE_TTL + 1
+    b.wm_size()
+    assert len(calls) == 2
+
+
+def test_wm_size_ttl_zero_disables_cache():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"),
+                   wm_size_ttl=0)
+    b.wm_size()
+    b.wm_size()
+    assert len(calls) == 2
+
 def test_input_tap_builds_command():
     calls = []
     b = AdbBackend(serial="d", runner=make_runner(calls))

@@ -48,6 +48,9 @@ class DaemonClient:
         if job_id is None:
             return acc          # older daemon ran the method synchronously
         deadline = now() + overall_timeout
+        # Ramped polling: start fast so short actions return promptly, then back
+        # off to poll_interval so long jobs don't hammer the daemon.
+        delay = min(0.05, poll_interval)
         while now() < deadline:
             polled = self.call("job_poll", {"job_id": job_id})
             if not polled.get("ok"):
@@ -55,7 +58,8 @@ class DaemonClient:
             data = polled["data"]
             if data["status"] in ("done", "error"):
                 return data["result"]
-            sleep(poll_interval)
+            sleep(delay)
+            delay = min(delay * 2, poll_interval)
         return results.err(
             errors.JobTimeoutError(
                 f"job {job_id} still running after {overall_timeout}s"),

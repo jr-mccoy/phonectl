@@ -82,10 +82,18 @@ def _scan_via_selectors(ip, ports, timeout):
 
 
 class AdbBackend:
-    def __init__(self, serial=None, runner=subprocess.run, port_probe=None):
+    # Physical screen size is effectively constant per device; caching it saves an
+    # adb round trip on every observe/named-swipe. The TTL keeps a long-lived
+    # daemon eventually honest on display changes (e.g. foldables).
+    WM_SIZE_TTL = 300.0
+
+    def __init__(self, serial=None, runner=subprocess.run, port_probe=None,
+                 wm_size_ttl=WM_SIZE_TTL):
         self.serial = serial
         self._runner = runner
         self._port_probe = port_probe or _default_port_probe
+        self._wm_size_ttl = wm_size_ttl
+        self._wm_size_cache = None   # (expires_at_monotonic, serial, (w, h))
 
     def scan_ports(self, ip, ports, *, timeout=0.1, workers=200):
         ports = list(ports)
@@ -129,11 +137,19 @@ class AdbBackend:
         return self._adb("shell", "dumpsys", "window")
 
     def wm_size(self) -> tuple[int, int]:
+        cached = self._wm_size_cache
+        if cached is not None:
+            expires_at, serial, size = cached
+            if serial == self.serial and time.monotonic() < expires_at:
+                return size
         out = self._adb("shell", "wm", "size")
         # "Physical size: 1080x2400"
         wh = out.strip().split(":")[-1].strip()
         w, h = wh.split("x")
-        return (int(w), int(h))
+        size = (int(w), int(h))
+        if self._wm_size_ttl > 0:
+            self._wm_size_cache = (time.monotonic() + self._wm_size_ttl, self.serial, size)
+        return size
 
     def input_tap(self, x: int, y: int) -> None:
         self._adb("shell", "input", "tap", str(x), str(y))
