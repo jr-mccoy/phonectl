@@ -191,3 +191,32 @@ def test_observe_combined_locked_fail_fast_uses_combined_window():
         observer.observe(b, Session(), sleep=lambda s: None)
     assert b.combined_calls == 1   # fail-fast on the first attempt
     assert b.window_calls == 0     # lock check reused the combined window
+
+
+def test_companion_path_snapshot_carries_real_app_and_lock_state():
+    # Regression: with a native tree provider serving observe (no window view),
+    # snapshots used to carry an empty app package — blinding the
+    # guarded_packages risk signal — and lock state fell back to a full
+    # adb dumpsys. The registry now augments from ADB's brief window form.
+    from phonectl import capabilities as caps_mod
+    from phonectl.providers.registry import ProviderRegistry
+
+    class NativeProv:
+        def capabilities(self):
+            return caps_mod.make(observe_ui_tree=True)
+        def observe_dump(self):
+            return XML, None
+        def wm_size(self):
+            return (1080, 2400)
+
+    class AdbProv:
+        def capabilities(self):
+            return caps_mod.make(requires_adb=True)
+        def window_brief(self):
+            return WINDOW
+
+    reg = ProviderRegistry([NativeProv(), AdbProv()])
+    snap = observer.observe(reg, Session())
+    assert snap["app"]["package"] == "com.android.settings"
+    assert snap["can_act"] is True
+    assert snap["lock_state"] == "unlocked"

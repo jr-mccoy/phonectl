@@ -263,3 +263,74 @@ def test_observe_dump_no_provider_raises_capability_unavailable():
     r = ProviderRegistry([FakeProv("A", _caps(act_tap=True))])
     with pytest.raises(errors.CapabilityUnavailableError):
         r.observe_dump()
+
+
+# ── window augmentation: a tree provider with no window view gets ADB's ──────
+
+class NativeTreeProv(FakeProv):
+    """Companion-style provider: native tree, no keyguard/focus knowledge."""
+    def __init__(self):
+        super().__init__("Native", _caps(observe_ui_tree=True))
+
+    def observe_dump(self):
+        return "<hierarchy native/>", None
+
+    def ui_dump(self):
+        return "<hierarchy native/>"
+
+    def window_dump(self):
+        return ""
+
+
+class AdbLikeProv(FakeProv):
+    def __init__(self):
+        super().__init__("AdbLike", _caps(requires_adb=True, act_tap=True))
+        self.brief_calls = 0
+        self.full_calls = 0
+
+    def window_brief(self):
+        self.brief_calls += 1
+        return "mCurrentFocus=Window{a b com.x/.Y}\nmDreamingLockscreen=false"
+
+    def window_dump(self):
+        self.full_calls += 1
+        return "FULL DUMP mCurrentFocus=Window{a b com.x/.Y}"
+
+
+def test_observe_dump_augments_missing_window_from_adb_brief():
+    native, adb = NativeTreeProv(), AdbLikeProv()
+    r = ProviderRegistry([native, adb])
+    xml, window = r.observe_dump()
+    assert xml == "<hierarchy native/>"
+    assert "mCurrentFocus" in window       # lock/focus truth still reaches policy
+    assert adb.brief_calls == 1
+    assert adb.full_calls == 0             # the cheap filtered form was enough
+    assert r.last_used == "NativeTreeProv" # the tree provider still gets credit
+
+
+def test_window_dump_augments_empty_result_from_adb():
+    native, adb = NativeTreeProv(), AdbLikeProv()
+    r = ProviderRegistry([native, adb])
+    out = r.window_dump()
+    assert "mCurrentFocus" in out
+
+
+def test_observe_dump_no_adb_leaves_window_none():
+    native = NativeTreeProv()
+    r = ProviderRegistry([native])
+    xml, window = r.observe_dump()
+    assert xml == "<hierarchy native/>"
+    assert window is None                  # nothing to augment from; caller decides
+
+
+def test_observe_dump_adb_failure_does_not_kill_the_observation():
+    class DeadAdb(AdbLikeProv):
+        def window_brief(self):
+            raise RuntimeError("adb offline")
+        def window_dump(self):
+            raise RuntimeError("adb offline")
+    native, adb = NativeTreeProv(), DeadAdb()
+    r = ProviderRegistry([native, adb])
+    xml, window = r.observe_dump()
+    assert xml == "<hierarchy native/>"    # companion observation survives
+    assert window is None

@@ -169,6 +169,14 @@ class AdbBackend:
     def window_dump(self) -> str:
         return self._adb("shell", "dumpsys", "window")
 
+    def window_brief(self) -> str:
+        """Only the focus/keyguard lines of `dumpsys window` — all phonectl
+        parses — filtered device-side to spare the link the full dump."""
+        out = self._adb("shell", "dumpsys window | grep -E '{}'".format(self._WINDOW_GREP))
+        if not any(k in out for k in self._WINDOW_KEYWORDS):
+            return self.window_dump()   # grep unavailable/odd shell -> full dump
+        return out
+
     def wm_size(self) -> tuple[int, int]:
         cached = self._wm_size_cache
         if cached is not None:

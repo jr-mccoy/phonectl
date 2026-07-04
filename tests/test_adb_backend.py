@@ -455,3 +455,27 @@ def test_observe_dump_keeps_lock_lines_for_parser():
     ls = ui_parser.parse_lock_state(window)
     assert ls["lock_state"] == "locked_secure"
     assert ls["can_act"] is False
+
+
+def test_window_brief_is_filtered_device_side():
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls, stdout=_OD_WINDOW))
+    out = b.window_brief()
+    assert len(calls) == 1
+    shell_cmd = " ".join(calls[0][0])
+    assert "dumpsys window" in shell_cmd and "grep -E" in shell_cmd
+    assert "mCurrentFocus" in out
+
+
+def test_window_brief_falls_back_to_full_dump_on_junk():
+    # grep unavailable -> the filtered form yields no recognizable line; the
+    # full dump must be fetched rather than parsed junk reading as "unlocked".
+    outputs = ["grep: not found\n", "  mCurrentFocus=Window{a b com.x/.Y}\n"]
+    calls = []
+    def runner(cmd, **kwargs):
+        calls.append(cmd)
+        return FakeCompleted(stdout=outputs[len(calls) - 1])
+    b = AdbBackend(serial="d", runner=runner)
+    out = b.window_brief()
+    assert len(calls) == 2
+    assert "mCurrentFocus" in out
