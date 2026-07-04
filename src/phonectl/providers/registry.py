@@ -107,6 +107,18 @@ class ProviderRegistry:
     def window_dump(self) -> str:
         return self._delegate("observe_ui_tree", lambda p: p.window_dump())
 
+    def observe_dump(self):
+        """(xml, window) from the winning observe_ui_tree provider — combined
+        single-round-trip form when the provider offers it, otherwise its own
+        ui_dump + window_dump. Selection stays per-provider so a higher-priority
+        tree source (companion) is never skipped for lacking the combined form."""
+        def _call(p):
+            fn = getattr(p, "observe_dump", None)
+            if fn is not None:
+                return fn()
+            return p.ui_dump(), p.window_dump()
+        return self._delegate("observe_ui_tree", _call)
+
     def wm_size(self):
         return self._delegate("observe_ui_tree", lambda p: p.wm_size())
 
