@@ -209,3 +209,54 @@ def test_poll_events_passes_since_cursor():
     t = LoopbackTransport({"events": events})
     AccessibilityProvider(t).poll_events(since=7)
     assert seen["since"] == 7
+
+
+# ── observe_dump: one native RPC per observe; screen size served from it ─────
+
+class CountingTransport(LoopbackTransport):
+    def __init__(self, handlers, **kw):
+        super().__init__(handlers, **kw)
+        self.calls = []
+
+    def request(self, method, params, *, request_id, timeout):
+        self.calls.append(method)
+        return super().request(method, params, request_id=request_id, timeout=timeout)
+
+
+def _native_with_screen(_params):
+    data = _native_handler(_params)
+    data["screen"] = {"width": 1080, "height": 2400}
+    data["generation"] = 7
+    return data
+
+
+def test_observe_dump_is_a_single_native_rpc():
+    t = CountingTransport({"observe_native": _native_with_screen})
+    p = AccessibilityProvider(t)
+    xml, window = p.observe_dump()
+    assert t.calls.count("observe_native") == 1
+    assert window is None                      # companion knows nothing of keyguard
+    elements = ui_parser.parse_elements(xml)
+    assert any(e.get("text") == "Network & internet" for e in elements)
+
+
+def test_wm_size_served_from_last_observe_without_new_rpc():
+    t = CountingTransport({"observe_native": _native_with_screen})
+    p = AccessibilityProvider(t)
+    p.observe_dump()
+    assert p.wm_size() == (1080, 2400)
+    assert t.calls.count("observe_native") == 1   # no second tree serialization
+
+
+def test_wm_size_still_fetches_when_no_observe_ran():
+    t = CountingTransport({"observe_native": _native_with_screen})
+    p = AccessibilityProvider(t)
+    assert p.wm_size() == (1080, 2400)
+    assert t.calls.count("observe_native") == 1
+
+
+def test_observe_dump_threads_generation_for_stale_protection():
+    t = CountingTransport({"observe_native": _native_with_screen})
+    p = AccessibilityProvider(t)
+    p.observe_dump()
+    assert p._last_generation == 7
