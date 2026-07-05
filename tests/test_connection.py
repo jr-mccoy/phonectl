@@ -165,3 +165,28 @@ def test_ensure_failure_does_not_mark_fresh(tmp_path, monkeypatch):
     with pytest.raises(ConnectionError):
         c.ensure(monotonic=lambda: t[0])
     assert c._ensured_at is None
+
+
+# ── degraded mode: a live companion keeps observe/act alive when ADB is gone ──
+
+class CompanionProvider:
+    """Non-ADB provider that serves the native observe surface."""
+    def capabilities(self):
+        return caps_mod.make(observe_ui_native=True, observe_ui_tree=True, act_tap=True)
+
+
+def test_ensure_degrades_to_companion_when_adb_unreachable(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = AdbProvider(["offline", "offline"])
+    registry = ProviderRegistry([CompanionProvider(), adb])
+    Connection(registry, {"serial": "127.0.0.1:5555"}).ensure()   # must NOT raise
+    # ADB recovery was still attempted first — degraded mode is the fallback, not the default.
+    assert ("connect", "127.0.0.1:5555") in adb.adb_calls
+
+
+def test_ensure_still_raises_when_no_companion_serves_observe(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    registry = ProviderRegistry([AdbProvider(["offline", "offline"])])
+    with pytest.raises(ConnectionError) as e:
+        Connection(registry, {"serial": "127.0.0.1:5555"}).ensure()
+    assert GUIDANCE in str(e.value)

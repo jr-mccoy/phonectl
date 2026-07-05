@@ -102,9 +102,18 @@ Returns the native UI tree:
       "nodes": [ <node>, ... ]
     }
   ],
-  "screen": { "width": <int>, "height": <int> }
+  "screen": { "width": <int>, "height": <int> },
+  "keyguard": { "showing": <bool>, "secure": <bool> },
+  "focus": { "package": "<focused window's package>", "activity": "<activity class or empty>" }
 }
 ```
+
+`keyguard` mirrors `KeyguardManager` (`isKeyguardLocked` / `isDeviceLocked`) and `focus` names
+the focused window's package (activity from the last `TYPE_WINDOW_STATE_CHANGED` event when its
+package matches). Together they let the Python provider build the complete snapshot — lock state
+and focused app included — from this single RPC, with no per-observe ADB `dumpsys window`
+augment. Older payloads without these keys stay valid: the Python side falls back to the ADB
+augment.
 
 **Node shape:**
 

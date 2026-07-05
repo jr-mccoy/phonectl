@@ -83,11 +83,40 @@ class AccessibilityProvider:
         return native_tree.to_compat_xml(self.observe_native())
 
     def observe_dump(self):
-        """Compat XML from ONE observe_native RPC; window is None because the
-        companion has no view of the keyguard/focused-window record — the
-        registry augments it from the ADB provider. The payload's screen size
-        is cached so the wm_size() in the same observe costs no second RPC."""
-        return self.ui_dump(), None
+        """(compat XML, window) from ONE observe_native RPC. When the payload
+        carries the native keyguard + focus report the window is the structured
+        dict observer consumes directly — a fully ADB-free observe. Older APKs
+        omit those keys; window is then None and the registry augments it from
+        the ADB provider as before. The payload's screen size is cached so the
+        wm_size() in the same observe costs no second RPC."""
+        from phonectl import native_tree
+        data = self.observe_native()
+        return native_tree.to_compat_xml(data), self._window_info(data)
+
+    @staticmethod
+    def _window_info(data):
+        """Structured window ({app, lock}) from the native payload, or None when
+        it must come from ADB. Requires BOTH the keyguard report and a non-empty
+        focused package: a lock state without the focused app would blind the
+        guarded_packages risk signal (the bug Finding 13's augment fixed)."""
+        kg = data.get("keyguard")
+        focus = data.get("focus") or {}
+        if not isinstance(kg, dict) or not focus.get("package"):
+            return None
+        # Mirrors ui_parser.parse_lock_state's states and guidance strings.
+        if not kg.get("showing"):
+            lock = {"lock_state": "unlocked", "can_act": True,
+                    "recommended_user_action": None}
+        elif kg.get("secure"):
+            lock = {"lock_state": "locked_secure", "can_act": False,
+                    "recommended_user_action": "Unlock the phone manually."}
+        else:
+            lock = {"lock_state": "locked_swipe_only", "can_act": False,
+                    "recommended_user_action":
+                        "Swipe up to dismiss the lock screen, then retry."}
+        return {"app": {"package": focus.get("package", ""),
+                        "activity": focus.get("activity", "")},
+                "lock": lock}
 
     def window_dump(self) -> str:
         return ""

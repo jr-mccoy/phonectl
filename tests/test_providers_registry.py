@@ -478,3 +478,30 @@ def test_observe_dump_adb_failure_does_not_kill_the_observation():
     xml, window = r.observe_dump()
     assert xml == "<hierarchy native/>"    # companion observation survives
     assert window is None
+
+
+# ── structured windows skip the ADB augment entirely ─────────────────────────
+
+def test_observe_dump_structured_window_skips_adb_augment():
+    class StructuredTreeProv(FakeProv):
+        def __init__(self):
+            super().__init__("Structured", _caps(observe_ui_tree=True))
+
+        def observe_dump(self):
+            return "<hierarchy native/>", {
+                "app": {"package": "com.x", "activity": "com.x.Main"},
+                "lock": {"lock_state": "unlocked", "can_act": True,
+                         "recommended_user_action": None}}
+
+    class CountingAdbProv(FakeAdbProv):
+        brief_calls = 0
+
+        def window_brief(self):
+            CountingAdbProv.brief_calls += 1
+            return "mCurrentFocus=x"
+
+    adb = CountingAdbProv()
+    r = ProviderRegistry([StructuredTreeProv(), adb])
+    _xml, window = r.observe_dump()
+    assert window["app"]["package"] == "com.x"
+    assert CountingAdbProv.brief_calls == 0    # no ADB round trip in the observe

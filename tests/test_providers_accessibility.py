@@ -379,3 +379,48 @@ def test_screencap_undecodable_payload_raises_observe_error(tmp_path):
     with pytest.raises(errors.ObserveError):
         AccessibilityProvider(t).screencap(str(out))
     assert not out.exists()   # a broken capture must not leave a partial file behind
+
+
+# --- ADB-free observe: keyguard + focus ride the native payload ---
+
+def _native_full(showing, secure, pkg="com.android.settings",
+                 activity="com.android.settings.Settings"):
+    def handler(p):
+        data = _native_with_screen(p)
+        data["keyguard"] = {"showing": showing, "secure": secure}
+        data["focus"] = {"package": pkg, "activity": activity}
+        return data
+    return handler
+
+
+def test_observe_dump_returns_structured_window_from_native_payload():
+    t = CountingTransport({"observe_native": _native_full(showing=False, secure=False)})
+    xml, window = AccessibilityProvider(t).observe_dump()
+    assert t.calls.count("observe_native") == 1        # still one RPC
+    assert window["app"] == {"package": "com.android.settings",
+                             "activity": "com.android.settings.Settings"}
+    assert window["lock"] == {"lock_state": "unlocked", "can_act": True,
+                              "recommended_user_action": None}
+
+
+def test_observe_dump_maps_secure_keyguard_to_locked_secure():
+    t = CountingTransport({"observe_native": _native_full(showing=True, secure=True)})
+    _xml, window = AccessibilityProvider(t).observe_dump()
+    assert window["lock"]["lock_state"] == "locked_secure"
+    assert window["lock"]["can_act"] is False
+    assert window["lock"]["recommended_user_action"]
+
+
+def test_observe_dump_maps_insecure_keyguard_to_swipe_only():
+    t = CountingTransport({"observe_native": _native_full(showing=True, secure=False)})
+    _xml, window = AccessibilityProvider(t).observe_dump()
+    assert window["lock"]["lock_state"] == "locked_swipe_only"
+    assert window["lock"]["can_act"] is False
+
+
+def test_observe_dump_window_none_when_focus_package_empty():
+    # A keyguard without a usable focused package would blind the guarded_packages
+    # risk signal — keep the ADB augment instead of shipping an empty app.
+    t = CountingTransport({"observe_native": _native_full(showing=False, secure=False, pkg="")})
+    _xml, window = AccessibilityProvider(t).observe_dump()
+    assert window is None

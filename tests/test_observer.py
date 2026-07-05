@@ -220,3 +220,48 @@ def test_companion_path_snapshot_carries_real_app_and_lock_state():
     assert snap["app"]["package"] == "com.android.settings"
     assert snap["can_act"] is True
     assert snap["lock_state"] == "unlocked"
+
+
+# ── structured windows: the companion reports keyguard/focus natively ─────────
+
+NATIVE_XML = ("<?xml version='1.0'?><hierarchy rotation=\"0\">"
+              "<node text=\"Wi-Fi\" class=\"T\" content-desc=\"\" clickable=\"true\""
+              " bounds=\"[0,100][500,200]\"/></hierarchy>")
+
+
+from phonectl import errors
+
+
+class StructuredWindowBackend:
+    """Companion-style backend: observe_dump carries a structured window, and any
+    ADB-only helper (window_dump / lock_state / keyguard) must never be needed."""
+
+    def __init__(self, lock=None):
+        self._lock = lock or {"lock_state": "unlocked", "can_act": True,
+                              "recommended_user_action": None}
+
+    def observe_dump(self):
+        return NATIVE_XML, {"app": {"package": "com.x", "activity": "com.x.Main"},
+                            "lock": dict(self._lock)}
+
+    def wm_size(self):
+        return (1080, 2400)
+
+    def __getattr__(self, name):
+        raise AssertionError(f"ADB-only helper {name!r} must not be consulted")
+
+
+def test_observe_consumes_structured_window_without_adb_helpers():
+    s = Session()
+    snap = observer.observe(StructuredWindowBackend(), s)
+    assert snap["app"] == {"package": "com.x", "activity": "com.x.Main"}
+    assert snap["lock_state"] == "unlocked"
+    assert snap["can_act"] is True
+
+
+def test_observe_structured_window_locked_raises_device_locked():
+    locked = {"lock_state": "locked_secure", "can_act": False,
+              "recommended_user_action": "Unlock the phone manually."}
+    with pytest.raises(errors.DeviceLockedError) as e:
+        observer.observe(StructuredWindowBackend(lock=locked), Session())
+    assert e.value.lock_state["lock_state"] == "locked_secure"

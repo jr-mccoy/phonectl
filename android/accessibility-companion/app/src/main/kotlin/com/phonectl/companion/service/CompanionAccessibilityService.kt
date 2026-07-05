@@ -2,6 +2,8 @@ package com.phonectl.companion.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
@@ -53,6 +55,15 @@ class CompanionAccessibilityService : AccessibilityService() {
      */
     private val treeGeneration = AtomicLong(0)
 
+    /**
+     * Last TYPE_WINDOW_STATE_CHANGED (package, activity class): AccessibilityWindowInfo knows the
+     * focused window's package but not its activity, so the event stream supplies it. Used by the
+     * observe_native `focus` report; consulted only when its package matches the live focused
+     * window, so a stale record can never mislabel a different app's activity.
+     */
+    @Volatile
+    private var lastWindowState: Pair<String, String>? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -64,6 +75,12 @@ class CompanionAccessibilityService : AccessibilityService() {
             event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) {
             treeGeneration.incrementAndGet()
+        }
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkgName = event.packageName?.toString()
+            if (!pkgName.isNullOrEmpty()) {
+                lastWindowState = pkgName to (event.className?.toString() ?: "")
+            }
         }
         val type = eventTypeName(event.eventType) ?: return
         val pkg = event.packageName?.toString() ?: ""
@@ -89,8 +106,15 @@ class CompanionAccessibilityService : AccessibilityService() {
         // counter and a later action carrying this token is (correctly, conservatively) stale.
         val generation = treeGeneration.get()
         val windows = mutableListOf<WindowData>()
+        var focusedPackage = ""
         for (window in safeWindows()) {
             val root = window.root ?: continue
+            // Captured before the guard skip: requireUnguardedForeground above already refused
+            // the whole observation if the FOREGROUND app is guarded, so this can only name an
+            // unguarded package.
+            if (window.isFocused && focusedPackage.isEmpty()) {
+                focusedPackage = root.packageName?.toString() ?: ""
+            }
             if (ActionGate.isGuarded(root.packageName?.toString(), guarded)) {
                 root.recycle()
                 continue
@@ -107,12 +131,30 @@ class CompanionAccessibilityService : AccessibilityService() {
             )
             root.recycle()
         }
+        if (focusedPackage.isEmpty()) focusedPackage = currentPackage() ?: ""
+        val last = lastWindowState
+        val activity = if (last != null && last.first == focusedPackage) last.second else ""
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val dm = resources.displayMetrics
         // Attach password/payment flags (trust SPEC §7) for the Python policy layer. Additive
-        // `flags` key — native_tree.to_compat_xml ignores it.
+        // `flags` key — native_tree.to_compat_xml ignores it. `keyguard` + `focus` let the
+        // Python provider build the whole snapshot (lock state + focused app) from this one
+        // RPC — no per-observe ADB `dumpsys window` augment.
         return NativeTreeJson.tree(windows, dm.widthPixels, dm.heightPixels)
             .put("flags", ObserveFlags.compute(windows))
             .put("generation", generation)
+            .put(
+                "keyguard",
+                JSONObject()
+                    .put("showing", km.isKeyguardLocked)
+                    .put("secure", km.isDeviceLocked),
+            )
+            .put(
+                "focus",
+                JSONObject()
+                    .put("package", focusedPackage)
+                    .put("activity", activity),
+            )
     }
 
     private fun safeWindows(): List<AccessibilityWindowInfo> =
