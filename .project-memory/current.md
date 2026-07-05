@@ -69,6 +69,33 @@ companion observe), and runtime memoizes the STOP-check transport per
 (host,port,token). Handshake-per-action fail-closed STOP semantics unchanged.
 On-device smoke advisable: idle-reconnect behavior against the real companion.
 
+**Companion-first routing pass (2026-07-05, branch
+`claude/accessibility-companion-automation-98hqxi`):** when the APK is up, the
+system now does as much as possible through it. (1) long_press / named_swipe /
+fling / screen-level scroll no longer slip through `ProviderRegistry.__getattr__`
+to ADB — the registry delegates them on `act_tap` and `AccessibilityProvider`
+serves them natively (long press = same-point stroke; named swipe/fling computed
+from the cached screen size with AdbBackend's timing curve). (2) `input_key`
+pre-flights against the companion's global-action set (HOME/BACK/RECENTS/
+APP_SWITCH/NOTIFICATIONS/QUICK_SETTINGS) and raises CapabilityUnavailableError
+locally for anything else, so ENTER/TAB/etc. fall to ADB without a doomed RPC.
+(3) The compat XML now carries `resource-id` (Kotlin: NodeData.resourceId from
+viewIdResourceName — id-selectors were blind on the companion path), `node-id`,
+and `actions`; parse_elements surfaces `node_id`/`actions` only on companion
+trees. (4) Semantic-first acting: tap/long_press by i/selector drive
+ACTION_CLICK/ACTION_LONG_CLICK via `registry.semantic_action` when the element
+advertises the action — generation-bound (Finding 9), so a mid-flight tree
+change surfaces as StaleSnapshotError instead of a mis-tap; explicit x/y,
+non-default long-press durations, unadvertised actions, and ADB trees stay on
+the coordinate gesture path. ⚠️ Validation debt: Kotlin JVM tests need an
+Android SDK (not in the session env) and the on-device smoke matrix was NOT
+run; Python suite is green (785 passed). Known remaining ADB dependencies when
+the companion is up: screenshots (Finding 16, by design), keyguard/focused-
+window augmentation per observe (`window_brief`), arbitrary keycode injection,
+and `Connection.ensure()` itself. Identified follow-up for full ADB-free
+operation: teach the companion to report keyguard + focused window natively in
+observe_native and let ensure() accept a live companion as sufficient.
+
 ## Recently Changed
 - 5557c6b Merge pull request #33 from jumbodaddystack/claude/phonectl-ocr-companion-1s1etp
 - 031e41a docs(companion): mark Phase 4 companion APK complete + cross-reference plans
