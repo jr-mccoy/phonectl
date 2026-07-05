@@ -6,6 +6,7 @@
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canPerformGestures="true"
+    android:canTakeScreenshot="true"
     android:canRequestFilterKeyEvents="false"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="100"

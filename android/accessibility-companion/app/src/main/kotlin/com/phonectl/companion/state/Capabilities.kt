@@ -97,6 +97,10 @@ object Capabilities {
         "ocr_image" to "observe_ocr",
         "ocr_screen" to "observe_ocr_screen",
         "screenshot" to "observe_screenshot",
+        // "screencap" is the pre-screenshot-RPC path-based capture, superseded but still wired
+        // in the dispatcher; gate it on the same toggle so a disabled observe_screenshot can't
+        // be bypassed through the older method name.
+        "screencap" to "observe_screenshot",
     )
 
     /**
