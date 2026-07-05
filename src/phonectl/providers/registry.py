@@ -171,6 +171,14 @@ class ProviderRegistry:
     def input_key(self, keycode: str) -> None:
         self._delegate("act_key", lambda p: p.input_key(keycode))
 
+    def semantic_action(self, node_id, action) -> dict:
+        return self._delegate("act_semantic_action",
+                              lambda p: p.semantic_action(node_id, action))
+
+    def set_text_native(self, node_id, text) -> None:
+        self._delegate("act_set_text_native",
+                       lambda p: p.set_text_native(node_id, text))
+
     def launch(self, package: str) -> None:
         self._delegate("launch_app", lambda p: p.launch(package))
 

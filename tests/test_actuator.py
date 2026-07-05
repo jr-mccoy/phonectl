@@ -309,3 +309,118 @@ def test_scroll_until_halts_on_stop_midloop(fake_backend, fake_session):
             max_scrolls=5, sleep=lambda _: None, halt=halt,
         )
     assert len(scrolls) == 1
+
+
+# ── semantic-first acting: companion node actions win over coordinate gestures ──
+
+SEM_XML = (
+    "<?xml version='1.0'?><hierarchy rotation=\"0\">"
+    "<node text=\"Wi-Fi\" resource-id=\"a:id/t\" class=\"T\" content-desc=\"\""
+    " clickable=\"true\" bounds=\"[0,100][500,200]\""
+    " node-id=\"w1.0\" actions=\"click,long_click\"/>"
+    "<node text=\"Label\" resource-id=\"\" class=\"T\" content-desc=\"\""
+    " clickable=\"true\" bounds=\"[0,300][500,400]\""
+    " node-id=\"w1.1\" actions=\"\"/>"
+    "</hierarchy>")
+
+
+class SemanticBackend:
+    """Companion-style registry fake: native tree + semantic surface."""
+
+    def __init__(self, semantic=True):
+        self._semantic = semantic
+        self.taps = []
+        self.long_presses = []
+        self.semantic_calls = []
+
+    def capabilities(self):
+        from phonectl import capabilities
+        return capabilities.make(observe_ui_tree=True, act_tap=True,
+                                 act_semantic_action=self._semantic)
+
+    def ui_dump(self):
+        return SEM_XML
+
+    def window_dump(self):
+        return "mCurrentFocus=Window{a b com.x/.A}"
+
+    def wm_size(self):
+        return (1080, 2400)
+
+    def input_tap(self, x, y):
+        self.taps.append((x, y))
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        self.long_presses.append((x, y, duration_ms))
+
+    def semantic_action(self, node_id, action):
+        self.semantic_calls.append((node_id, action))
+        return {"performed": action}
+
+
+def test_tap_by_index_prefers_semantic_click():
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, i=0)
+    assert b.semantic_calls == [("w1.0", "click")]
+    assert b.taps == []
+
+
+def test_tap_by_selector_prefers_semantic_click():
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, selector={"text": "Wi-Fi"})
+    assert b.semantic_calls == [("w1.0", "click")]
+    assert b.taps == []
+
+
+def test_tap_falls_to_coordinates_when_node_lacks_click_action():
+    # Coordinate taps hit-test through to a clickable ancestor; ACTION_CLICK on a
+    # non-clickable node would just fail — so only advertised actions go semantic.
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, i=1)
+    assert b.semantic_calls == []
+    assert b.taps == [(250, 350)]
+
+
+def test_tap_falls_to_coordinates_without_semantic_capability():
+    b, s = SemanticBackend(semantic=False), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, i=0)
+    assert b.semantic_calls == []
+    assert b.taps == [(250, 150)]
+
+
+def test_tap_by_xy_never_goes_semantic():
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, x=250, y=150)
+    assert b.semantic_calls == []
+    assert b.taps == [(250, 150)]
+
+
+def test_tap_on_adb_tree_stays_coordinate():
+    # ScriptBackend has no capabilities()/semantic_action() — plain ADB path unchanged.
+    b, s = ScriptBackend(), Session()
+    observer.observe(b, s)
+    actuator.tap(b, s, i=0)
+    assert ("tap", 540, 450) in b.calls
+
+
+def test_long_press_by_index_prefers_semantic_long_click():
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.long_press(b, s, i=0)
+    assert b.semantic_calls == [("w1.0", "long_click")]
+    assert b.long_presses == []
+
+
+def test_long_press_with_custom_duration_stays_coordinate():
+    # ACTION_LONG_CLICK has no duration; an explicit non-default hold expresses
+    # intent the semantic action cannot honor.
+    b, s = SemanticBackend(), Session()
+    observer.observe(b, s)
+    actuator.long_press(b, s, i=0, duration_ms=3000)
+    assert b.semantic_calls == []
+    assert b.long_presses == [(250, 150, 3000)]

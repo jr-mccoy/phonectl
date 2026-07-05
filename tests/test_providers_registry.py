@@ -279,6 +279,39 @@ def test_gesture_verbs_fall_back_to_adb_on_runtime_failure():
     assert r.last_fallback and r.last_fallback[0]["provider"] == "DyingGestureProv"
 
 
+# ── semantic / native set-text delegation ────────────────────────────────────
+
+class SemanticProv(FakeProv):
+    def __init__(self):
+        super().__init__("Semantic", _caps(act_semantic_action=True,
+                                           act_set_text_native=True))
+        self.calls = []
+
+    def semantic_action(self, node_id, action):
+        self.calls.append(("semantic", node_id, action))
+        return {"performed": action}
+
+    def set_text_native(self, node_id, text):
+        self.calls.append(("set_text", node_id, text))
+
+
+def test_semantic_action_delegates_on_capability():
+    p = SemanticProv()
+    r = ProviderRegistry([p, FakeAdbProv()])
+    assert r.semantic_action("w1.0", "click") == {"performed": "click"}
+    r.set_text_native("w1.1", "hello")
+    assert p.calls == [("semantic", "w1.0", "click"), ("set_text", "w1.1", "hello")]
+    assert r.last_used == "SemanticProv"
+
+
+def test_semantic_action_without_capable_provider_raises():
+    r = ProviderRegistry([FakeAdbProv()])
+    with pytest.raises(errors.CapabilityUnavailableError):
+        r.semantic_action("w1.0", "click")
+    with pytest.raises(errors.CapabilityUnavailableError):
+        r.set_text_native("w1.0", "x")
+
+
 # ── observe_dump delegation: combined when the provider has it, split when not ──
 
 class CombinedProv(FakeProv):
