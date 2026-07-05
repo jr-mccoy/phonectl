@@ -11,6 +11,13 @@ SUPPORTED_SEMANTIC_ACTIONS = frozenset({
     "expand", "collapse", "dismiss",
 })
 
+# Mirror of the companion's GLOBAL_KEYS map (CompanionAccessibilityService): the
+# AccessibilityService can only performGlobalAction, never inject arbitrary keycodes.
+# Refusing others locally lets the registry fall to ADB without a doomed RPC.
+SUPPORTED_GLOBAL_KEYS = frozenset({
+    "HOME", "BACK", "RECENTS", "APP_SWITCH", "NOTIFICATIONS", "QUICK_SETTINGS",
+})
+
 
 class AccessibilityProvider:
     def __init__(self, transport, *, timeout: float = 2.0) -> None:
@@ -128,6 +135,13 @@ class AccessibilityProvider:
         self.input_named_swipe(direction, distance_pct=0.6, ms=ms)
 
     def input_key(self, keycode):
+        name = str(keycode).upper()
+        if name.startswith("KEYCODE_"):
+            name = name[len("KEYCODE_"):]
+        if name not in SUPPORTED_GLOBAL_KEYS:
+            raise errors.CapabilityUnavailableError(
+                f"companion cannot inject keycode {keycode!r} (global actions only)"
+            )
         self._call("key", {"keycode": keycode})
 
     def input_text(self, text):

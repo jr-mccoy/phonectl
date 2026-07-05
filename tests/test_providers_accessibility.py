@@ -82,6 +82,27 @@ def test_input_text_uses_type_mode():
     assert t.sent[-1] == ("set_text", {"text": "hi", "mode": "type"})
 
 
+# --- key pre-flight: only companion-performable keys reach the socket ---
+
+def test_input_key_sends_supported_global_keys():
+    t = RecordingTransport()
+    p = AccessibilityProvider(t)
+    for kc in ("KEYCODE_BACK", "KEYCODE_HOME", "KEYCODE_APP_SWITCH",
+               "KEYCODE_NOTIFICATIONS", "KEYCODE_QUICK_SETTINGS", "RECENTS", "back"):
+        p.input_key(kc)
+        assert t.sent[-1] == ("key", {"keycode": kc})
+
+
+def test_input_key_refuses_unsupported_keycode_without_rpc():
+    # The companion can only perform global actions; arbitrary keycodes (ENTER, TAB,
+    # DPAD…) must fall to ADB immediately, not cost a doomed socket round trip.
+    t = RecordingTransport()
+    p = AccessibilityProvider(t)
+    with pytest.raises(errors.CapabilityUnavailableError):
+        p.input_key("KEYCODE_ENTER")
+    assert all(m != "key" for m, _ in t.sent)
+
+
 # --- companion-first gestures: long-press / named swipe / fling ---
 
 class GestureTransport(RecordingTransport):

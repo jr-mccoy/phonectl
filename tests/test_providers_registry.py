@@ -245,6 +245,27 @@ def test_gesture_verbs_delegate_to_priority_act_tap_provider():
     assert r.last_used == "GestureProv"
 
 
+def test_unsupported_keycode_falls_to_adb_without_a_companion_rpc():
+    from phonectl.providers.accessibility import AccessibilityProvider
+    from phonectl.providers.transport import LoopbackTransport
+
+    class RecordingTransport(LoopbackTransport):
+        def __init__(self):
+            self.sent = []
+            super().__init__({"key": lambda p: {"applied": True}})
+
+        def request(self, method, params, *, request_id, timeout):
+            self.sent.append(method)
+            return super().request(method, params, request_id=request_id, timeout=timeout)
+
+    t = RecordingTransport()
+    adb = FakeAdbProv()
+    r = ProviderRegistry([AccessibilityProvider(t), adb])
+    r.input_key("KEYCODE_ENTER")
+    assert "key" not in t.sent          # pre-flight refused locally, no socket round trip
+    assert r.last_used == "FakeAdbProv"
+
+
 def test_gesture_verbs_fall_back_to_adb_on_runtime_failure():
     class DyingGestureProv(GestureProv):
         def input_long_press(self, x, y, duration_ms=1000):
