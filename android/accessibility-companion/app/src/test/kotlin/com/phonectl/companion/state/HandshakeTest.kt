@@ -46,6 +46,7 @@ class HandshakeTest {
             "observe_notifications", "notifications_wait", "notifications_reply",
             "notifications_dismiss",
             "observe_ocr", "observe_ocr_screen",
+            "observe_screenshot",
         )
         assertEquals(expected, caps.keys().asSequence().toSet())
         for (key in expected) assertTrue("$key should default enabled", caps.getBoolean(key))

@@ -45,8 +45,18 @@ object Capabilities {
         "observe_ocr_screen",
     )
 
+    /**
+     * Screenshot capability key: gates the `screenshot` method, which returns the PNG as
+     * base64 over the token-authenticated socket. The companion persists nothing (Finding 16
+     * still holds — it never writes outside its own storage; here it writes nothing at all);
+     * the Python caller stores the bytes under its own storage.
+     */
+    val SCREENSHOT_KEYS: List<String> = listOf(
+        "observe_screenshot",
+    )
+
     /** Every capability key the companion advertises in `handshake.capabilities`. */
-    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS + OCR_KEYS
+    val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS + OCR_KEYS + SCREENSHOT_KEYS
 
     /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
     const val DEFAULT_ENABLED = true
@@ -86,6 +96,7 @@ object Capabilities {
         "notifications_dismiss" to "notifications_dismiss",
         "ocr_image" to "observe_ocr",
         "ocr_screen" to "observe_ocr_screen",
+        "screenshot" to "observe_screenshot",
     )
 
     /**

@@ -279,6 +279,37 @@ def test_gesture_verbs_fall_back_to_adb_on_runtime_failure():
     assert r.last_fallback and r.last_fallback[0]["provider"] == "DyingGestureProv"
 
 
+# ── screenshots: companion-first, ADB fallback ───────────────────────────────
+
+class ScreenshotProv(FakeProv):
+    def __init__(self, exc=None):
+        super().__init__("Shot", _caps(observe_screenshot=True))
+        self._exc = exc
+        self.captured = []
+
+    def screencap(self, path):
+        if self._exc is not None:
+            raise self._exc
+        self.captured.append(path)
+        return path
+
+
+def test_screencap_prefers_the_companion_provider():
+    shot, adb = ScreenshotProv(), FakeAdbProv()
+    r = ProviderRegistry([shot, adb])
+    assert r.screencap("/x/snap.png") == "/x/snap.png"
+    assert shot.captured == ["/x/snap.png"]
+    assert r.last_used == "ScreenshotProv"
+
+
+def test_screencap_falls_back_to_adb_on_runtime_failure():
+    dying = ScreenshotProv(exc=errors.ObserveError("companion died mid-request"))
+    r = ProviderRegistry([dying, FakeAdbProv()])
+    assert r.screencap("/x/snap.png") == "/x/snap.png"
+    assert r.last_used == "FakeAdbProv"
+    assert r.last_fallback and r.last_fallback[0]["provider"] == "ScreenshotProv"
+
+
 # ── semantic / native set-text delegation ────────────────────────────────────
 
 class SemanticProv(FakeProv):

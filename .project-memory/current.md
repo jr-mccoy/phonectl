@@ -89,10 +89,19 @@ change surfaces as StaleSnapshotError instead of a mis-tap; explicit x/y,
 non-default long-press durations, unadvertised actions, and ADB trees stay on
 the coordinate gesture path. ⚠️ Validation debt: Kotlin JVM tests need an
 Android SDK (not in the session env) and the on-device smoke matrix was NOT
-run; Python suite is green (785 passed). Known remaining ADB dependencies when
-the companion is up: screenshots (Finding 16, by design), keyguard/focused-
-window augmentation per observe (`window_brief`), arbitrary keycode injection,
-and `Connection.ensure()` itself. Identified follow-up for full ADB-free
+run; Python suite is green. (5) Companion screenshots: new `screenshot` RPC
+returns the PNG as **base64 over the token-authenticated socket** (no `path`
+param — zero on-device file-write surface, so Finding 16's invariant tightens
+rather than loosens); the Python provider decodes and persists under ITS
+storage and re-advertises `observe_screenshot` (companion-first, ADB fallback).
+Gated by a new `observe_screenshot` capability key (handshake + settings
+toggle + dispatcher gate + STOP gate); old APKs simply don't advertise it and
+ADB keeps serving. `screenshot` is in READ_ONLY_METHODS (replay-safe) and uses
+a 10s RPC timeout for the multi-MB base64 line. ⚠️ On-device: verify a real
+S25 Ultra capture round-trips within the timeout. Known remaining ADB
+dependencies when the companion is up: keyguard/focused-window augmentation
+per observe (`window_brief`), arbitrary keycode injection, and
+`Connection.ensure()` itself. Identified follow-up for full ADB-free
 operation: teach the companion to report keyguard + focused window natively in
 observe_native and let ensure() accept a live companion as sufficient.
 

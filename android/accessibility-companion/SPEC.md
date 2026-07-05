@@ -228,6 +228,27 @@ Returns: `{"path": "<path>"}`
 Implementation: `takeScreenshot` (API 30+) or fallback via `MediaProjection` if available.
 Writes a PNG to `path`. Returns `ok: false` on API < 30 without a fallback.
 
+`path` must resolve under the companion's own storage roots (files/cache dirs, internal or
+app-specific external); anything else is refused with `path_rejected`. Cross-UID callers that
+need the pixels use `screenshot` instead.
+
+---
+
+### `screenshot`
+
+Params: `{}`
+
+Returns: `{"format": "png", "data": "<base64 PNG bytes>"}`
+
+The pixels travel over the token-authenticated loopback socket; the companion persists
+**nothing** — no path parameter exists, so there is no on-device file-write surface at all.
+The caller (a different Android UID that cannot read the companion's storage) decodes and
+stores the image under its own storage. Refused with `guarded_action` when the foreground
+app is guarded, like `observe_native`/`screencap`; `screencap_unavailable` when capture or
+PNG encoding fails.
+
+**Capability toggle:** `observe_screenshot` gates this method (`capability_disabled` when off).
+
 ---
 
 ### `events`

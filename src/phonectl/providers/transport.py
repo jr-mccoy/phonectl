@@ -76,7 +76,7 @@ class SocketTransport:
     # out dead mid-request: liveness/read-only, never device-mutating.
     READ_ONLY_METHODS = frozenset({
         "ping", "handshake", "version", "capabilities",
-        "observe_native", "events", "notifications_list",
+        "observe_native", "events", "notifications_list", "screenshot",
     })
 
     def __init__(self, host: str, port: int, *, version: int = 1, connect=None,

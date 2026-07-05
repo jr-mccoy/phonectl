@@ -222,6 +222,7 @@ class DispatcherTest {
         "semantic" to { _ -> JSONObject().put("performed", "click") },
         "launch" to { _ -> JSONObject().put("launched", true) },
         "screencap" to { _ -> JSONObject().put("path", "/x.png") },
+        "screenshot" to { _ -> JSONObject().put("format", "png").put("data", "aGk=") },
         "ocr_screen" to { _ -> JSONObject().put("regions", true) },
         "events" to { _ -> JSONObject().put("events", true) },
         "notifications_list" to { _ -> JSONObject().put("notifications", true) },

@@ -39,19 +39,21 @@ class AccessibilityProvider:
     def capabilities(self) -> dict:
         if not self.is_available():
             return caps_mod.make()
-        # observe_screenshot intentionally NOT advertised (Finding 16): the companion now writes
-        # screenshots only under its own app storage, which this process (a different Android
-        # UID) cannot read — advertising it would just dead-end registry.screencap. ADB serves it.
+        # observe_screenshot rides the `screenshot` RPC: the companion returns the PNG
+        # bytes over the token-authenticated socket and THIS side persists them under its
+        # own storage. Finding 16's invariant holds — the companion still never writes
+        # outside its own app storage (here it writes nothing at all).
         return caps_mod.make(
             observe_ui_native=True, observe_ui_events=True,
             act_set_text_native=True, act_gesture_native=True, act_semantic_action=True,
-            observe_ui_tree=True,
+            observe_ui_tree=True, observe_screenshot=True,
             act_tap=True, act_type=True, act_key=True, launch_app=True,
         )
 
-    def _call(self, method: str, params: dict | None = None) -> dict:
+    def _call(self, method: str, params: dict | None = None, *, timeout: float = None) -> dict:
         rid = next_request_id()
-        resp = self._t.request(method, params or {}, request_id=rid, timeout=self._timeout)
+        resp = self._t.request(method, params or {}, request_id=rid,
+                               timeout=self._timeout if timeout is None else timeout)
         if resp.get("request_id") != rid:
             raise errors.ObserveError(
                 f"stale companion response: expected {rid}, got {resp.get('request_id')}"
@@ -154,8 +156,25 @@ class AccessibilityProvider:
     def launch(self, package):
         self._call("launch", {"package": package})
 
+    # PNG encode + a multi-MB base64 line take longer than an ordinary RPC.
+    SCREENSHOT_TIMEOUT = 10.0
+
     def screencap(self, path):
-        self._call("screencap", {"path": path})
+        """Capture via the `screenshot` RPC and persist the PNG on THIS side of the
+        UID boundary — the companion never writes outside its own storage (Finding 16),
+        so the bytes travel over the token-authenticated socket instead."""
+        import base64
+        import binascii
+        data = self._call("screenshot", {},
+                          timeout=max(self._timeout, self.SCREENSHOT_TIMEOUT))
+        try:
+            png = base64.b64decode(data.get("data", ""), validate=True)
+        except (binascii.Error, ValueError):
+            raise errors.ObserveError("companion screenshot payload is not valid base64")
+        if not png:
+            raise errors.ObserveError("companion screenshot payload is empty")
+        with open(path, "wb") as f:
+            f.write(png)
         return path
 
     def get_state(self):

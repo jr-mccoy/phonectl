@@ -20,11 +20,12 @@ def test_capabilities_all_false_when_unavailable():
     assert all(v is False for v in p.capabilities().values())
 
 
-def test_companion_does_not_advertise_observe_screenshot():
-    # Finding 16: companion screencap writes only under its own (cross-UID unreadable) app
-    # storage, so advertising observe_screenshot would dead-end registry.screencap — ADB owns it.
+def test_companion_advertises_observe_screenshot():
+    # Finding 16 evolution: the companion never writes outside its own storage — the
+    # `screenshot` RPC returns the PNG bytes over the (token-authenticated) socket and
+    # the Python side persists them under ITS storage, so no cross-UID dead-end remains.
     p = AccessibilityProvider(LoopbackTransport({}))
-    assert p.capabilities()["observe_screenshot"] is False
+    assert p.capabilities()["observe_screenshot"] is True
 
 
 # --- Task 3: native tree + ui_dump ---
@@ -335,3 +336,46 @@ def test_observe_dump_threads_generation_for_stale_protection():
     p = AccessibilityProvider(t)
     p.observe_dump()
     assert p._last_generation == 7
+
+
+# --- screencap: base64 PNG over the socket, persisted Python-side ---
+
+PNG_BYTES = b"\x89PNG\r\n\x1a\nfakepixels"
+
+
+class ScreenshotTransport(LoopbackTransport):
+    def __init__(self, handlers=None):
+        import base64
+        self.timeouts = []
+        super().__init__(handlers if handlers is not None else {
+            "screenshot": lambda p: {"format": "png",
+                                     "data": base64.b64encode(PNG_BYTES).decode("ascii")},
+        })
+
+    def request(self, method, params, *, request_id, timeout):
+        self.timeouts.append((method, timeout))
+        return super().request(method, params, request_id=request_id, timeout=timeout)
+
+
+def test_screencap_decodes_base64_and_writes_the_requested_path(tmp_path):
+    t = ScreenshotTransport()
+    out = str(tmp_path / "snap.png")
+    assert AccessibilityProvider(t).screencap(out) == out
+    with open(out, "rb") as f:
+        assert f.read() == PNG_BYTES
+
+
+def test_screencap_uses_a_generous_timeout():
+    # PNG encode + a multi-MB base64 line deserve more than the 2s RPC default.
+    t = ScreenshotTransport()
+    AccessibilityProvider(t).screencap("/dev/null")
+    (method, timeout), = [(m, s) for m, s in t.timeouts if m == "screenshot"]
+    assert timeout >= 10.0
+
+
+def test_screencap_undecodable_payload_raises_observe_error(tmp_path):
+    t = ScreenshotTransport({"screenshot": lambda p: {"format": "png", "data": "!!not-base64!!"}})
+    out = tmp_path / "snap.png"
+    with pytest.raises(errors.ObserveError):
+        AccessibilityProvider(t).screencap(str(out))
+    assert not out.exists()   # a broken capture must not leave a partial file behind

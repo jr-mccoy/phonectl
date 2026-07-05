@@ -16,6 +16,7 @@ class CapabilitiesTest {
             "set_text" to "act_set_text_native",
             "semantic" to "act_semantic_action",
             "launch" to "launch_app",
+            "screenshot" to "observe_screenshot",
         )
 
         for ((method, capability) in expected) {
@@ -32,6 +33,7 @@ class CapabilitiesTest {
             "act_set_text_native" to listOf("set_text"),
             "act_semantic_action" to listOf("semantic"),
             "launch_app" to listOf("launch"),
+            "observe_screenshot" to listOf("screenshot"),
         )
 
         for ((capability, methods) in methodsByCapability) {

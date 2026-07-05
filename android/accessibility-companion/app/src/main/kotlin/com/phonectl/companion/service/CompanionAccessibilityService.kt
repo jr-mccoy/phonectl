@@ -348,6 +348,24 @@ class CompanionAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * `screenshot` — the PNG as base64 over the socket. Nothing touches disk on this side
+     * (Finding 16 stays intact: the companion never writes outside its own storage); the
+     * Python caller decodes and persists the bytes under ITS storage, across the UID boundary
+     * the old path-based screencap could never cross. java.util.Base64 keeps it JVM-testable.
+     */
+    private fun screenshot(state: TrustState): JSONObject {
+        requireUnguardedForeground(state, what = "screenshot")
+        val bitmap = captureScreenshotBitmap()
+        val baos = java.io.ByteArrayOutputStream()
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)) {
+            throw MethodException("screencap_unavailable", "PNG encode failed")
+        }
+        return JSONObject()
+            .put("format", "png")
+            .put("data", java.util.Base64.getEncoder().encodeToString(baos.toByteArray()))
+    }
+
+    /**
      * Writable screenshot roots (Finding 16): the companion's own files/cache dirs (internal and
      * app-specific external). Canonicalized so the pure prefix check cannot be tricked.
      */
@@ -461,6 +479,7 @@ class CompanionAccessibilityService : AccessibilityService() {
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p, state) },
+                "screenshot" to { _ -> svc().screenshot(state) },
                 "ocr_screen" to { _ -> svc().ocrScreen(state) },
                 // Guarded packages are filtered out of the event stream (Finding 10).
                 "events" to { p ->
