@@ -111,7 +111,8 @@ emergency-stop flag.
     "observe_notifications": true,
     "notifications_wait": true,
     "notifications_reply": true,
-    "notifications_dismiss": true
+    "notifications_dismiss": true,
+    "observe_screenshot": true
   },
   "stopped": false
 }

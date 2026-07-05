@@ -14,9 +14,15 @@ def _node_xml(node: dict) -> str:
     l, t, r, b = node.get("bounds", [0, 0, 0, 0])
     parts = [
         _attr("text", str(node.get("text", "") or "")),
+        _attr("resource-id", str(node.get("resource_id", "") or "")),
         _attr("class", str(node.get("class", "") or "")),
         _attr("content-desc", str(node.get("content_desc", "") or "")),
         _attr("bounds", f"[{l},{t}][{r},{b}]"),
+        # Companion-native extras: node-id targets semantic/set-text actions, actions
+        # says which the node supports. Always emitted (possibly empty) so consumers
+        # can distinguish a companion tree from an ADB uiautomator dump.
+        _attr("node-id", str(node.get("node_id", "") or "")),
+        _attr("actions", ",".join(node.get("actions", []) or [])),
     ]
     for flag in _FLAGS:
         parts.append(_attr(flag, "true" if node.get(flag) else "false"))

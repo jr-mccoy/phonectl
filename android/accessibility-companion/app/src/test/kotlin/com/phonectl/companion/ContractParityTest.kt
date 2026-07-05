@@ -28,6 +28,7 @@ class ContractParityTest {
                 NodeData(
                     nodeId = "n1", text = "Wi-Fi", className = "android.widget.TextView",
                     contentDesc = "", bounds = listOf(44, 380, 1036, 520),
+                    resourceId = "com.example:id/wifi", actions = listOf("click", "long_click"),
                     clickable = true, enabled = true, scrollable = false, password = false,
                 ),
                 NodeData(
@@ -49,6 +50,10 @@ class ContractParityTest {
         assertTrue(xml, xml.contains("content-desc=\"Search\""))
         // test_to_compat_xml_is_parseable_by_ui_parser: Wi-Fi text present
         assertTrue(xml, xml.contains("text=\"Wi-Fi\""))
+        // test_to_compat_xml_carries_node_id_resource_id_and_actions
+        assertTrue(xml, xml.contains("node-id=\"n1\""))
+        assertTrue(xml, xml.contains("resource-id=\"com.example:id/wifi\""))
+        assertTrue(xml, xml.contains("actions=\"click,long_click\""))
     }
 
     @Test
@@ -101,11 +106,16 @@ class ContractParityTest {
 
     private fun nodeXml(node: JSONObject): String {
         val b = node.getJSONArray("bounds")
+        val actions = node.optJSONArray("actions")
+        val actionsCsv = (0 until (actions?.length() ?: 0)).joinToString(",") { actions!!.getString(it) }
         val parts = mutableListOf(
             attr("text", node.optString("text", "")),
+            attr("resource-id", node.optString("resource_id", "")),
             attr("class", node.optString("class", "")),
             attr("content-desc", node.optString("content_desc", "")),
             attr("bounds", "[${b.getInt(0)},${b.getInt(1)}][${b.getInt(2)},${b.getInt(3)}]"),
+            attr("node-id", node.optString("node_id", "")),
+            attr("actions", actionsCsv),
         )
         for (flag in flags) parts.add(attr(flag, if (node.optBoolean(flag, false)) "true" else "false"))
         return "<node " + parts.joinToString(" ") + " />"

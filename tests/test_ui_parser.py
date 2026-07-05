@@ -375,3 +375,32 @@ def test_get_visible_text_in_region_preserves_order():
     els = [_make_el(i, f"el{i}", [i*50, 0, i*50+40, 50]) for i in range(4)]
     found = ui_parser.get_visible_text_in_region(els, (0, 0, 1000, 100))
     assert [e["i"] for e in found] == [0, 1, 2, 3]
+
+
+# ── companion-native attributes: node-id / actions surface on elements ───────
+
+def test_parse_elements_surfaces_node_id_and_actions_when_present():
+    xml = ('<?xml version="1.0" encoding="UTF-8"?><hierarchy rotation="0">'
+           '<node text="Wi-Fi" resource-id="com.example:id/wifi" class="android.widget.TextView"'
+           ' content-desc="" bounds="[44,380][1036,520]" clickable="true" enabled="true"'
+           ' node-id="w1.0.3" actions="click,long_click" /></hierarchy>')
+    (el,) = ui_parser.parse_elements(xml)
+    assert el["node_id"] == "w1.0.3"
+    assert el["actions"] == ["click", "long_click"]
+
+
+def test_parse_elements_empty_actions_attr_yields_empty_list():
+    xml = ('<hierarchy rotation="0"><node text="x" class="T" content-desc=""'
+           ' bounds="[0,0][10,10]" clickable="true" node-id="n" actions="" /></hierarchy>')
+    (el,) = ui_parser.parse_elements(xml)
+    assert el["actions"] == []
+
+
+def test_parse_elements_omits_native_keys_for_adb_dumps():
+    # uiautomator XML has no node-id/actions attributes — the keys must be absent,
+    # not empty, so consumers can tell "companion tree" from "adb tree".
+    xml = ('<hierarchy rotation="0"><node text="x" class="T" content-desc=""'
+           ' bounds="[0,0][10,10]" clickable="true" /></hierarchy>')
+    (el,) = ui_parser.parse_elements(xml)
+    assert "node_id" not in el
+    assert "actions" not in el

@@ -27,6 +27,7 @@
     <string name="cap_notifications_dismiss">Dismiss notifications</string>
     <string name="cap_observe_ocr">Read text from screenshot files (on-device OCR)</string>
     <string name="cap_observe_ocr_screen">Read text from the current screen without saving screenshots</string>
+    <string name="cap_observe_screenshot">Share screenshots with phonectl (sent directly, never saved by this app)</string>
 
     <!-- Settings: notification-listener access -->
     <string name="prefs_notif_setup_title">Notification access</string>

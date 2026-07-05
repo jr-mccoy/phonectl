@@ -88,6 +88,15 @@ class FakeAdbProv:
     def input_swipe(self, x1, y1, x2, y2, ms=200):
         pass
 
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        FakeAdbProv._named_swiped = (direction, distance_pct, ms)
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        FakeAdbProv._long_pressed = (x, y, duration_ms)
+
+    def input_fling(self, direction, velocity=2000):
+        FakeAdbProv._flung = (direction, velocity)
+
     def input_key(self, keycode):
         pass
 
@@ -197,6 +206,141 @@ def test_no_capable_provider_still_raises_capability_unavailable():
     r = ProviderRegistry([FakeProv("A", _caps(read_clipboard=True))])
     with pytest.raises(errors.CapabilityUnavailableError):
         r.input_tap(0, 0)
+
+
+# ── companion-first gestures: long-press / named swipe / fling delegate, not __getattr__ ──
+
+class GestureProv(FakeProv):
+    """Companion-style provider that serves the full gesture surface."""
+
+    def __init__(self):
+        super().__init__("Gesture", _caps(act_tap=True))
+        self.calls = []
+
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        self.calls.append(("named_swipe", direction, distance_pct, ms))
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        self.calls.append(("long_press", x, y, duration_ms))
+
+    def input_fling(self, direction, velocity=2000):
+        self.calls.append(("fling", direction, velocity))
+
+
+def test_gesture_verbs_delegate_to_priority_act_tap_provider():
+    # These previously slipped through __getattr__ to the ADB provider even when a
+    # higher-priority companion could serve them.
+    companion, adb = GestureProv(), FakeAdbProv()
+    FakeAdbProv._named_swiped = FakeAdbProv._long_pressed = FakeAdbProv._flung = None
+    r = ProviderRegistry([companion, adb])
+    r.input_long_press(10, 20, 800)
+    r.input_named_swipe("up", 0.4, 350)
+    r.input_fling("down", 1500)
+    assert companion.calls == [("long_press", 10, 20, 800),
+                               ("named_swipe", "up", 0.4, 350),
+                               ("fling", "down", 1500)]
+    assert FakeAdbProv._named_swiped is None
+    assert FakeAdbProv._long_pressed is None
+    assert FakeAdbProv._flung is None
+    assert r.last_used == "GestureProv"
+
+
+def test_unsupported_keycode_falls_to_adb_without_a_companion_rpc():
+    from phonectl.providers.accessibility import AccessibilityProvider
+    from phonectl.providers.transport import LoopbackTransport
+
+    class RecordingTransport(LoopbackTransport):
+        def __init__(self):
+            self.sent = []
+            super().__init__({"key": lambda p: {"applied": True}})
+
+        def request(self, method, params, *, request_id, timeout):
+            self.sent.append(method)
+            return super().request(method, params, request_id=request_id, timeout=timeout)
+
+    t = RecordingTransport()
+    adb = FakeAdbProv()
+    r = ProviderRegistry([AccessibilityProvider(t), adb])
+    r.input_key("KEYCODE_ENTER")
+    assert "key" not in t.sent          # pre-flight refused locally, no socket round trip
+    assert r.last_used == "FakeAdbProv"
+
+
+def test_gesture_verbs_fall_back_to_adb_on_runtime_failure():
+    class DyingGestureProv(GestureProv):
+        def input_long_press(self, x, y, duration_ms=1000):
+            raise errors.ObserveError("companion died mid-request")
+
+    FakeAdbProv._long_pressed = None
+    r = ProviderRegistry([DyingGestureProv(), FakeAdbProv()])
+    r.input_long_press(1, 2, 700)
+    assert FakeAdbProv._long_pressed == (1, 2, 700)
+    assert r.last_used == "FakeAdbProv"
+    assert r.last_fallback and r.last_fallback[0]["provider"] == "DyingGestureProv"
+
+
+# ── screenshots: companion-first, ADB fallback ───────────────────────────────
+
+class ScreenshotProv(FakeProv):
+    def __init__(self, exc=None):
+        super().__init__("Shot", _caps(observe_screenshot=True))
+        self._exc = exc
+        self.captured = []
+
+    def screencap(self, path):
+        if self._exc is not None:
+            raise self._exc
+        self.captured.append(path)
+        return path
+
+
+def test_screencap_prefers_the_companion_provider():
+    shot, adb = ScreenshotProv(), FakeAdbProv()
+    r = ProviderRegistry([shot, adb])
+    assert r.screencap("/x/snap.png") == "/x/snap.png"
+    assert shot.captured == ["/x/snap.png"]
+    assert r.last_used == "ScreenshotProv"
+
+
+def test_screencap_falls_back_to_adb_on_runtime_failure():
+    dying = ScreenshotProv(exc=errors.ObserveError("companion died mid-request"))
+    r = ProviderRegistry([dying, FakeAdbProv()])
+    assert r.screencap("/x/snap.png") == "/x/snap.png"
+    assert r.last_used == "FakeAdbProv"
+    assert r.last_fallback and r.last_fallback[0]["provider"] == "ScreenshotProv"
+
+
+# ── semantic / native set-text delegation ────────────────────────────────────
+
+class SemanticProv(FakeProv):
+    def __init__(self):
+        super().__init__("Semantic", _caps(act_semantic_action=True,
+                                           act_set_text_native=True))
+        self.calls = []
+
+    def semantic_action(self, node_id, action):
+        self.calls.append(("semantic", node_id, action))
+        return {"performed": action}
+
+    def set_text_native(self, node_id, text):
+        self.calls.append(("set_text", node_id, text))
+
+
+def test_semantic_action_delegates_on_capability():
+    p = SemanticProv()
+    r = ProviderRegistry([p, FakeAdbProv()])
+    assert r.semantic_action("w1.0", "click") == {"performed": "click"}
+    r.set_text_native("w1.1", "hello")
+    assert p.calls == [("semantic", "w1.0", "click"), ("set_text", "w1.1", "hello")]
+    assert r.last_used == "SemanticProv"
+
+
+def test_semantic_action_without_capable_provider_raises():
+    r = ProviderRegistry([FakeAdbProv()])
+    with pytest.raises(errors.CapabilityUnavailableError):
+        r.semantic_action("w1.0", "click")
+    with pytest.raises(errors.CapabilityUnavailableError):
+        r.set_text_native("w1.0", "x")
 
 
 # ── observe_dump delegation: combined when the provider has it, split when not ──
@@ -334,3 +478,30 @@ def test_observe_dump_adb_failure_does_not_kill_the_observation():
     xml, window = r.observe_dump()
     assert xml == "<hierarchy native/>"    # companion observation survives
     assert window is None
+
+
+# ── structured windows skip the ADB augment entirely ─────────────────────────
+
+def test_observe_dump_structured_window_skips_adb_augment():
+    class StructuredTreeProv(FakeProv):
+        def __init__(self):
+            super().__init__("Structured", _caps(observe_ui_tree=True))
+
+        def observe_dump(self):
+            return "<hierarchy native/>", {
+                "app": {"package": "com.x", "activity": "com.x.Main"},
+                "lock": {"lock_state": "unlocked", "can_act": True,
+                         "recommended_user_action": None}}
+
+    class CountingAdbProv(FakeAdbProv):
+        brief_calls = 0
+
+        def window_brief(self):
+            CountingAdbProv.brief_calls += 1
+            return "mCurrentFocus=x"
+
+    adb = CountingAdbProv()
+    r = ProviderRegistry([StructuredTreeProv(), adb])
+    _xml, window = r.observe_dump()
+    assert window["app"]["package"] == "com.x"
+    assert CountingAdbProv.brief_calls == 0    # no ADB round trip in the observe

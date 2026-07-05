@@ -36,7 +36,20 @@ def _observe_dump(backend):
     return backend.ui_dump(), None
 
 
-def _lock_state(backend, window_dump: str = "") -> dict:
+def _window_app(window) -> dict:
+    """Focused app from either window form: the structured dict a companion
+    observe carries natively, or the `dumpsys window` text ADB serves."""
+    if isinstance(window, dict):
+        app = window.get("app") or {}
+        return {"package": app.get("package", ""), "activity": app.get("activity", "")}
+    return parse_focused_app(window)
+
+
+def _lock_state(backend, window_dump="") -> dict:
+    # A structured window (companion-native keyguard report) already IS the
+    # parse_lock_state shape — no ADB round trip involved at all.
+    if isinstance(window_dump, dict):
+        return dict(window_dump.get("lock") or {})
     # Prefer parsing a dump the caller already paid for — `dumpsys window` is a
     # full device round trip, so observe() fetches it once and shares it between
     # the lock check and the focused-app parse.
@@ -87,7 +100,7 @@ def observe(backend, session, screenshot: bool = False, snap_path: str | None = 
 
     elements = ui_parser.parse_elements(xml)
     w, h = backend.wm_size()
-    app = parse_focused_app(window)
+    app = _window_app(window)
     snap = {
         "app": app,
         "screen": {"w": w, "h": h, "orientation": _orientation(xml, w, h)},

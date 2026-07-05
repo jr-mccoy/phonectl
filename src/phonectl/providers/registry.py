@@ -156,8 +156,28 @@ class ProviderRegistry:
     def input_swipe(self, x1, y1, x2, y2, ms: int = 200) -> None:
         self._delegate("act_tap", lambda p: p.input_swipe(x1, y1, x2, y2, ms))
 
+    # Explicit delegation for the derived gesture verbs: without these they slip
+    # through __getattr__ straight to the ADB provider, bypassing a higher-priority
+    # companion that serves the same surface natively.
+    def input_named_swipe(self, direction, distance_pct: float = 0.5, ms: int = 400) -> None:
+        self._delegate("act_tap", lambda p: p.input_named_swipe(direction, distance_pct, ms))
+
+    def input_long_press(self, x, y, duration_ms: int = 1000) -> None:
+        self._delegate("act_tap", lambda p: p.input_long_press(x, y, duration_ms))
+
+    def input_fling(self, direction, velocity: int = 2000) -> None:
+        self._delegate("act_tap", lambda p: p.input_fling(direction, velocity))
+
     def input_key(self, keycode: str) -> None:
         self._delegate("act_key", lambda p: p.input_key(keycode))
+
+    def semantic_action(self, node_id, action) -> dict:
+        return self._delegate("act_semantic_action",
+                              lambda p: p.semantic_action(node_id, action))
+
+    def set_text_native(self, node_id, text) -> None:
+        self._delegate("act_set_text_native",
+                       lambda p: p.set_text_native(node_id, text))
 
     def launch(self, package: str) -> None:
         self._delegate("launch_app", lambda p: p.launch(package))

@@ -39,6 +39,27 @@ class Connection:
         self._ensured_at = monotonic()   # only stamped when _ensure_now succeeded
 
     def _ensure_now(self) -> None:
+        try:
+            self._ensure_adb()
+        except (ConnectionError, FileNotFoundError, OSError):
+            # ADB recovery exhausted. A live companion still serves the whole
+            # observe→act loop natively (tree, keyguard/focus, gestures,
+            # screenshots), so a dead ADB link degrades instead of failing —
+            # ADB-only helpers surface their own errors if actually needed.
+            if self._companion_serves_observe():
+                return
+            raise
+
+    def _companion_serves_observe(self) -> bool:
+        fn = getattr(self.backend, "for_capability", None)
+        if fn is None:
+            return False   # bare AdbBackend — no other provider to degrade to
+        try:
+            return fn("observe_ui_native") is not None
+        except Exception:
+            return False
+
+    def _ensure_adb(self) -> None:
         if self.backend.get_state() == "device":
             return
         wake = getattr(self.backend, "wake", None)

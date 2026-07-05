@@ -102,9 +102,18 @@ Returns the native UI tree:
       "nodes": [ <node>, ... ]
     }
   ],
-  "screen": { "width": <int>, "height": <int> }
+  "screen": { "width": <int>, "height": <int> },
+  "keyguard": { "showing": <bool>, "secure": <bool> },
+  "focus": { "package": "<focused window's package>", "activity": "<activity class or empty>" }
 }
 ```
+
+`keyguard` mirrors `KeyguardManager` (`isKeyguardLocked` / `isDeviceLocked`) and `focus` names
+the focused window's package (activity from the last `TYPE_WINDOW_STATE_CHANGED` event when its
+package matches). Together they let the Python provider build the complete snapshot — lock state
+and focused app included — from this single RPC, with no per-observe ADB `dumpsys window`
+augment. Older payloads without these keys stay valid: the Python side falls back to the ADB
+augment.
 
 **Node shape:**
 
@@ -115,6 +124,7 @@ Returns the native UI tree:
   "class": "<fully qualified class name>",
   "content_desc": "<accessibility content description or empty string>",
   "bounds": [left, top, right, bottom],
+  "resource_id": "<viewIdResourceName or empty string>",
   "actions": ["click", "long_click", "scroll_forward", "scroll_backward", "set_text", ...],
   "checkable": false,
   "checked": false,
@@ -226,6 +236,27 @@ Returns: `{"path": "<path>"}`
 
 Implementation: `takeScreenshot` (API 30+) or fallback via `MediaProjection` if available.
 Writes a PNG to `path`. Returns `ok: false` on API < 30 without a fallback.
+
+`path` must resolve under the companion's own storage roots (files/cache dirs, internal or
+app-specific external); anything else is refused with `path_rejected`. Cross-UID callers that
+need the pixels use `screenshot` instead.
+
+---
+
+### `screenshot`
+
+Params: `{}`
+
+Returns: `{"format": "png", "data": "<base64 PNG bytes>"}`
+
+The pixels travel over the token-authenticated loopback socket; the companion persists
+**nothing** — no path parameter exists, so there is no on-device file-write surface at all.
+The caller (a different Android UID that cannot read the companion's storage) decodes and
+stores the image under its own storage. Refused with `guarded_action` when the foreground
+app is guarded, like `observe_native`/`screencap`; `screencap_unavailable` when capture or
+PNG encoding fails.
+
+**Capability toggle:** `observe_screenshot` gates this method (`capability_disabled` when off).
 
 ---
 

@@ -17,14 +17,52 @@ def _check_stale(backend, session, expected_hash=None, stale_ok=False) -> None:
         raise errors.StaleSnapshotError("snapshot hash differs from expected_hash")
 
 
+def _semantic_node(backend, session, i, selector, action):
+    """The node_id to drive natively, or None when the coordinate path must serve.
+
+    Semantic-first: when the snapshot came from the companion's native tree, the
+    targeted element advertises ``action``, and the backend can perform semantic
+    node actions, prefer the accessibility action over a coordinate gesture — it
+    is generation-bound (Finding 9) and immune to layout drift. Elements that do
+    not advertise the action stay on coordinates: a coordinate tap hit-tests
+    through to the clickable ancestor, which ACTION_CLICK on the node would not.
+    """
+    caps_fn = getattr(backend, "capabilities", None)
+    if caps_fn is None or getattr(backend, "semantic_action", None) is None:
+        return None
+    if session.last is None:
+        return None
+    if i is None and selector is not None:
+        matches = session.find(selector)
+        if not matches:
+            return None   # the coordinate path raises the proper StaleSnapshotError
+        i = matches[0]
+    if i is None:
+        return None
+    el = next((e for e in session.last.get("elements", []) if e["i"] == i), None)
+    if el is None or not el.get("node_id") or action not in el.get("actions", ()):
+        return None
+    try:
+        if not caps_fn().get("act_semantic_action"):
+            return None
+    except Exception:
+        return None
+    return el["node_id"]
+
+
 def tap(backend, session, i=None, x=None, y=None, selector=None, expected_hash=None, stale_ok=False) -> dict:
     _check_stale(backend, session, expected_hash, stale_ok)
     if x is not None and y is not None:
         pass
-    elif i is not None:
-        x, y = session.resolve(i)
-    elif selector is not None:
-        x, y = session.resolve_selector(selector)
+    elif i is not None or selector is not None:
+        node_id = _semantic_node(backend, session, i, selector, "click")
+        if node_id is not None:
+            backend.semantic_action(node_id, "click")
+            return observer.observe(backend, session)
+        if i is not None:
+            x, y = session.resolve(i)
+        else:
+            x, y = session.resolve_selector(selector)
     else:
         raise ValueError("tap requires x/y, i, or selector")
     backend.input_tap(x, y)
@@ -90,12 +128,19 @@ def long_press(backend, session, *, i=None, x=None, y=None, selector=None,
                duration_ms: int = 1000, expected_hash=None, stale_ok=False) -> dict:
     _check_stale(backend, session, expected_hash, stale_ok)
     if x is None or y is None:
+        if i is None and selector is None:
+            raise ValueError("long_press requires x/y, i, or selector")
+        # ACTION_LONG_CLICK has no duration; a non-default hold expresses intent
+        # the semantic action cannot honor, so it stays on the gesture path.
+        if duration_ms == 1000:
+            node_id = _semantic_node(backend, session, i, selector, "long_click")
+            if node_id is not None:
+                backend.semantic_action(node_id, "long_click")
+                return observer.observe(backend, session)
         if i is not None:
             x, y = session.resolve(i)
-        elif selector is not None:
-            x, y = session.resolve_selector(selector)
         else:
-            raise ValueError("long_press requires x/y, i, or selector")
+            x, y = session.resolve_selector(selector)
     backend.input_long_press(x, y, duration_ms)
     return observer.observe(backend, session)
 

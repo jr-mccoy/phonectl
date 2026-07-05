@@ -2,6 +2,8 @@ package com.phonectl.companion.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Path
@@ -53,6 +55,15 @@ class CompanionAccessibilityService : AccessibilityService() {
      */
     private val treeGeneration = AtomicLong(0)
 
+    /**
+     * Last TYPE_WINDOW_STATE_CHANGED (package, activity class): AccessibilityWindowInfo knows the
+     * focused window's package but not its activity, so the event stream supplies it. Used by the
+     * observe_native `focus` report; consulted only when its package matches the live focused
+     * window, so a stale record can never mislabel a different app's activity.
+     */
+    @Volatile
+    private var lastWindowState: Pair<String, String>? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
@@ -64,6 +75,12 @@ class CompanionAccessibilityService : AccessibilityService() {
             event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         ) {
             treeGeneration.incrementAndGet()
+        }
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkgName = event.packageName?.toString()
+            if (!pkgName.isNullOrEmpty()) {
+                lastWindowState = pkgName to (event.className?.toString() ?: "")
+            }
         }
         val type = eventTypeName(event.eventType) ?: return
         val pkg = event.packageName?.toString() ?: ""
@@ -89,8 +106,15 @@ class CompanionAccessibilityService : AccessibilityService() {
         // counter and a later action carrying this token is (correctly, conservatively) stale.
         val generation = treeGeneration.get()
         val windows = mutableListOf<WindowData>()
+        var focusedPackage = ""
         for (window in safeWindows()) {
             val root = window.root ?: continue
+            // Captured before the guard skip: requireUnguardedForeground above already refused
+            // the whole observation if the FOREGROUND app is guarded, so this can only name an
+            // unguarded package.
+            if (window.isFocused && focusedPackage.isEmpty()) {
+                focusedPackage = root.packageName?.toString() ?: ""
+            }
             if (ActionGate.isGuarded(root.packageName?.toString(), guarded)) {
                 root.recycle()
                 continue
@@ -107,12 +131,30 @@ class CompanionAccessibilityService : AccessibilityService() {
             )
             root.recycle()
         }
+        if (focusedPackage.isEmpty()) focusedPackage = currentPackage() ?: ""
+        val last = lastWindowState
+        val activity = if (last != null && last.first == focusedPackage) last.second else ""
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val dm = resources.displayMetrics
         // Attach password/payment flags (trust SPEC §7) for the Python policy layer. Additive
-        // `flags` key — native_tree.to_compat_xml ignores it.
+        // `flags` key — native_tree.to_compat_xml ignores it. `keyguard` + `focus` let the
+        // Python provider build the whole snapshot (lock state + focused app) from this one
+        // RPC — no per-observe ADB `dumpsys window` augment.
         return NativeTreeJson.tree(windows, dm.widthPixels, dm.heightPixels)
             .put("flags", ObserveFlags.compute(windows))
             .put("generation", generation)
+            .put(
+                "keyguard",
+                JSONObject()
+                    .put("showing", km.isKeyguardLocked)
+                    .put("secure", km.isDeviceLocked),
+            )
+            .put(
+                "focus",
+                JSONObject()
+                    .put("package", focusedPackage)
+                    .put("activity", activity),
+            )
     }
 
     private fun safeWindows(): List<AccessibilityWindowInfo> =
@@ -180,6 +222,7 @@ class CompanionAccessibilityService : AccessibilityService() {
             className = node.className?.toString() ?: "",
             contentDesc = contentDesc,
             bounds = listOf(rect.left, rect.top, rect.right, rect.bottom),
+            resourceId = node.viewIdResourceName ?: "",
             actions = actions,
             checkable = node.isCheckable,
             checked = node.isChecked,
@@ -347,6 +390,24 @@ class CompanionAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * `screenshot` — the PNG as base64 over the socket. Nothing touches disk on this side
+     * (Finding 16 stays intact: the companion never writes outside its own storage); the
+     * Python caller decodes and persists the bytes under ITS storage, across the UID boundary
+     * the old path-based screencap could never cross. java.util.Base64 keeps it JVM-testable.
+     */
+    private fun screenshot(state: TrustState): JSONObject {
+        requireUnguardedForeground(state, what = "screenshot")
+        val bitmap = captureScreenshotBitmap()
+        val baos = java.io.ByteArrayOutputStream()
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)) {
+            throw MethodException("screencap_unavailable", "PNG encode failed")
+        }
+        return JSONObject()
+            .put("format", "png")
+            .put("data", java.util.Base64.getEncoder().encodeToString(baos.toByteArray()))
+    }
+
+    /**
      * Writable screenshot roots (Finding 16): the companion's own files/cache dirs (internal and
      * app-specific external). Canonicalized so the pure prefix check cannot be tricked.
      */
@@ -460,6 +521,7 @@ class CompanionAccessibilityService : AccessibilityService() {
                 "semantic" to { p -> svc().run { requireUnguarded(state); semantic(p) } },
                 "launch" to { p -> svc().run { requireUnguardedTarget(p, state); launch(p) }; JSONObject().put("launched", true) },
                 "screencap" to { p -> svc().screencap(p, state) },
+                "screenshot" to { _ -> svc().screenshot(state) },
                 "ocr_screen" to { _ -> svc().ocrScreen(state) },
                 // Guarded packages are filtered out of the event stream (Finding 10).
                 "events" to { p ->

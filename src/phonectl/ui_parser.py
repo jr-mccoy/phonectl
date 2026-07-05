@@ -63,6 +63,12 @@ def parse_elements(xml: str) -> list[dict]:
             el["hint_text"] = node.get("hint_text") or ""
         if node.get("error_text") is not None:
             el["error_text"] = node.get("error_text") or ""
+        # Companion-native attributes (native_tree.to_compat_xml): present only on
+        # companion trees, so their absence tells consumers this was an ADB dump.
+        if node.get("node-id"):
+            el["node_id"] = node.get("node-id")
+        if node.get("actions") is not None:
+            el["actions"] = [a for a in node.get("actions", "").split(",") if a]
         elements.append(el)
         i += 1
     return elements

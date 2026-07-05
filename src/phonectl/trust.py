@@ -43,10 +43,30 @@ def companion_stopped(transport, *, timeout: float = 1.0) -> bool:
     return hs.stopped or not hs.reachable
 
 
+# Backend-protocol aliases of the native capabilities the companion handshake actually
+# names. These are the SAME surfaces under the registry's capability names (the compat
+# tree IS observe_ui_native; a tap IS a gesture RPC), gated on-device by the same toggle
+# (the companion's METHOD_CAPABILITY maps `key`→act_gesture_native, `set_text`→
+# act_set_text_native). Without this derivation, Finding 5's default-deny stripped them
+# as "unknown" and every observe/tap/type/key silently fell back to ADB despite a live,
+# fully-enabled companion.
+DERIVED_CAPABILITIES = {
+    "observe_ui_tree": "observe_ui_native",
+    "act_tap": "act_gesture_native",
+    "act_key": "act_gesture_native",
+    "act_type": "act_set_text_native",
+}
+
+
 def gate_capabilities(advertised: dict, enabled: dict) -> dict:
     # Unknown keys default to disabled (Finding 5): a capability the companion
-    # handshake did not explicitly affirm must not be exercised.
-    return {k: bool(v) and bool(enabled.get(k, False)) for k, v in advertised.items()}
+    # handshake did not explicitly affirm must not be exercised. Derived keys ride
+    # their source toggle; a handshake naming a derived key explicitly is authoritative.
+    effective = dict(enabled)
+    for derived, source in DERIVED_CAPABILITIES.items():
+        if derived not in effective and effective.get(source):
+            effective[derived] = True
+    return {k: bool(v) and bool(effective.get(k, False)) for k, v in advertised.items()}
 
 
 class GatedProvider:
