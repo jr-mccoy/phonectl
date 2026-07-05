@@ -101,6 +101,32 @@ class AccessibilityProvider:
     def input_swipe(self, x1, y1, x2, y2, ms: int = 200):
         self._call("gesture", {"type": "swipe", "x1": x1, "y1": y1, "x2": x2, "y2": y2, "ms": ms})
 
+    def input_long_press(self, x, y, duration_ms: int = 1000):
+        # A same-point stroke held for the duration — the gesture-dispatch analogue of
+        # AdbBackend's `input swipe x y x y ms` long press.
+        self.input_swipe(x, y, x, y, duration_ms)
+
+    def input_named_swipe(self, direction, distance_pct: float = 0.5, ms: int = 400):
+        if direction not in {"up", "down", "left", "right"}:
+            raise ValueError(f"unknown swipe direction: {direction!r}")
+        w, h = self.wm_size()   # cached from the last observe; one RPC at most
+        cx, cy = w // 2, h // 2
+        half_x = int(w * distance_pct / 2)
+        half_y = int(h * distance_pct / 2)
+        if direction == "up":
+            self.input_swipe(cx, cy + half_y, cx, cy - half_y, ms)
+        elif direction == "down":
+            self.input_swipe(cx, cy - half_y, cx, cy + half_y, ms)
+        elif direction == "left":
+            self.input_swipe(cx + half_x, cy, cx - half_x, cy, ms)
+        else:
+            self.input_swipe(cx - half_x, cy, cx + half_x, cy, ms)
+
+    def input_fling(self, direction, velocity: int = 2000):
+        # Same timing curve as AdbBackend.input_fling so a provider switch keeps semantics.
+        ms = max(50, min(400, 2_000_000 // velocity))
+        self.input_named_swipe(direction, distance_pct=0.6, ms=ms)
+
     def input_key(self, keycode):
         self._call("key", {"keycode": keycode})
 

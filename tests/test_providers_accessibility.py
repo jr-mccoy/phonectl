@@ -82,6 +82,60 @@ def test_input_text_uses_type_mode():
     assert t.sent[-1] == ("set_text", {"text": "hi", "mode": "type"})
 
 
+# --- companion-first gestures: long-press / named swipe / fling ---
+
+class GestureTransport(RecordingTransport):
+    """RecordingTransport that also serves observe_native (for the screen size)."""
+
+    def __init__(self):
+        super().__init__()
+        self._handlers["observe_native"] = lambda p: {
+            "windows": [], "screen": {"width": 1080, "height": 2400}, "generation": 1,
+        }
+
+
+def test_input_long_press_is_a_same_point_swipe_gesture():
+    t = RecordingTransport()
+    AccessibilityProvider(t).input_long_press(100, 220, 900)
+    assert ("gesture", {"type": "swipe", "x1": 100, "y1": 220,
+                        "x2": 100, "y2": 220, "ms": 900}) in t.sent
+
+
+def test_input_named_swipe_computes_coords_from_screen_size():
+    t = GestureTransport()
+    p = AccessibilityProvider(t)
+    p.input_named_swipe("up")
+    # 1080x2400: center (540, 1200), half_y = 2400 * 0.5 / 2 = 600
+    assert t.sent[-1] == ("gesture", {"type": "swipe", "x1": 540, "y1": 1800,
+                                      "x2": 540, "y2": 600, "ms": 400})
+
+
+def test_input_named_swipe_uses_cached_screen_without_new_rpc():
+    t = GestureTransport()
+    p = AccessibilityProvider(t)
+    p.observe_native()
+    p.input_named_swipe("left", distance_pct=0.5, ms=300)
+    # Exactly one observe_native — the swipe rode the cached screen size.
+    assert sum(1 for m, _ in t.sent if m == "observe_native") == 1
+    assert t.sent[-1] == ("gesture", {"type": "swipe", "x1": 810, "y1": 1200,
+                                      "x2": 270, "y2": 1200, "ms": 300})
+
+
+def test_input_named_swipe_rejects_unknown_direction_locally():
+    t = GestureTransport()
+    with pytest.raises(ValueError):
+        AccessibilityProvider(t).input_named_swipe("sideways")
+    assert all(m != "gesture" for m, _ in t.sent)
+
+
+def test_input_fling_timing_mirrors_adb_backend():
+    t = GestureTransport()
+    AccessibilityProvider(t).input_fling("left")
+    # velocity 2000 -> ms = max(50, min(400, 2_000_000 // 2000)) = 400; distance 0.6
+    assert t.sent[-1] == ("gesture", {"type": "swipe", "x1": 864, "y1": 1200,
+                                      "x2": 216, "y2": 1200, "ms": 400})
+
+
 # --- Task 5: semantic node actions ---
 
 def test_semantic_action_click_sends_request():

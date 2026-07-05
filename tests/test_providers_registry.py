@@ -88,6 +88,15 @@ class FakeAdbProv:
     def input_swipe(self, x1, y1, x2, y2, ms=200):
         pass
 
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        FakeAdbProv._named_swiped = (direction, distance_pct, ms)
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        FakeAdbProv._long_pressed = (x, y, duration_ms)
+
+    def input_fling(self, direction, velocity=2000):
+        FakeAdbProv._flung = (direction, velocity)
+
     def input_key(self, keycode):
         pass
 
@@ -197,6 +206,56 @@ def test_no_capable_provider_still_raises_capability_unavailable():
     r = ProviderRegistry([FakeProv("A", _caps(read_clipboard=True))])
     with pytest.raises(errors.CapabilityUnavailableError):
         r.input_tap(0, 0)
+
+
+# ── companion-first gestures: long-press / named swipe / fling delegate, not __getattr__ ──
+
+class GestureProv(FakeProv):
+    """Companion-style provider that serves the full gesture surface."""
+
+    def __init__(self):
+        super().__init__("Gesture", _caps(act_tap=True))
+        self.calls = []
+
+    def input_named_swipe(self, direction, distance_pct=0.5, ms=400):
+        self.calls.append(("named_swipe", direction, distance_pct, ms))
+
+    def input_long_press(self, x, y, duration_ms=1000):
+        self.calls.append(("long_press", x, y, duration_ms))
+
+    def input_fling(self, direction, velocity=2000):
+        self.calls.append(("fling", direction, velocity))
+
+
+def test_gesture_verbs_delegate_to_priority_act_tap_provider():
+    # These previously slipped through __getattr__ to the ADB provider even when a
+    # higher-priority companion could serve them.
+    companion, adb = GestureProv(), FakeAdbProv()
+    FakeAdbProv._named_swiped = FakeAdbProv._long_pressed = FakeAdbProv._flung = None
+    r = ProviderRegistry([companion, adb])
+    r.input_long_press(10, 20, 800)
+    r.input_named_swipe("up", 0.4, 350)
+    r.input_fling("down", 1500)
+    assert companion.calls == [("long_press", 10, 20, 800),
+                               ("named_swipe", "up", 0.4, 350),
+                               ("fling", "down", 1500)]
+    assert FakeAdbProv._named_swiped is None
+    assert FakeAdbProv._long_pressed is None
+    assert FakeAdbProv._flung is None
+    assert r.last_used == "GestureProv"
+
+
+def test_gesture_verbs_fall_back_to_adb_on_runtime_failure():
+    class DyingGestureProv(GestureProv):
+        def input_long_press(self, x, y, duration_ms=1000):
+            raise errors.ObserveError("companion died mid-request")
+
+    FakeAdbProv._long_pressed = None
+    r = ProviderRegistry([DyingGestureProv(), FakeAdbProv()])
+    r.input_long_press(1, 2, 700)
+    assert FakeAdbProv._long_pressed == (1, 2, 700)
+    assert r.last_used == "FakeAdbProv"
+    assert r.last_fallback and r.last_fallback[0]["provider"] == "DyingGestureProv"
 
 
 # ── observe_dump delegation: combined when the provider has it, split when not ──
