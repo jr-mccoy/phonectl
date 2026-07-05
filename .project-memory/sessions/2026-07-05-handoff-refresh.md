@@ -1,11 +1,35 @@
-# Current State
+---
+id: ses_20260705_handoff-refresh
+type: session
+slug: handoff-refresh
+title: handoff refresh
+status: active
+created_at: 2026-07-05T02:46:51+00:00
+updated_at: 2026-07-05T02:46:51+00:00
+created_by: root
+agent: claude
+project: phonectl
+scope: project
+branch: master
+commit: 3e87622
+dirty_files:
+  - project-memory/generated/resume-packet.md
+  - .project-memory/generated/guard-prefilter.json
+confidence: medium
+privacy: repo-safe
+review_status: unreviewed
+reviewed_by: null
+supersedes: []
+superseded_by: null
+expires_at: null
+tags: []
+evidence: []
+---
 
-_What matters right now. Lifespan: days to ~2 weeks. Keep it short and true._
+## Starting Context
+_(not recorded)_
 
-## Current Focus
-2026-07 adversarial review remediation is code-complete (all 16 findings fixed across PR #40 and two follow-up branches). Validation debt outstanding on the last branch.
-
-## Recently Changed
+## Work Completed
 - 3e87622 fix(companion): screenshot needs canTakeScreenshot; close gating + visibility gaps
 - f7d7802 Merge pull request #52 from jumbodaddystack/claude/accessibility-companion-automation-98hqxi
 - 5d0d611 docs(memory): record ADB-free observe + the derived-capability gating trap
@@ -55,4 +79,20 @@ _What matters right now. Lifespan: days to ~2 weeks. Keep it short and true._
 - dd3f0f8 Register breadcrumbs MCP server
 - 172d7d2 chore: adopt breadcrumbs memory store + slim CLAUDE.md to a signpost (#34)
 
-## Watch Out For
+## Decisions Made
+_(not recorded)_
+
+## Attempts / Failures
+_(not recorded)_
+
+## Open Questions
+_(not recorded)_
+
+## Files Touched
+116 files changed, +9331/-453
+
+## Commands / Verification
+_(not recorded)_
+
+## Next Action
+Run pytest -v, a Gradle test build, and the on-device smoke matrix before merging; then take up the human-only sensitive-action policy layer (roadmap item 16) and Phase 7.1 (Shizuku).

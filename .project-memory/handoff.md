@@ -1,14 +1,14 @@
 # Project Handoff
 
-_Last updated: 2026-06-26T14:14:04-05:00_
+_Last updated: 2026-07-05T02:46:51+00:00_
 _Branch: master_
-_Commit: 5557c6b_
+_Commit: 3e87622_
 
 ## Current Focus
-Evaluating crumb-kit 0.1.1 workflow
+2026-07 adversarial review remediation is code-complete (all 16 findings fixed across PR #40 and two follow-up branches). Validation debt outstanding on the last branch.
 
 ## Next Action
-Decide whether to keep .project-memory/ in phonectl and trim CLAUDE.md per audit bloat warning
+Run pytest -v, a Gradle test build, and the on-device smoke matrix before merging; then take up the human-only sensitive-action policy layer (roadmap item 16) and Phase 7.1 (Shizuku).
 
 ## Blockers / Open Questions
 
