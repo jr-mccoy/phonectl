@@ -115,6 +115,7 @@ Returns the native UI tree:
   "class": "<fully qualified class name>",
   "content_desc": "<accessibility content description or empty string>",
   "bounds": [left, top, right, bottom],
+  "resource_id": "<viewIdResourceName or empty string>",
   "actions": ["click", "long_click", "scroll_forward", "scroll_backward", "set_text", ...],
   "checkable": false,
   "checked": false,

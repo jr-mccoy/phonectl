@@ -180,6 +180,7 @@ class CompanionAccessibilityService : AccessibilityService() {
             className = node.className?.toString() ?: "",
             contentDesc = contentDesc,
             bounds = listOf(rect.left, rect.top, rect.right, rect.bottom),
+            resourceId = node.viewIdResourceName ?: "",
             actions = actions,
             checkable = node.isCheckable,
             checked = node.isChecked,

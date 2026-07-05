@@ -24,6 +24,7 @@ data class NodeData(
     val className: String,
     val contentDesc: String,
     val bounds: List<Int>, // [left, top, right, bottom]
+    val resourceId: String = "", // viewIdResourceName — compat XML resource-id / element id
     val actions: List<String> = emptyList(),
     val checkable: Boolean = false,
     val checked: Boolean = false,
@@ -50,6 +51,7 @@ object NativeTreeJson {
             .put("class", n.className)
             .put("content_desc", n.contentDesc)
             .put("bounds", JSONArray(n.bounds))
+            .put("resource_id", n.resourceId)
             .put("actions", Json.arr(n.actions))
             .put("checkable", n.checkable)
             .put("checked", n.checked)

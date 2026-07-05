@@ -15,7 +15,8 @@ class NativeTreeTest {
     // Mirrors tests/test_native_tree.py NATIVE
     private val n1 = NodeData(
         nodeId = "n1", text = "Wi-Fi", className = "android.widget.TextView", contentDesc = "",
-        bounds = listOf(44, 380, 1036, 520), clickable = true, enabled = true,
+        bounds = listOf(44, 380, 1036, 520), resourceId = "com.example:id/wifi",
+        actions = listOf("click", "long_click"), clickable = true, enabled = true,
         scrollable = false, password = false,
     )
     private val n2 = NodeData(
@@ -31,6 +32,7 @@ class NativeTreeTest {
         assertEquals("Wi-Fi", j.getString("text"))
         assertEquals("android.widget.TextView", j.getString("class"))
         assertEquals("", j.getString("content_desc"))
+        assertEquals("com.example:id/wifi", j.getString("resource_id"))
         val b = j.getJSONArray("bounds")
         assertEquals(listOf(44, 380, 1036, 520), (0 until b.length()).map { b.getInt(it) })
         assertTrue(j.getBoolean("clickable"))
