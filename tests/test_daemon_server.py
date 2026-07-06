@@ -154,6 +154,39 @@ def test_act_reuses_one_registry_across_two_calls(tmp_path, monkeypatch):
     assert build_calls["n"] == 1  # warm triple built once, reused by run_action
 
 
+def test_act_with_selector_captures_into_memory(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    srv = _srv(tmp_path)
+    selector = {"text": "Wi-Fi"}
+    _acc, polled = _submit_run_poll(
+        srv, "act",
+        {"verb": "tap", "target": {"selector": selector}, "selector": selector}, rid="s1")
+    assert polled["data"]["result"]["ok"] is True
+
+    # The resolved selector -> matched_i lands in the memory selector-library, keyed by
+    # package|app_version|locale (app_version/locale default "?").
+    from phonectl.macro import memory
+    sels = memory.read("selectors")
+    assert "com.x|?|?" in sels
+    assert sels["com.x|?|?"]["matched_i"] == 0
+
+    from phonectl.daemon import records
+    rec = records.read()[-1]
+    assert rec["kind"] == "action"
+    assert rec["target"]["matched_i"] == 0
+    assert rec["context"]["package"] == "com.x"
+
+
+def test_capture_context_uses_injected_resolvers(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.session import Session
+    srv = DaemonServer(config.load(), build=lambda cfg: (object(), object(), None),
+                       app_version=lambda package: "2.1", locale=lambda: "en")
+    s = Session(); s.last = {"app": {"package": "com.x"}}
+    assert srv._capture_context(s) == {"package": "com.x", "app_version": "2.1", "locale": "en"}
+
+
 # ── Task 5: full handler suite ─────────────────────────────────────────────
 
 def test_capabilities_method(tmp_path, monkeypatch):
