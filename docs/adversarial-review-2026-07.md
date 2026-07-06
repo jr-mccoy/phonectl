@@ -181,6 +181,17 @@ disabled. Default unknown capability keys to disabled.
 
 **Tests.** `test_default_mode_is_confirm`, `test_unknown_capability_defaults_disabled`.
 
+**Status (companion half — done).** The Python half landed earlier (`mode: confirm`,
+`gate_capabilities` defaults unknown keys off). The companion half is now complete: the scalar
+`Capabilities.DEFAULT_ENABLED = true` is replaced by a per-key `DEFAULT_ENABLED_BY_KEY`
+(`Capabilities.defaultFor`) so a fresh install ships the sensitive caps
+(`act_set_text_native`, `notifications_reply`, `observe_ocr`, `observe_ocr_screen`,
+`observe_screenshot`) **disabled** while the MVP observe/gesture/launch/notification-list caps
+stay enabled. `SharedPrefsTrustState` and the `SettingsActivity` switch defaults consult the same
+map (no UI-vs-handshake mismatch); the user opts into sensitive caps in the Settings UI.
+`notifications_dismiss` stays enabled (nuisance vector, not confidentiality/spend). JVM contract
+tests updated (`HandshakeTest`, `OcrContractTest`, `CapabilitiesTest`).
+
 ---
 
 ### Finding 6 — `scroll_until` bypasses the choke-point (MCP) and can't be interrupted mid-loop (CLI)

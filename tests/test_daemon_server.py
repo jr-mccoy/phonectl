@@ -154,6 +154,75 @@ def test_act_reuses_one_registry_across_two_calls(tmp_path, monkeypatch):
     assert build_calls["n"] == 1  # warm triple built once, reused by run_action
 
 
+def test_act_with_selector_captures_into_memory(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    srv = _srv(tmp_path)
+    selector = {"text": "Wi-Fi"}
+    _acc, polled = _submit_run_poll(
+        srv, "act",
+        {"verb": "tap", "target": {"selector": selector}, "selector": selector}, rid="s1")
+    assert polled["data"]["result"]["ok"] is True
+
+    # The resolved selector -> matched_i lands in the memory selector-library, keyed by
+    # package|app_version|locale (app_version/locale default "?").
+    from phonectl.macro import memory
+    sels = memory.read("selectors")
+    assert "com.x|?|?" in sels
+    assert sels["com.x|?|?"]["matched_i"] == 0
+
+    from phonectl.daemon import records
+    rec = records.read()[-1]
+    assert rec["kind"] == "action"
+    assert rec["target"]["matched_i"] == 0
+    assert rec["context"]["package"] == "com.x"
+
+
+def test_transport_rejects_oversized_line(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    import io
+    srv = DaemonServer(config.load(), build=lambda cfg: (object(), object(), None))
+
+    class _Duplex:
+        def __init__(self, data):
+            self._r = io.StringIO(data)
+            self.out = io.StringIO()
+        def readline(self, *a): return self._r.readline(*a)
+        def write(self, s): self.out.write(s)
+        def flush(self): pass
+        def close(self): pass
+
+    class _Conn:
+        def __init__(self, data):
+            self.f = _Duplex(data)
+            self.closed = False
+        def makefile(self, *a, **k): return self.f
+        def close(self): self.closed = True
+
+    # A giant line with no newline is refused with request_too_large and the connection dropped —
+    # never accumulated in full.
+    conn = _Conn("x" * (srv.MAX_LINE + 10))
+    srv._serve_conn(conn)
+    resp = json.loads(conn.f.out.getvalue().strip())
+    assert resp["ok"] is False and resp["error"]["code"] == "request_too_large"
+    assert conn.closed is True
+
+    # A normal request on a fresh connection is still served.
+    ok_conn = _Conn(_req("ping") + "\n")
+    srv._serve_conn(ok_conn)
+    resp2 = json.loads(ok_conn.f.out.getvalue().strip())
+    assert resp2["ok"] is True and resp2["data"]["pong"] is True
+
+
+def test_capture_context_uses_injected_resolvers(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl.session import Session
+    srv = DaemonServer(config.load(), build=lambda cfg: (object(), object(), None),
+                       app_version=lambda package: "2.1", locale=lambda: "en")
+    s = Session(); s.last = {"app": {"package": "com.x"}}
+    assert srv._capture_context(s) == {"package": "com.x", "app_version": "2.1", "locale": "en"}
+
+
 # ── Task 5: full handler suite ─────────────────────────────────────────────
 
 def test_capabilities_method(tmp_path, monkeypatch):

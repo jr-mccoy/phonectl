@@ -16,7 +16,8 @@ from phonectl.daemon.snapshots import SnapshotCache
 
 
 class DaemonServer:
-    def __init__(self, cfg, *, build=None, now=time.time, registry=None) -> None:
+    def __init__(self, cfg, *, build=None, now=time.time, registry=None,
+                 app_version=None, locale=None) -> None:
         host = cfg.get("daemon_host", "127.0.0.1")
         if host not in LOOPBACK:
             raise ValueError(f"daemon is loopback-only; refusing daemon_host {host!r}")
@@ -27,6 +28,11 @@ class DaemonServer:
         self._host = host
         self._build = build
         self._now = now
+        # Context resolvers for the memory selector-library key (package|app_version|locale).
+        # Kept injectable and defaulting to "?" so capture never costs an extra round trip and
+        # never blocks on the companion; full app_version/locale capture is deferred (roadmap §9).
+        self._app_version = app_version or (lambda package: "?")
+        self._locale = locale or (lambda: "?")
         self.registry = registry or rpc_mod.Registry()
         self._write_lock = threading.Lock()
         self._warm = None
@@ -342,11 +348,32 @@ class DaemonServer:
         )
 
         from phonectl.daemon import records as _records
-        rec = _records.build_record(env, params, action_id=uuid.uuid4().hex, now=self._now)
+        rec = _records.build_record(
+            env, params, action_id=uuid.uuid4().hex, now=self._now,
+            matched_i=getattr(session, "last_match", None),
+            context=self._capture_context(session),
+        )
         rec["snapshot_before"] = snapshot_before
         rec["snapshot_after"] = snapshot_after
         self._append_record(rec)
+        # Feed the user-controlled memory selector-library. Best-effort: a capture failure must
+        # never fail the action it describes.
+        try:
+            from phonectl.macro import memory as _memory
+            _memory.capture_from_runs([rec])
+        except Exception:
+            pass
         return env
+
+    def _capture_context(self, session):
+        """The {package, app_version, locale} key for the memory selector-library."""
+        app = (getattr(session, "last", None) or {}).get("app") or {}
+        package = app.get("package") or "?"
+        return {
+            "package": package,
+            "app_version": self._app_version(package),
+            "locale": self._locale(),
+        }
 
     def _run_observe(self, params):
         reg, session, conn = self._warm_triple()
@@ -553,10 +580,27 @@ class DaemonServer:
             sel.close()
             self.shutdown()
 
+    # Upper bound on a single request line. A well-formed RPC (even a long macro or a base64
+    # screenshot request) sits far below this; the cap stops a peer from pinning unbounded memory
+    # with one never-terminated line (loopback is not a trust boundary on Android — Finding 2).
+    MAX_LINE = 1 << 20  # 1 MiB
+
     def _serve_conn(self, conn):
         f = conn.makefile("rw", encoding="utf-8", newline="\n")
         try:
-            for line in f:
+            while True:
+                # readline(limit) reads at most limit+1 chars; a longer logical line comes back
+                # without its trailing newline, which is how we detect and refuse an oversized line
+                # instead of accumulating it.
+                line = f.readline(self.MAX_LINE + 1)
+                if not line:
+                    break
+                if len(line) > self.MAX_LINE and not line.endswith("\n"):
+                    f.write(self._finish(
+                        results.err(("request_too_large",
+                                     f"request line exceeds {self.MAX_LINE} bytes")), None) + "\n")
+                    f.flush()
+                    break  # position is mid-line; the rest is untrusted, so drop the connection
                 line = line.strip()
                 if not line:
                     continue

@@ -283,3 +283,33 @@ def test_status_reports_state():
     ])
     rep = cs.status(adb, {"companion_token": "t"})
     assert rep == {"installed": True, "accessibility": True, "socket": True, "token_paired": True}
+
+
+def test_push_token_mints_and_broadcasts(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([])
+    cfg = {}
+    out_lines = []
+    res = cs.push_token(adb, cfg, out_lines.append, mint=lambda: "deadbeef")
+    assert res["status"] == "done"
+    assert cfg["companion_token"] == "deadbeef"
+    # A SET_TOKEN broadcast carrying the minted token was sent to the LifecycleReceiver.
+    bcast = [c for c in adb.calls if "broadcast" in c and cs.SET_TOKEN_ACTION in c]
+    assert bcast, adb.calls
+    assert cs.LIFECYCLE_COMPONENT in bcast[0]
+    assert "deadbeef" in " ".join(bcast[0])
+
+
+def test_push_token_skips_when_already_paired(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    adb = FakeAdb([])
+    cfg = {"companion_token": "existing"}
+    res = cs.push_token(adb, cfg, lambda _m: None, mint=lambda: "new")
+    assert res["status"] == "skipped"
+    assert cfg["companion_token"] == "existing"
+    assert adb.calls == []  # no broadcast when a token already exists
+
+
+def test_mint_token_is_32_hex_chars():
+    t = cs._mint_token()
+    assert len(t) == 32 and all(c in "0123456789abcdef" for c in t)

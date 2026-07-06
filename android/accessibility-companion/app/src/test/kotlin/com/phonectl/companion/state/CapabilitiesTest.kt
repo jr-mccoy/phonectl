@@ -1,10 +1,30 @@
 package com.phonectl.companion.state
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CapabilitiesTest {
+
+    @Test
+    fun defaultForShipsSensitiveCapsOffAndRestOn() {
+        // Finding 5, safe-by-default: text injection, notification reply, OCR, and screenshot
+        // ship disabled; observe/gesture/launch/notification-list stay enabled.
+        val sensitive = setOf(
+            "act_set_text_native", "notifications_reply",
+            "observe_ocr", "observe_ocr_screen", "observe_screenshot",
+        )
+        assertEquals(sensitive, Capabilities.SENSITIVE_KEYS)
+        for (key in Capabilities.ALL_KEYS) {
+            assertEquals("$key default", key !in sensitive, Capabilities.defaultFor(key))
+        }
+        // notifications_dismiss is deliberately ON (nuisance vector, not confidentiality/spend).
+        assertTrue(Capabilities.defaultFor("notifications_dismiss"))
+        // Unknown keys fail closed.
+        assertFalse(Capabilities.defaultFor("nonexistent_key"))
+    }
 
     @Test
     fun methodGateCoversAccessibilityMethods() {

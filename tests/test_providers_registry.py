@@ -189,6 +189,43 @@ def test_all_capable_providers_failing_reraises_last_error():
         r.ui_dump()
 
 
+def test_registry_priority_is_documented_order():
+    # Providers are consulted in construction order (highest priority first). build_runtime places
+    # the companion ahead of ADB, so a capability served by both is delivered by the companion, and
+    # only a runtime failure walks down the stack. This pins that ordering contract with a
+    # 3-provider stack.
+    class TapProv:
+        def __init__(self, name, exc=None):
+            self.name = name
+            self._exc = exc
+            self.tapped = None
+        capabilities = staticmethod(lambda: _caps(act_tap=True))
+        def input_tap(self, x, y):
+            if self._exc:
+                raise self._exc
+            self.tapped = (x, y)
+    # Rename the class per-instance so last_used reflects each distinct provider.
+    high = type("HighProv", (TapProv,), {})("high")
+    mid = type("MidProv", (TapProv,), {})("mid")
+    low = type("LowProv", (TapProv,), {})("low")
+    r = ProviderRegistry([high, mid, low])
+
+    # for_capability returns the first advertiser (documented priority head).
+    assert r.for_capability("act_tap") is high
+
+    # A healthy stack delivers via the highest-priority provider; the rest are untouched.
+    r.input_tap(1, 2)
+    assert high.tapped == (1, 2) and mid.tapped is None and low.tapped is None
+    assert r.last_used == "HighProv"
+
+    # When the head fails at call time, delegation walks down the documented order.
+    high2 = type("HighProv", (TapProv,), {})("high", exc=errors.ObserveError("dead"))
+    r2 = ProviderRegistry([high2, mid, low])
+    r2.input_tap(5, 6)
+    assert mid.tapped == (5, 6) and low.tapped is None
+    assert r2.last_used == "MidProv"
+
+
 def test_policy_refusals_do_not_fall_back():
     # A guarded/stopped refusal is the companion enforcing policy, not a provider failure —
     # falling through to ADB would BYPASS the protection. It must propagate.

@@ -1,13 +1,18 @@
 package com.phonectl.companion.ui
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
@@ -15,6 +20,7 @@ import androidx.preference.SwitchPreferenceCompat
 import com.phonectl.companion.R
 import com.phonectl.companion.service.CompanionForegroundService
 import com.phonectl.companion.service.CompanionNotificationListenerService
+import com.phonectl.companion.state.Capabilities
 import com.phonectl.companion.state.SharedPrefsTrustState
 
 /**
@@ -25,12 +31,30 @@ import com.phonectl.companion.state.SharedPrefsTrustState
  */
 class SettingsActivity : AppCompatActivity() {
 
+    // Runtime request for POST_NOTIFICATIONS (API 33+). Without it the "Stop phonectl" foreground
+    // notification silently never appears when the app is installed without running
+    // `phonectl companion setup` (the manifest <uses-permission> alone does not grant a dangerous
+    // runtime permission). companion setup still grants it via `adb shell pm grant`; this in-app
+    // request covers the ADB-less onboarding path. Best-effort — a denial only costs the
+    // notification, not the automation transport.
+    private val requestPostNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        maybeRequestPostNotifications()
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
                 .replace(android.R.id.content, SettingsFragment())
                 .commit()
+        }
+    }
+
+    private fun maybeRequestPostNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED) {
+            requestPostNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -46,7 +70,10 @@ class SettingsActivity : AppCompatActivity() {
 
             val screen = preferenceManager.createPreferenceScreen(ctx)
 
-            // --- Capabilities (default-enabled per SPEC §6) ---
+            // --- Capabilities (per-key safe-by-default: sensitive caps ship off, Finding 5) ---
+            // The switch's defaultValue MUST equal Capabilities.defaultFor(key), or a fresh
+            // install would show a switch "on" while the handshake reports the cap off (and the
+            // already-shown "on" state means toggling it wouldn't persist a change).
             val capabilities = PreferenceCategory(ctx).apply {
                 title = getString(R.string.prefs_capabilities_title)
             }
@@ -56,7 +83,7 @@ class SettingsActivity : AppCompatActivity() {
                     SwitchPreferenceCompat(ctx).apply {
                         this.key = "cap_$key"
                         title = getString(labelRes)
-                        setDefaultValue(true)
+                        setDefaultValue(Capabilities.defaultFor(key))
                     }
                 )
             }

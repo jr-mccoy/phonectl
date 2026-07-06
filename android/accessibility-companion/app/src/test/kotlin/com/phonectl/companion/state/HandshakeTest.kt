@@ -11,7 +11,10 @@ import org.junit.Test
 /**
  * Handshake/ping contract — the handshake shape matches foreground-service SPEC §3 and the
  * keys the Python side recognizes (tests/test_trust.py negotiate fields: version, capabilities,
- * stopped). Capability defaults are enabled (SPEC §6); a disabled toggle flips its bool.
+ * stopped). Fresh-install capability defaults are per-key (sensitive caps off, Finding 5); a
+ * user-set toggle flips its bool. [FakeTrustState] models a chosen toggle state (everything the
+ * user could enable is on unless listed in `disabled`), NOT the install default — the real
+ * per-key default path is exercised directly via [Capabilities.handshakeData] with an empty map.
  */
 class HandshakeTest {
 
@@ -35,7 +38,7 @@ class HandshakeTest {
     }
 
     @Test
-    fun handshakeAdvertisesAllKeysEnabledByDefault() {
+    fun handshakeAdvertisesExactlyTheKnownKeys() {
         val data = handshake(FakeTrustState())
         assertEquals(1, data.getInt("version"))
         assertFalse(data.getBoolean("stopped"))
@@ -49,25 +52,23 @@ class HandshakeTest {
             "observe_screenshot",
         )
         assertEquals(expected, caps.keys().asSequence().toSet())
-        for (key in expected) assertTrue("$key should default enabled", caps.getBoolean(key))
     }
 
     @Test
-    fun handshakeAdvertisesTheFourNotificationKeysEnabledByDefault() {
-        val caps = handshake(FakeTrustState()).getJSONObject("capabilities")
-        for (key in Capabilities.NOTIFICATION_KEYS) {
-            assertTrue("$key should be present", caps.has(key))
-            assertTrue("$key should default enabled", caps.getBoolean(key))
+    fun freshInstallDefaultsSensitiveCapsOffAndRestOn() {
+        // The real per-key default path: handshakeData with no user toggles set falls back to
+        // Capabilities.defaultFor(key). Sensitive caps ship OFF (Finding 5); everything else ON.
+        val caps = Capabilities.handshakeData(emptyMap(), stopped = false)
+            .getJSONObject("capabilities")
+        val sensitiveOff = setOf(
+            "act_set_text_native", "notifications_reply",
+            "observe_ocr", "observe_ocr_screen", "observe_screenshot",
+        )
+        // Guard against silent drift in the sensitive set.
+        assertEquals(sensitiveOff, Capabilities.SENSITIVE_KEYS)
+        for (key in Capabilities.ALL_KEYS) {
+            assertEquals("$key default", key !in sensitiveOff, caps.getBoolean(key))
         }
-    }
-
-    @Test
-    fun handshakeAdvertisesObserveOcrEnabledByDefault() {
-        val caps = handshake(FakeTrustState()).getJSONObject("capabilities")
-        assertTrue("observe_ocr should be present", caps.has("observe_ocr"))
-        assertTrue("observe_ocr should default enabled", caps.getBoolean("observe_ocr"))
-        assertTrue("observe_ocr_screen should be present", caps.has("observe_ocr_screen"))
-        assertTrue("observe_ocr_screen should default enabled", caps.getBoolean("observe_ocr_screen"))
     }
 
     @Test

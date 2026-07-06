@@ -17,7 +17,8 @@ import java.security.SecureRandom
  * [setStopFilePath] for setups where a shared, app-readable location exists; it widens the stop
  * (OR), never narrows it.
  *
- * Capability toggles default to enabled (foreground-service SPEC §6).
+ * Capability toggles default per [Capabilities.defaultFor]: sensitive caps ship disabled
+ * (safe-by-default, Finding 5), the rest enabled.
  */
 class SharedPrefsTrustState(context: Context) : TrustState {
 
@@ -25,7 +26,7 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     override fun isCapabilityEnabled(key: String): Boolean =
-        prefs.getBoolean(capKey(key), Capabilities.DEFAULT_ENABLED)
+        prefs.getBoolean(capKey(key), Capabilities.defaultFor(key))
 
     fun setCapabilityEnabled(key: String, enabled: Boolean) {
         prefs.edit().putBoolean(capKey(key), enabled).apply()
@@ -69,6 +70,23 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         val token = generateToken()
         prefs.edit().putString(KEY_TOKEN, token).apply()
         return token
+    }
+
+    /**
+     * Whether a token is already set, WITHOUT minting one. [companionToken] generates-on-read, so
+     * the trust-on-first-use pairing path ([LifecycleReceiver] SET_TOKEN) must use this to decide
+     * adoption — reading [companionToken] would itself create a token and close the TOFU window.
+     */
+    fun hasToken(): Boolean =
+        !prefs.getString(KEY_TOKEN, null).isNullOrBlank()
+
+    /**
+     * Adopt a phonectl-minted token at first pair (pushed-token v2). Caller MUST have checked
+     * [hasToken] is false — this never guards against overwrite itself; the guard lives in
+     * [LifecycleReceiver] via [com.phonectl.companion.service.LifecycleAuth.authorizedFirstPair].
+     */
+    fun setToken(token: String) {
+        prefs.edit().putString(KEY_TOKEN, token).apply()
     }
 
     private fun generateToken(): String {

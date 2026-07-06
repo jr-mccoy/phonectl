@@ -352,6 +352,13 @@ Tool catalog:
 | `phone_notifications_reply` | Reply to a notification via RemoteInput (**high-risk**; companion required). | `key`, `text`, `confirm`, `dry_run` |
 | `phone_notifications_dismiss` | Dismiss a notification (companion required). | `key`, `confirm`, `dry_run` |
 | `phone_ocr_screen` | OCR the current screen and return text regions with bounds and confidence. **Use only as a fallback** when `phone_observe_ui`/`phone_find` return nothing (canvas/WebView/game surfaces). Requires `tesseract` on PATH or the companion ML-Kit OCR provider. | `min_confidence` |
+| `phone_extract_list` | Extract rows from a scrollable list container. | `container_index` |
+| `phone_extract_form` | Extract form fields with associated labels. | none |
+| `phone_get_focused_field` | Return the currently focused text field, or null. | none |
+| `phone_find_text` | Find elements whose text matches a regex pattern (`re.search`). | `pattern` |
+| `phone_macro_validate` | Validate a macro document; returns `{valid, errors}`. | `macro` |
+| `phone_macro_run` | Run a declarative macro document; returns the run envelope. | `macro`, `yes` |
+| `phone_macro_status` | List recent macro runs from `runs.jsonl`. | `limit` |
 
 Example observe envelope:
 

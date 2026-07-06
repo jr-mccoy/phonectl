@@ -16,6 +16,7 @@ PACKAGE = "com.phonectl.companion"
 ACCESSIBILITY_COMPONENT = f"{PACKAGE}/{PACKAGE}.service.CompanionAccessibilityService"
 LIFECYCLE_COMPONENT = f"{PACKAGE}/.service.LifecycleReceiver"
 START_ACTION = "com.phonectl.companion.action.START_SERVICE"
+SET_TOKEN_ACTION = "com.phonectl.companion.action.SET_TOKEN"
 TOKEN_EXTRA = "token"
 PREFS_REL = "shared_prefs/phonectl_companion.xml"
 TOKEN_KEY = "companion_token"
@@ -120,6 +121,29 @@ def acquire_token(adb, cfg, out, *, prompt) -> dict:
     cfg["companion_token"] = token
     _config.save(cfg)
     return step("token", "done", f"paired via {source}")
+
+
+def push_token(adb, cfg, out, *, token=None, mint=None) -> dict:
+    """Pushed-token v2 (trust-on-first-use): mint a token and broadcast it to the companion so a
+    release build needs neither `run-as` nor manual paste. The companion adopts it ONLY when it has
+    no token yet (LifecycleAuth.authorizedFirstPair); once a token exists the broadcast is ignored,
+    so this is safe to call idempotently. Additive — leaves the run-as/paste paths intact.
+    See docs/superpowers/specs/2026-07-06-pushed-token-v2-design.md.
+    """
+    if cfg.get(TOKEN_KEY):
+        return step("push_token", "skipped", "companion_token already set")
+    token = token or (mint or _mint_token)()
+    adb("shell", "am", "broadcast", "-a", SET_TOKEN_ACTION,
+        "--es", TOKEN_EXTRA, shlex.quote(token), "-n", LIFECYCLE_COMPONENT)
+    cfg[TOKEN_KEY] = token
+    _config.save(cfg)
+    out("Pushed a minted pairing token to the companion (adopted only if none was set).")
+    return step("push_token", "done", "token minted and pushed")
+
+
+def _mint_token() -> str:
+    import secrets
+    return secrets.token_hex(16)  # 32 hex chars, matching the companion's own generateToken()
 
 
 def _socket_up(adb, port=DEFAULT_PORT) -> bool:

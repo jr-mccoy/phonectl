@@ -19,5 +19,8 @@ phonectl = "phonectl.cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
+markers = [
+    "device: real-device benchmark lane (needs hardware over Wireless Debugging); never run in CI",
+]

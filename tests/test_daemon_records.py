@@ -28,6 +28,35 @@ def test_build_record_from_error_envelope():
     assert rec["user_approved"] is False
 
 
+def test_build_record_tags_kind_action():
+    rec = records.build_record({"ok": True}, {"verb": "tap", "target": {"i": 1}},
+                               action_id="a1", now=lambda: 1.0)
+    assert rec["kind"] == "action"
+
+
+def test_build_record_threads_matched_i_for_selector_target():
+    params = {"verb": "tap", "target": {"selector": {"resource_id": "com.x:id/send"}}}
+    rec = records.build_record({"ok": True, "request_id": "r1"}, params,
+                               action_id="a1", now=lambda: 1.0, matched_i=14)
+    assert rec["target"]["matched_i"] == 14
+    # caller params must not be mutated
+    assert "matched_i" not in params["target"]
+
+
+def test_build_record_omits_matched_i_without_selector():
+    # An explicit-index or coordinate target has no selector to learn — no matched_i attached.
+    rec = records.build_record({"ok": True}, {"verb": "tap", "target": {"i": 3}},
+                               action_id="a1", now=lambda: 1.0, matched_i=3)
+    assert "matched_i" not in rec["target"]
+
+
+def test_build_record_attaches_context():
+    ctx = {"package": "com.x", "app_version": "?", "locale": "?"}
+    rec = records.build_record({"ok": True}, {"verb": "tap", "target": {"selector": {}}},
+                               action_id="a1", now=lambda: 1.0, context=ctx)
+    assert rec["context"] == ctx
+
+
 def test_append_and_read_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     records.append({"action_id": "a1", "verb": "tap"})

@@ -58,19 +58,48 @@ object Capabilities {
     /** Every capability key the companion advertises in `handshake.capabilities`. */
     val ALL_KEYS: List<String> = MVP_KEYS + NOTIFICATION_KEYS + OCR_KEYS + SCREENSHOT_KEYS
 
-    /** Defaults: all capabilities enabled on first install (foreground-service SPEC §6). */
-    const val DEFAULT_ENABLED = true
+    /**
+     * Capabilities that ship DISABLED on a fresh install (adversarial-review Finding 5,
+     * safe-by-default): text injection, notification reply, OCR (screen + image), and screenshot
+     * capture — the caps that can exfiltrate on-screen content or write to arbitrary UI. The user
+     * opts into each one in the Settings UI. Everything else (observe UI/events, gestures,
+     * semantic actions, launch, notification list/wait/dismiss) stays on so the companion is
+     * usable immediately after `phonectl companion setup`.
+     *
+     * `notifications_dismiss` stays ON: it is a nuisance/DoS vector, not a confidentiality or
+     * spend action — the underlying notification (and any 2FA code it carries) remains valid — and
+     * the review does not list it among the sensitive four.
+     */
+    val SENSITIVE_KEYS: Set<String> = setOf(
+        "act_set_text_native",
+        "notifications_reply",
+        "observe_ocr",
+        "observe_ocr_screen",
+        "observe_screenshot",
+    )
+
+    /**
+     * Per-key fresh-install defaults: sensitive caps ([SENSITIVE_KEYS]) default off, all others on.
+     * Consulted by [SharedPrefsTrustState.isCapabilityEnabled] (the on-device default when no
+     * `cap_<key>` pref is set) and by [handshakeData]'s fallback. Keeping this a single source of
+     * truth is what keeps the Settings switches, the persisted prefs, and the handshake in sync.
+     */
+    val DEFAULT_ENABLED_BY_KEY: Map<String, Boolean> =
+        ALL_KEYS.associateWith { it !in SENSITIVE_KEYS }
+
+    /** The fresh-install default for a capability key; unknown keys default off (fail-closed). */
+    fun defaultFor(key: String): Boolean = DEFAULT_ENABLED_BY_KEY[key] ?: false
 
     /**
      * Build the `handshake` response data:
      *   {version:1, capabilities:{<key>:bool, ...}, stopped:<bool>}
      *
-     * @param enabled the user-enabled toggle set; keys absent here default to DEFAULT_ENABLED.
+     * @param enabled the user-enabled toggle set; keys absent here fall back to [defaultFor].
      */
     fun handshakeData(enabled: Map<String, Boolean>, stopped: Boolean): JSONObject {
         val caps = JSONObject()
         for (key in ALL_KEYS) {
-            caps.put(key, enabled[key] ?: DEFAULT_ENABLED)
+            caps.put(key, enabled[key] ?: defaultFor(key))
         }
         return JSONObject()
             .put("version", 1)

@@ -188,7 +188,13 @@ and intersected by the Python `trust.gate_capabilities` function — a disabled 
 grant from the provider graph; the registry transparently falls back to ADB or reports
 `CapabilityUnavailableError`.
 
-Defaults: all capabilities are **enabled** on first install. The user opts out per capability.
+Defaults are **per-key, safe-by-default** (adversarial-review Finding 5): the sensitive caps
+(`act_set_text_native`, `notifications_reply`, `observe_ocr`, `observe_ocr_screen`,
+`observe_screenshot`) ship **disabled** on first install; the MVP observe/gesture/launch and
+notification list/wait/dismiss caps ship **enabled** so the companion is usable immediately after
+setup. The single source of truth is `Capabilities.DEFAULT_ENABLED_BY_KEY` / `defaultFor(key)`,
+consulted by both `SharedPrefsTrustState` and the Settings switch defaults. The user opts into the
+sensitive caps (and can opt out of any cap) per capability.
 
 ---
 

@@ -105,9 +105,12 @@ class OcrContractTest {
     }
 
     @Test
-    fun handshakeAdvertisesOcrScreenCapability() {
+    fun handshakeAdvertisesOcrScreenCapabilityDisabledByDefault() {
+        // OCR is sensitive (screen exfiltration) so it ships OFF (Finding 5, safe-by-default):
+        // the key is still advertised, but a fresh install reports it disabled until the user
+        // opts in via the Settings UI.
         val caps = Capabilities.handshakeData(emptyMap(), stopped = false).getJSONObject("capabilities")
         assertTrue(caps.has("observe_ocr_screen"))
-        assertTrue(caps.getBoolean("observe_ocr_screen"))
+        assertFalse(caps.getBoolean("observe_ocr_screen"))
     }
 }

@@ -22,8 +22,22 @@ import com.phonectl.companion.state.SharedPrefsTrustState
  */
 class LifecycleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val expected = SharedPrefsTrustState(context).companionToken()
-        if (!LifecycleAuth.authorized(intent.getStringExtra(EXTRA_TOKEN), expected)) return
+        val state = SharedPrefsTrustState(context)
+        val supplied = intent.getStringExtra(EXTRA_TOKEN)
+
+        // SET_TOKEN uses trust-on-first-use: adopt a phonectl-minted token ONLY when none is set
+        // yet, checked WITHOUT minting one (hasToken, not companionToken which generates-on-read).
+        // Once a token exists it is never overwritten by a broadcast (pushed-token v2 design note).
+        if (intent.action == ACTION_SET_TOKEN) {
+            if (LifecycleAuth.authorizedFirstPair(supplied, state.hasToken())) {
+                state.setToken(supplied!!)
+            }
+            return
+        }
+
+        // START/STOP require the already-paired token (Finding 14). companionToken() here also
+        // establishes a token on a never-paired companion, keeping the pre-v2 behavior intact.
+        if (!LifecycleAuth.authorized(supplied, state.companionToken())) return
         when (intent.action) {
             ACTION_START -> CompanionForegroundService.send(context, CompanionForegroundService.ACTION_START)
             ACTION_STOP -> context.stopService(Intent(context, CompanionForegroundService::class.java))
@@ -33,6 +47,9 @@ class LifecycleReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_START = "com.phonectl.companion.action.START_SERVICE"
         const val ACTION_STOP = "com.phonectl.companion.action.STOP_SERVICE"
+
+        /** Trust-on-first-use pairing (pushed-token v2): adopt a minted token when none is set. */
+        const val ACTION_SET_TOKEN = "com.phonectl.companion.action.SET_TOKEN"
 
         /** String extra carrying the paired companion token (`--es token <value>`). */
         const val EXTRA_TOKEN = "token"

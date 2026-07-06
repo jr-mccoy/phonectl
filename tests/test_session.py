@@ -35,3 +35,20 @@ def test_resolve_selector_raises_stale_when_absent():
 def test_find_without_snapshot_raises():
     with pytest.raises(KeyError):
         Session().find({"text": "x"})
+
+
+def test_find_records_last_match_for_capture():
+    # The resolved index is threaded into the daemon run-record so the selector-library can learn
+    # selector -> matched_i. find() records the primary match; a miss clears it.
+    s = Session(); s.set_snapshot(_snap())
+    assert s.last_match is None
+    s.find({"text": "Bluetooth"})
+    assert s.last_match == 1
+    s.find({"text": "Nonexistent"})
+    assert s.last_match is None
+
+
+def test_resolve_selector_sets_last_match():
+    s = Session(); s.set_snapshot(_snap())
+    s.resolve_selector({"text": "Wi-Fi"})
+    assert s.last_match == 0
