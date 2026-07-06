@@ -15,6 +15,7 @@ import androidx.preference.SwitchPreferenceCompat
 import com.phonectl.companion.R
 import com.phonectl.companion.service.CompanionForegroundService
 import com.phonectl.companion.service.CompanionNotificationListenerService
+import com.phonectl.companion.state.Capabilities
 import com.phonectl.companion.state.SharedPrefsTrustState
 
 /**
@@ -46,7 +47,10 @@ class SettingsActivity : AppCompatActivity() {
 
             val screen = preferenceManager.createPreferenceScreen(ctx)
 
-            // --- Capabilities (default-enabled per SPEC §6) ---
+            // --- Capabilities (per-key safe-by-default: sensitive caps ship off, Finding 5) ---
+            // The switch's defaultValue MUST equal Capabilities.defaultFor(key), or a fresh
+            // install would show a switch "on" while the handshake reports the cap off (and the
+            // already-shown "on" state means toggling it wouldn't persist a change).
             val capabilities = PreferenceCategory(ctx).apply {
                 title = getString(R.string.prefs_capabilities_title)
             }
@@ -56,7 +60,7 @@ class SettingsActivity : AppCompatActivity() {
                     SwitchPreferenceCompat(ctx).apply {
                         this.key = "cap_$key"
                         title = getString(labelRes)
-                        setDefaultValue(true)
+                        setDefaultValue(Capabilities.defaultFor(key))
                     }
                 )
             }

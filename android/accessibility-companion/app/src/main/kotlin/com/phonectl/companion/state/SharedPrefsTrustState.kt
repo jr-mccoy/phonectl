@@ -17,7 +17,8 @@ import java.security.SecureRandom
  * [setStopFilePath] for setups where a shared, app-readable location exists; it widens the stop
  * (OR), never narrows it.
  *
- * Capability toggles default to enabled (foreground-service SPEC §6).
+ * Capability toggles default per [Capabilities.defaultFor]: sensitive caps ship disabled
+ * (safe-by-default, Finding 5), the rest enabled.
  */
 class SharedPrefsTrustState(context: Context) : TrustState {
 
@@ -25,7 +26,7 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     override fun isCapabilityEnabled(key: String): Boolean =
-        prefs.getBoolean(capKey(key), Capabilities.DEFAULT_ENABLED)
+        prefs.getBoolean(capKey(key), Capabilities.defaultFor(key))
 
     fun setCapabilityEnabled(key: String, enabled: Boolean) {
         prefs.edit().putBoolean(capKey(key), enabled).apply()
