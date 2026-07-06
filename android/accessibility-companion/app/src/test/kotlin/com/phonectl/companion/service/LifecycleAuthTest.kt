@@ -31,4 +31,22 @@ class LifecycleAuthTest {
         assertFalse(LifecycleAuth.authorized(supplied = "anything", expected = null))
         assertFalse(LifecycleAuth.authorized(supplied = "", expected = ""))
     }
+
+    @Test
+    fun firstPairAdoptsAMintedTokenOnlyWhenNoneIsSet() {
+        // Trust-on-first-use (pushed-token v2): adopt only when non-blank AND no token exists yet.
+        assertTrue(LifecycleAuth.authorizedFirstPair(supplied = "minted", hasExistingToken = false))
+    }
+
+    @Test
+    fun firstPairNeverOverwritesAnExistingToken() {
+        // Once a token exists, an unauthenticated SET_TOKEN broadcast can never re-key the companion.
+        assertFalse(LifecycleAuth.authorizedFirstPair(supplied = "attacker", hasExistingToken = true))
+    }
+
+    @Test
+    fun firstPairRejectsBlankTokens() {
+        assertFalse(LifecycleAuth.authorizedFirstPair(supplied = null, hasExistingToken = false))
+        assertFalse(LifecycleAuth.authorizedFirstPair(supplied = "", hasExistingToken = false))
+    }
 }

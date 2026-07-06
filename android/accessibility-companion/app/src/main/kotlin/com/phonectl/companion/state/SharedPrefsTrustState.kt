@@ -72,6 +72,23 @@ class SharedPrefsTrustState(context: Context) : TrustState {
         return token
     }
 
+    /**
+     * Whether a token is already set, WITHOUT minting one. [companionToken] generates-on-read, so
+     * the trust-on-first-use pairing path ([LifecycleReceiver] SET_TOKEN) must use this to decide
+     * adoption — reading [companionToken] would itself create a token and close the TOFU window.
+     */
+    fun hasToken(): Boolean =
+        !prefs.getString(KEY_TOKEN, null).isNullOrBlank()
+
+    /**
+     * Adopt a phonectl-minted token at first pair (pushed-token v2). Caller MUST have checked
+     * [hasToken] is false — this never guards against overwrite itself; the guard lives in
+     * [LifecycleReceiver] via [com.phonectl.companion.service.LifecycleAuth.authorizedFirstPair].
+     */
+    fun setToken(token: String) {
+        prefs.edit().putString(KEY_TOKEN, token).apply()
+    }
+
     private fun generateToken(): String {
         val bytes = ByteArray(16)
         SecureRandom().nextBytes(bytes)

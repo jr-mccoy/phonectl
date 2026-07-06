@@ -95,6 +95,7 @@
             <intent-filter>
                 <action android:name="com.phonectl.companion.action.START_SERVICE" />
                 <action android:name="com.phonectl.companion.action.STOP_SERVICE" />
+                <action android:name="com.phonectl.companion.action.SET_TOKEN" />
             </intent-filter>
         </receiver>
 
