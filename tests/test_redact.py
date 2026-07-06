@@ -14,6 +14,19 @@ def test_redact_text_keeps_benign_labels():
     assert redact.redact_text("Connected devices") == "Connected devices"
 
 
+def test_redact_masks_high_entropy_token():
+    # A bare high-entropy secret with no `token=` prefix must still be masked — e.g. the
+    # companion pairing token (32 hex chars) or an API key pasted into a field. The `key=`
+    # pattern alone misses these.
+    hex_token = "3f9a1c7e5b2d4086af13e9c7d5b1a2f0"
+    assert redact.redact_text(f"companion_token {hex_token}") == "companion_token [REDACTED]"
+    assert "[REDACTED]" in redact.redact_text("Authorization: Bearer sk-Ab12Cd34Ef56Gh78Ij90")
+    # Benign long identifiers must NOT be masked: letters-only class names (no digit) and
+    # ordinary spaced prose stay intact.
+    assert redact.redact_text("AccessibilityService") == "AccessibilityService"
+    assert redact.redact_text("Connected devices and storage") == "Connected devices and storage"
+
+
 def test_redact_value_recurses_and_leaves_non_strings():
     out = redact.redact_value(
         {"i": 7, "selector": {"text": "code 123456"}, "xs": [1, "a@b.co"]}

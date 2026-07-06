@@ -115,6 +115,24 @@ def test_input_text_shell_quotes_metacharacters():
     assert calls[0][0] == ["adb", "-s", "d", "shell", "input", "text", expected_quoted]
 
 
+def test_type_unicode_behavior():
+    # Documents the known ADB trap (adversarial-review edge-case inventory): `adb shell input
+    # text` silently drops/mistypes non-ASCII (emoji, non-Latin scripts, combining marks) on most
+    # Android versions. The backend does NOT pre-filter or transcode — it faithfully shell-quotes
+    # and forwards the exact string, so the drop happens device-side, not here. This test pins
+    # that forwarding contract; the companion `set_text` (ACTION_SET_TEXT) is the Unicode-safe
+    # path and is preferred by the provider registry when available.
+    import shlex
+    calls = []
+    b = AdbBackend(serial="d", runner=make_runner(calls))
+    for text in ("café", "日本語", "emoji 😀", "é"):  # accented, CJK, emoji, combining mark
+        calls.clear()
+        b.input_text(text)
+        # The raw Unicode string is forwarded verbatim (only shell-quoted), never stripped to ASCII.
+        assert calls[0][0] == ["adb", "-s", "d", "shell", "input", "text", shlex.quote(text)]
+        assert shlex.quote(text) == calls[0][0][-1]
+
+
 def test_wake_sends_wakeup_keyevent():
     calls = []
     b = AdbBackend(serial="d", runner=make_runner(calls))
