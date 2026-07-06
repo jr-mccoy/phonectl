@@ -580,10 +580,27 @@ class DaemonServer:
             sel.close()
             self.shutdown()
 
+    # Upper bound on a single request line. A well-formed RPC (even a long macro or a base64
+    # screenshot request) sits far below this; the cap stops a peer from pinning unbounded memory
+    # with one never-terminated line (loopback is not a trust boundary on Android — Finding 2).
+    MAX_LINE = 1 << 20  # 1 MiB
+
     def _serve_conn(self, conn):
         f = conn.makefile("rw", encoding="utf-8", newline="\n")
         try:
-            for line in f:
+            while True:
+                # readline(limit) reads at most limit+1 chars; a longer logical line comes back
+                # without its trailing newline, which is how we detect and refuse an oversized line
+                # instead of accumulating it.
+                line = f.readline(self.MAX_LINE + 1)
+                if not line:
+                    break
+                if len(line) > self.MAX_LINE and not line.endswith("\n"):
+                    f.write(self._finish(
+                        results.err(("request_too_large",
+                                     f"request line exceeds {self.MAX_LINE} bytes")), None) + "\n")
+                    f.flush()
+                    break  # position is mid-line; the rest is untrusted, so drop the connection
                 line = line.strip()
                 if not line:
                     continue

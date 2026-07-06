@@ -178,6 +178,42 @@ def test_act_with_selector_captures_into_memory(tmp_path, monkeypatch):
     assert rec["context"]["package"] == "com.x"
 
 
+def test_transport_rejects_oversized_line(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    import io
+    srv = DaemonServer(config.load(), build=lambda cfg: (object(), object(), None))
+
+    class _Duplex:
+        def __init__(self, data):
+            self._r = io.StringIO(data)
+            self.out = io.StringIO()
+        def readline(self, *a): return self._r.readline(*a)
+        def write(self, s): self.out.write(s)
+        def flush(self): pass
+        def close(self): pass
+
+    class _Conn:
+        def __init__(self, data):
+            self.f = _Duplex(data)
+            self.closed = False
+        def makefile(self, *a, **k): return self.f
+        def close(self): self.closed = True
+
+    # A giant line with no newline is refused with request_too_large and the connection dropped —
+    # never accumulated in full.
+    conn = _Conn("x" * (srv.MAX_LINE + 10))
+    srv._serve_conn(conn)
+    resp = json.loads(conn.f.out.getvalue().strip())
+    assert resp["ok"] is False and resp["error"]["code"] == "request_too_large"
+    assert conn.closed is True
+
+    # A normal request on a fresh connection is still served.
+    ok_conn = _Conn(_req("ping") + "\n")
+    srv._serve_conn(ok_conn)
+    resp2 = json.loads(ok_conn.f.out.getvalue().strip())
+    assert resp2["ok"] is True and resp2["data"]["pong"] is True
+
+
 def test_capture_context_uses_injected_resolvers(tmp_path, monkeypatch):
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
     from phonectl.session import Session

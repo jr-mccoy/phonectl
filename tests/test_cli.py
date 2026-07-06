@@ -1142,3 +1142,19 @@ def test_cli_companion_status_dispatches(tmp_path, monkeypatch, capsys):
     assert rc == 0
     report = json.loads(capsys.readouterr().out)
     assert report == {"installed": True, "accessibility": True, "socket": True, "token_paired": True}
+
+
+def test_exit_codes_uniform_across_commands():
+    # Finding 15: every command maps its result envelope to an exit code through the single
+    # _exit_code helper — ok -> 0, stopped -> 2, confirmation_required -> 3, any other error -> 1.
+    # No command invents its own codes.
+    assert cli._exit_code({"ok": True}) == 0
+    assert cli._exit_code({"ok": True, "data": {}}) == 0
+    assert cli._exit_code({"ok": False, "error": {"code": "stopped"}}) == 2
+    assert cli._exit_code({"ok": False, "error": {"code": "confirmation_required"}}) == 3
+    for code in ("guarded_action", "rate_limited", "stale_snapshot", "observe_failed",
+                 "capability_unavailable", "bad_request", "anything_else"):
+        assert cli._exit_code({"ok": False, "error": {"code": code}}) == 1
+    # A malformed error envelope (no code) still resolves to the generic failure code, never crashes.
+    assert cli._exit_code({"ok": False}) == 1
+    assert cli._exit_code({"ok": False, "error": {}}) == 1
