@@ -105,7 +105,7 @@ is scoped in the meta-plan and written when its phase begins.
 | **5** | Daemon & event runtime (north-star core) | **Spec 5.0** daemon brainstorm→spec · **5.1** daemon process + JSON-RPC/socket API · **5.2** event bus + subscriptions + snapshot cache | strategy §22 (currently-unplanned daemon) |
 | ✅ **6** | Macro runtime & progressive autonomy | **Spec 6.0** macro engine spec · ✅ **6.1** macro runtime core (done) · ✅ **6.2** triggers + scheduler + macro_enable/disable/list (done) · ✅ **6.3** progressive autonomy + memory/state layer (done) | strategy §12, §18, §23, §25 |
 | **7** | Ecosystem & advanced providers | **7.1** Shizuku · **7.2** optional root · **7.3** scrcpy/minicap low-latency transport · **7.4** Tasker/MacroDroid interop | strategy §11.3, §13 |
-| **X** | Cross-cutting: evaluation suite | Eval harness + fake-provider simulator (introduced in Phase 1, grows each phase) | strategy §26, §27#7 |
+| 🟡 **X** | Cross-cutting: evaluation suite | Eval harness + fake-provider simulator **landed** (`eval/`: `ScriptedBackend` simulator, metrics, harness, the 7 §26 scenarios, `tests/test_eval_suite.py` gate, `python -m eval` reporter). Real-device lane is a documented `@pytest.mark.device` stub. Grows each phase. | strategy §26, §27#7 |
 
 ### 5.1 Phase ordering rationale
 
