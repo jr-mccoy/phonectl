@@ -186,7 +186,7 @@ Follow-ups intentionally left out of scope (each needs its own plan):
    phonectl-minted secret pushed at first pair (replacing `adb run-as` / manual paste for
    non-debug builds). Requires an APK/Kotlin change (a TOFU first-pair path) — a natural v2 once
    an Android build loop exists.
-3. **Kotlin Finding-5 gap.** `Capabilities.DEFAULT_ENABLED = true` was never flipped in the
-   companion app — it still ships **all** capabilities enabled by default. The Python-side half of
-   Finding 5 (safe-by-default gating) landed; the companion-side default does not yet match it.
-   Independent of companion setup — file as its own remediation.
+3. **Current status hygiene.** Historical companion-side Finding-5 notes in older docs are
+   superseded by the 2026-07 adversarial-review status: sensitive companion capabilities now
+   default off. Keep future status in a short current-status document instead of long-lived
+   roadmap footnotes; see `docs/system-improvement-audit-2026-07-09.md` Priority 10.
