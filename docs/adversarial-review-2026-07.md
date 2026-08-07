@@ -1,37 +1,47 @@
 # phonectl — Adversarial Technical Review
 
+> **Status: all 16 findings remediated.** This is a self-commissioned adversarial review of
+> phonectl, conducted 2026-07-01, followed by a full remediation pass. It is published as a
+> record of the project's security posture and how it was arrived at. **The risk assessment
+> below is the snapshot as of the review date, before any fixes landed** — see
+> [Remediation](#remediation) for what shipped in response, and
+> [Residual risk](#residual-risk) for what is still owed.
+
 **Date:** 2026-07-01
-**Remediation status (2026-07-02):** Findings **1, 2** fixed (PR #40). Findings
-**4, 5, 6, 7, 8, 12, 15** fixed on `claude/system-improvement-emxdl8` — intent_start
-risk + tel/sms critical, safe defaults (`mode: confirm`, unknown caps disabled),
-scroll_until through `run_action` with mid-loop STOP checks, intent/launch shell
-quoting, fail-closed companion STOP check (now actually wired into `run_action`),
-clipboard audit length surrogate, uniform exit codes. Findings **3, 9, 10, 11, 13,
-14, 16** fixed on `claude/system-companion-app-improve-ru7udk` — on-device STOP gate
-in the companion dispatcher (SharedPrefs authoritative, inert env STOP-file fallback
-removed), tree-generation tokens binding set_text/semantic to their observation +
-ambiguous-node-id refusal, guarded-app checks on observe/screencap/OCR/events/
-notification reads, screencap constrained to companion-owned storage (Python stops
-advertising companion `observe_screenshot`), token-authenticated LifecycleReceiver,
-cross-process idempotency store + `action.lock` flock, and registry runtime fallback
-with truthful `provider` fields (policy refusals never fall back). ✅ The Kotlin-side fixes are
-**compiled and JVM-unit-tested green on CI**: the `android.yml` workflow ran
-`./gradlew assembleDebug test` on the `master` merge commit `fb4db55` (Actions run
-28605014626, 2026-07-02), building the debug APK and executing the new JVM tests
-(`GenerationTest`, `GuardsAndFlagsTest`, `LifecycleAuthTest`, `DispatcherTest`).
-⚠️ Still not exercised on a real Android runtime: instrumented tests
-(`connectedAndroidTest` — CI runs no emulator) and the manual on-device smoke
-matrix. Still open: the
-longer-term human-only sensitive-action policy layer (roadmap item 16).
 **Scope:** Full system — Python CLI, provider architecture, MCP interface, daemon, macro
 engine, Android companion APK/specs, transport/trust model, docs, tests, packaging.
 **Method:** Firsthand source reading of every core layer plus the companion Kotlin, a full
-test run (`586 passed, 1 skipped`), and cross-checking documented claims against code. All
-findings cite real `file:line` evidence.
+test run (`586 passed, 1 skipped` at the time of review), and cross-checking documented
+claims against code. All findings cite real `file:line` evidence.
+
+## Remediation
+
+All 16 findings were fixed across three passes:
+
+| Findings | What shipped |
+|---|---|
+| 1, 2 | Emergency STOP is no longer agent-reachable; local transports (companion socket, daemon RPC) are authenticated. |
+| 4, 5, 6, 7, 8, 12, 15 | `intent_start` risk classification with `tel`/`sms` as critical; safe defaults (`mode: confirm`, unknown capabilities disabled); `scroll_until` routed through `run_action` with mid-loop STOP checks; intent/launch shell quoting; fail-closed companion STOP check actually wired into `run_action`; clipboard audit logs a length surrogate rather than content; uniform exit codes. |
+| 3, 9, 10, 11, 13, 14, 16 | On-device STOP gate in the companion dispatcher (SharedPrefs authoritative; the inert env STOP-file fallback removed); tree-generation tokens binding `set_text`/semantic actions to the observation they came from, with ambiguous-node-id refusal; guarded-app checks extended to observe/screencap/OCR/events/notification reads; `screencap` constrained to companion-owned storage; token-authenticated `LifecycleReceiver`; cross-process idempotency store plus an `action.lock` flock; registry runtime fallback with truthful `provider` fields (policy refusals never fall back). |
+
+The Kotlin-side fixes are compiled and JVM-unit-tested green in CI — the `android.yml`
+workflow runs `./gradlew assembleDebug test`, building the debug APK and executing
+`GenerationTest`, `GuardsAndFlagsTest`, `LifecycleAuthTest`, and `DispatcherTest`.
+
+## Residual risk
+
+- **Not exercised on a real Android runtime:** instrumented tests (`connectedAndroidTest` —
+  CI runs no emulator) and the manual on-device smoke matrix in `docs/integration-smoke.md`.
+- **Still open by design:** the longer-term human-only sensitive-action policy layer
+  (roadmap item 16). Until it lands, the honest posture remains the one in the table
+  below — phonectl is built for *supervised* agent use, not unattended autonomy.
 
 ---
 
 ## Executive Summary
+
+*Everything from here to the end of the findings is the review as written on 2026-07-01,
+preserved unedited. It describes the codebase **before** the remediation above.*
 
 The *architecture* is sound: clean layering, a real single-writer choke-point
 (`runtime.run_action`), uniform structured result envelopes, a stdlib-only runtime, 586

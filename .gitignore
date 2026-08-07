@@ -5,13 +5,22 @@ __pycache__/
 *.log
 snap-*.png
 
-# >>> breadcrumbs managed block (managed by `crumb init`) >>>
-.project-memory/private/**
-.project-memory/index/**
-!.project-memory/index/README.md
-.project-memory/generated/*.local.md
-.project-memory/generated/*.tmp
-# <<< breadcrumbs managed block <<<
+# Runtime state written by phonectl itself
+.phonectl/
+daemon.json
+actions.jsonl
+runs.jsonl
 
-# Claude Code personal project overrides (incl. MCP approvals)
-.claude/settings.local.json
+# Android build output
+android/**/build/
+android/**/.gradle/
+android/**/local.properties
+*.apk
+
+# Local development scaffolding — useful while working on the project,
+# but not part of what the project ships.
+.project-memory/
+.mcp.json
+docs/superpowers/
+.claude/
+pc

@@ -6,11 +6,34 @@ build-backend = "setuptools.build_meta"
 name = "phonectl"
 version = "0.1.0"
 description = "Android computer-use bridge over ADB (no root)"
+readme = "README.md"
 requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Jeremy McCoy" }]
+keywords = ["android", "adb", "automation", "agent", "computer-use", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Android",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/jumbodaddystack/phonectl"
+Repository = "https://github.com/jumbodaddystack/phonectl"
+Issues = "https://github.com/jumbodaddystack/phonectl/issues"
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.0"]
+# The FastMCP transport imports `mcp.server.fastmcp`, which SDK 2.0 removed.
+mcp = ["mcp>=1.0,<2"]
 yaml = ["PyYAML>=6"]
+dev = ["pytest>=7"]
 
 [project.scripts]
 phonectl = "phonectl.cli:main"

@@ -3,9 +3,9 @@
 **Plan 4.3** | Phase 4 of the phonectl platform roadmap.
 
 This document specifies the Android-side foreground service that hosts the loopback TCP server
-the Python `SocketTransport` connects to. This document was the input to the build; the Kotlin
-implementation now ships, built by Plans 4.5–4.8 (`com.phonectl.companion`, CI debug-APK artifact).
-See `docs/superpowers/plans/phonectl-companion-apk-build-index.md`.
+the Python `SocketTransport` connects to. It was the design input to the build; the Kotlin
+implementation now ships as `com.phonectl.companion` (see `android/accessibility-companion/`,
+built as a debug-APK artifact by the `android.yml` workflow).
 
 ---
 

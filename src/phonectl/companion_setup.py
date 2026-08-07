@@ -128,7 +128,7 @@ def push_token(adb, cfg, out, *, token=None, mint=None) -> dict:
     release build needs neither `run-as` nor manual paste. The companion adopts it ONLY when it has
     no token yet (LifecycleAuth.authorizedFirstPair); once a token exists the broadcast is ignored,
     so this is safe to call idempotently. Additive — leaves the run-as/paste paths intact.
-    See docs/superpowers/specs/2026-07-06-pushed-token-v2-design.md.
+    See docs/design/2026-07-06-pushed-token-v2-design.md.
     """
     if cfg.get(TOKEN_KEY):
         return step("push_token", "skipped", "companion_token already set")
