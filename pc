@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# clean phonectl launcher (repo src on path, Debian python)
-cd /root/projects/phonectl
-PYTHONPATH=src exec python3 -c "from phonectl.cli import main; main()" "$@"

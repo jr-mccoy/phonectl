@@ -1,0 +1,41 @@
+name: Python tests
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "eval/**"
+      - "pyproject.toml"
+      - ".github/workflows/python.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "eval/**"
+      - "pyproject.toml"
+      - ".github/workflows/python.yml"
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: pip install -e ".[dev,mcp,yaml]"
+
+      - name: Run tests
+        # The `device` lane needs real hardware over Wireless Debugging; never run it in CI.
+        run: pytest -v -m "not device"

@@ -1,6 +1,55 @@
 # phonectl
 
+[![Python tests](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml)
+[![Android companion APK](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+
 phonectl is an Android computer-use bridge over ADB (no root) — observe the screen as structured JSON, act (tap, type, swipe, send key events, launch apps), then re-observe to confirm the action landed. It is designed to run inside a Termux + PRoot-Distro environment on the device itself, with `adb` as the only external dependency, giving an AI agent a tight observe-act-observe loop over any Android app without requiring device root.
+
+```bash
+# Observe: the screen as indexed elements (each also carries content_desc, enabled,
+# scrollable, editable, package, center, and the other element flags — trimmed here)
+$ phonectl observe --json | jq '.data.elements[1:3] | map({i, text, id, clickable, bounds})'
+[
+  { "i": 1, "text": "Wi-Fi",     "id": "android:id/title", "clickable": true, "bounds": [44, 380, 1036, 520] },
+  { "i": 2, "text": "Bluetooth", "id": "android:id/title", "clickable": true, "bounds": [44, 540, 1036, 680] }
+]
+
+# Act: by element, not by pixel
+$ phonectl tap --index 1
+$ phonectl tap --text "Wi-Fi"
+$ phonectl tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
+```
+
+**Why it's built this way.** Targeting elements instead of coordinates is what makes an agent
+portable across screen sizes and ROMs. Re-observing after every action is how the loop knows the
+action actually landed. And because the thing on the other end is an autonomous agent driving a
+real phone, every action funnels through one choke-point (`runtime.run_action`) that applies the
+mode gate, kill switch, risk classification, policy, rate limit, idempotency, and audit log — there
+is no second path.
+
+**Design notes:** [architecture invariants](docs/architecture.md) ·
+[subsystem design docs](docs/design/) · [roadmap](docs/roadmap.md) ·
+[adversarial security review](docs/adversarial-review-2026-07.md)
+
+> **Safety.** This tool grants an AI agent real control of a real phone. The default action mode
+> is `confirm` (every action asks first). Read [Safety](#safety) before switching to `auto`, and
+> read the [security review](docs/adversarial-review-2026-07.md) before any unattended use — the
+> project's honest position is that it is built for *supervised* agent use.
+
+---
+
+## Contents
+
+- [Install](#install) · [Pair and connect](#pair-and-connect-android-11-wireless-debugging) · [Getting started](#getting-started-phonectl-setup) · [Diagnostics](#diagnostics)
+- [Command reference](#command-reference) — [`observe`](#observe), [`tap`](#tap), [`type`](#type), [`swipe`](#swipe), [gestures](#gestures), [`key`](#key), [`launch`](#launch), [`clipboard`](#clipboard), [`device`](#device), [`tts`](#tts), [`intent`](#intent), [`packages`](#packages), [`wait-for`](#wait-for), [`doctor`](#doctor), [`mcp`](#mcp)
+- [Safety](#safety) — [action modes](#three-action-modes), [audit log](#audit-log), [risk ledger & policy](#risk-ledger--policy), [kill switch](#kill-switch), [exit codes](#exit-codes)
+- Providers — [Termux:API](#termuxapi-provider-optional), [AccessibilityService companion APK](#accessibilityservice-provider-companion-apk), [OCR](#ocr-provider-optional), [provider graph](#provider-graph)
+- [Companion setup](#companion-setup) · [transport & trust controls](#companion-transport--trust-controls) · [notifications](#notifications)
+- [Structured results & capabilities](#structured-results--capabilities) · [Configuration](#configuration) · [Status](#status)
+- [Selector targeting](#selector-targeting-and-tree-observation) · [Resilience](#resilience-and-connection-recovery) · [Performance tuning](#performance-tuning) · [Structured extraction](#structured-extraction)
+- [Daemon](#daemon) · [Macros](#macros) · [Development](#development) · [License](#license)
 
 ---
 
@@ -80,7 +129,7 @@ phonectl setup termux-api
 phonectl setup all
 ```
 
-Each module report states the required permission, current availability, how to enable it, capabilities unlocked, and safety implications. `accessibility` and `notifications` are companion-APK providers planned for Phase 4; `termux-api` is optional and discovered from the local Termux:API commands.
+Each module report states the required permission, current availability, how to enable it, capabilities unlocked, and safety implications. `accessibility` and `notifications` are served by the companion APK; `termux-api` is optional and discovered from the local Termux:API commands.
 
 ## Diagnostics
 
@@ -910,7 +959,7 @@ phonectl notifications dismiss KEY --json --yes
 
 ## Provider graph
 
-`build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. In Phase 3.1 the registry holds a single `AdbBackend`; future phases will add `TermuxApiProvider` (Phase 3.5) and `AccessibilityServiceProvider` (Phase 4.1) by prepending them to the list.
+`build_runtime()` returns a `ProviderRegistry` that wraps one or more `Backend`-conforming providers in priority order. At minimum the registry holds a single `AdbBackend`; `TermuxApiProvider`, `AccessibilityProvider`, `NotificationsProvider`, and `OcrProvider` are prepended when their underlying service is discovered at runtime.
 
 ### How the registry works
 
@@ -950,8 +999,7 @@ registry.capabilities_by_provider()        # → [{"provider": "AdbBackend", "ca
 Priority order is positional: the first provider in the list wins for each capability. Adding a higher-priority provider means prepending it to the list in `build_runtime()` with no other changes required:
 
 ```python
-# Phase 4.1 example (not yet shipped):
-registry = ProviderRegistry([AccessibilityServiceProvider(), AdbBackend(...)])
+registry = ProviderRegistry([AccessibilityProvider(...), AdbBackend(...)])
 # AccessibilityService wins for observe_ui_tree; ADB handles everything else.
 ```
 
@@ -1105,7 +1153,22 @@ Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
 
 ## Status
 
-Phases 1–6 of the platform roadmap are implemented and unit-tested: structured results and capabilities, selector/tree observation, resilience and the setup wizard, the `run_action` single-writer funnel with risk policy and audit v2, the provider/capability graph (clipboard, intents, packages, gestures, extraction, Termux:API), the companion APK event providers (accessibility, notifications, OCR), the daemon/event runtime, and the macro engine with progressive autonomy. The real-device connectivity proof and end-to-end smoke runs are manual steps that require a physical Android 11+ phone with Wireless Debugging enabled. See [docs/integration-smoke.md](docs/integration-smoke.md) for the full procedure and [docs/superpowers/phonectl-platform-roadmap.md](docs/superpowers/phonectl-platform-roadmap.md) for phase status.
+**Shipped and unit-tested (836 tests):** structured results and capabilities; selector and tree
+observation; resilience and the setup wizard; the `run_action` single-writer funnel with risk
+policy and audit v2; the provider/capability graph (clipboard, intents, packages, gestures,
+extraction, Termux:API); the companion APK and its event providers (accessibility,
+notifications, OCR); the daemon and event runtime; and the macro engine with progressive
+autonomy. Core behavior is validated on a real Samsung Galaxy S25 Ultra over Wireless Debugging.
+
+**Next:** a Shizuku provider, to reduce the dependence on an ADB connection.
+
+**Caveats worth knowing.** Unit tests run against injected fakes — they prove the logic, not the
+device topology. The real-device connectivity proof and the end-to-end smoke matrix are manual
+steps needing a physical Android 11+ phone with Wireless Debugging enabled; see
+[docs/integration-smoke.md](docs/integration-smoke.md). The Android instrumented tests
+(`connectedAndroidTest`) do not run in CI. Phase status lives in [docs/roadmap.md](docs/roadmap.md);
+security posture and remaining risk in
+[docs/adversarial-review-2026-07.md](docs/adversarial-review-2026-07.md).
 
 ## Selector targeting and tree observation
 
@@ -1315,7 +1378,7 @@ UI tree always takes precedence. OCR is strictly a **fallback** for surfaces the
 
 ---
 
-## Daemon (Phase 5.1)
+## Daemon
 
 `phonectl daemon` makes the runtime a **long-lived single-writer process** that keeps the provider graph, session, and connection warm across requests and brokers all actions through one global write lock.
 
@@ -1397,7 +1460,7 @@ Set via `$PHONECTL_HOME/config.json`:
 
 Every action dispatched through the daemon is appended as a structured run record to `$PHONECTL_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before`, `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
 
-### Events & snapshots (Phase 5.2)
+### Events & snapshots
 
 The daemon is the single writer **and** event broker.
 
@@ -1443,7 +1506,7 @@ In-process primitives (`observe`, `tap`, `type`, etc.) work exactly as they alwa
 
 ### Termux:Boot autostart (seam only)
 
-`daemon_autostart` config key exists and `phonectl daemon start` runs foreground. Autostart via Termux:Boot and companion foreground-service hosting are noted as seams; they land in Phase 5.2+.
+The `daemon_autostart` config key exists and `phonectl daemon start` runs in the foreground. Autostart via Termux:Boot and companion foreground-service hosting are deliberate seams — the interfaces are in place, the wiring is not yet built.
 
 
 ## Macros
@@ -1471,3 +1534,39 @@ phonectl memory delete [<store>]                  # delete a store (or all)
 ```
 
 See [docs/macros.md § Progressive autonomy & memory](docs/macros.md#progressive-autonomy--memory) for the confirm-default rule, critical-risk policy, and the D12 redaction promise.
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/jumbodaddystack/phonectl.git
+cd phonectl
+pip install -e ".[dev]"     # package + console script + pytest
+pip install -e ".[dev,mcp]" # also the optional FastMCP transport
+
+pytest -v                                               # full suite
+pytest tests/test_ui_parser.py -v                       # one file
+pytest tests/test_ui_parser.py::test_parse_bounds -v    # one test
+```
+
+The suite is 836 tests, all against injected fakes — no device required (one test needs the optional `mcp` extra and skips without it). Tests marked
+`device` need real hardware over Wireless Debugging and are excluded in CI
+(`pytest -m "not device"`).
+
+The Android companion APK lives in `android/accessibility-companion/` and builds
+independently:
+
+```bash
+cd android/accessibility-companion
+./gradlew assembleDebug test
+```
+
+**Before changing a core layer, read [`docs/architecture.md`](docs/architecture.md).** The
+invariants there are load-bearing — in particular, only `adb_backend.py` may touch `adb` or
+`subprocess`, and every action must go through `runtime.run_action`. Tests come first: write
+the failing test, confirm it fails for the right reason, then write the code that passes it.
+
+## License
+
+[MIT](LICENSE) © Jeremy McCoy
