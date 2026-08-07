@@ -34,7 +34,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install
-        run: pip install -e ".[dev,mcp,yaml]"
+        run: pip install -e ".[dev,yaml]"
+
+      - name: Install the optional MCP transport
+        # The MCP SDK requires Python >= 3.10; phonectl itself supports 3.9, where the
+        # FastMCP transport is simply unavailable and its test skips.
+        if: matrix.python-version != '3.9'
+        run: pip install -e ".[mcp]"
 
       - name: Run tests
         # The `device` lane needs real hardware over Wireless Debugging; never run it in CI.
