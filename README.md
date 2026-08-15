@@ -362,6 +362,10 @@ pip install 'phonectl[mcp]'
 phonectl mcp
 ```
 
+**Requires Python ≥ 3.10.** The MCP SDK dropped 3.9, so the extra is gated on the interpreter
+version: on 3.9 the install still succeeds and the stdlib-only core works normally, but the
+MCP transport is unavailable. Everything else in phonectl runs on 3.9.
+
 Every MCP tool returns the same structured result envelope used by `--json` CLI actions. Agents should branch on `ok`, `error.code`, `requires_user`, `risk_level`, and `reasons` instead of parsing human text.
 
 Tool catalog:
