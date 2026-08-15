@@ -3,7 +3,7 @@
 [![Python tests](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml)
 [![Android companion APK](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
 phonectl is an Android computer-use bridge over ADB (no root) — observe the screen as structured JSON, act (tap, type, swipe, send key events, launch apps), then re-observe to confirm the action landed. It is designed to run inside a Termux + PRoot-Distro environment on the device itself, with `adb` as the only external dependency, giving an AI agent a tight observe-act-observe loop over any Android app without requiring device root.
 
@@ -361,10 +361,6 @@ Launch the optional stdio MCP server so agents can call phonectl as native tools
 pip install 'phonectl[mcp]'
 phonectl mcp
 ```
-
-**Requires Python ≥ 3.10.** The MCP SDK dropped 3.9, so the extra is gated on the interpreter
-version: on 3.9 the install still succeeds and the stdlib-only core works normally, but the
-MCP transport is unavailable. Everything else in phonectl runs on 3.9.
 
 Every MCP tool returns the same structured result envelope used by `--json` CLI actions. Agents should branch on `ok`, `error.code`, `requires_user`, `risk_level`, and `reasons` instead of parsing human text.
 

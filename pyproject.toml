@@ -7,7 +7,7 @@ name = "phonectl"
 version = "0.1.0"
 description = "Android computer-use bridge over ADB (no root)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Jeremy McCoy" }]
 keywords = ["android", "adb", "automation", "agent", "computer-use", "mcp"]
@@ -20,6 +20,10 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Testing",
     "Topic :: Utilities",
 ]
@@ -31,12 +35,7 @@ Issues = "https://github.com/jumbodaddystack/phonectl/issues"
 
 [project.optional-dependencies]
 # The FastMCP transport imports `mcp.server.fastmcp`, which SDK 2.0 removed.
-# Every published `mcp` release now requires Python >= 3.10, so without this marker
-# `pip install ".[mcp]"` fails outright on 3.9 — taking the whole install down rather
-# than just the optional transport. With it, 3.9 installs the (stdlib-only) core and
-# the MCP frontend is simply unavailable there; `phonectl mcp` reports that, and the
-# mcp-gated test skips.
-mcp = ["mcp>=1.0,<2; python_version >= '3.10'"]
+mcp = ["mcp>=1.0,<2"]
 yaml = ["PyYAML>=6"]
 dev = ["pytest>=7"]
 
