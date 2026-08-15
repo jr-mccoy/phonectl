@@ -69,8 +69,11 @@ class Dispatcher(
         }
 
         // Shared-secret auth (Finding 2): loopback is not a trust boundary on Android. `ping`
-        // stays open for liveness; every other method must present the paired token.
-        if (expectedToken != null && method != "ping" && req.optString("token", "") != expectedToken) {
+        // stays open for liveness; every other method must present the paired token. The
+        // comparison is constant-time (see [Tokens]) — a local attacker gets unlimited attempts.
+        if (expectedToken != null && method != "ping" &&
+            !Tokens.equal(req.optString("token", ""), expectedToken)
+        ) {
             return fail(requestId, method, "unauthorized", "missing or invalid token")
         }
 

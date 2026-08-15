@@ -345,6 +345,35 @@ def test_daemon_accepts_rpc_with_token(tmp_path, monkeypatch):
     assert resp["ok"] is True
 
 
+def test_daemon_token_check_is_constant_time(tmp_path, monkeypatch):
+    # Audit D3: an attacker on the same device gets unlimited local attempts, so
+    # the token gate must not short-circuit on the first differing byte.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    import hmac
+    from phonectl import trust
+    srv = _bound_srv(tmp_path)
+    seen = []
+    real = hmac.compare_digest
+    monkeypatch.setattr(hmac, "compare_digest",
+                        lambda a, b: seen.append((a, b)) or real(a, b))
+    srv.handle_line(json.dumps({"method": "status", "params": {},
+                                "request_id": "r1", "token": srv._token}))
+    assert seen, "daemon token gate must go through hmac.compare_digest"
+
+
+def test_daemon_rejects_non_string_token_without_crashing(tmp_path, monkeypatch):
+    # A hostile client can send any JSON type for `token`; compare_digest raises
+    # TypeError on these, which must surface as `unauthorized`, not a crash.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    srv = _bound_srv(tmp_path)
+    for bogus in (123, ["a"], {"t": "a"}, None, True):
+        line = json.dumps({"method": "status", "params": {},
+                           "request_id": "r1", "token": bogus})
+        resp = json.loads(srv.handle_line(line))
+        assert resp["ok"] is False, bogus
+        assert resp["error"]["code"] == "unauthorized", bogus
+
+
 def test_daemon_ping_is_token_exempt(tmp_path, monkeypatch):
     # ping stays open so discovery can detect a live daemon without the token.
     monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))

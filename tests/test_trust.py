@@ -125,3 +125,37 @@ def test_gated_accessibility_provider_serves_the_tree_with_a_real_handshake():
                 "observe_ui_native", "act_semantic_action", "launch_app",
                 "observe_screenshot"):
         assert caps[key] is True, key
+
+
+# ── Constant-time token comparison (audit D3) ──────────────────────────────
+# Loopback is not a UID boundary on Android (Finding 2), so the shared-secret
+# token is the only thing keeping other local apps out. Comparing it with `!=`
+# leaks a timing signal to an attacker with unlimited local attempts.
+
+def test_tokens_equal_matches_and_rejects():
+    assert trust.tokens_equal("abc123", "abc123") is True
+    assert trust.tokens_equal("abc123", "abc124") is False
+    assert trust.tokens_equal("abc", "abc123") is False   # prefix is not a match
+
+
+def test_tokens_equal_is_constant_time(monkeypatch):
+    import hmac
+    seen = []
+    real = hmac.compare_digest
+    monkeypatch.setattr(hmac, "compare_digest",
+                        lambda a, b: seen.append((a, b)) or real(a, b))
+    assert trust.tokens_equal("abc123", "abc123") is True
+    assert seen, "token comparison must go through hmac.compare_digest"
+
+
+def test_tokens_equal_rejects_non_string_presented_tokens():
+    # A missing `token` key yields None, and a hostile client can send any JSON
+    # type. compare_digest raises TypeError on these — the guard must return
+    # False instead of crashing the request handler.
+    for bogus in (None, 123, ["abc123"], {"t": "abc123"}, True):
+        assert trust.tokens_equal(bogus, "abc123") is False
+
+
+def test_tokens_equal_rejects_non_ascii_without_crashing():
+    # compare_digest rejects non-ASCII str operands with TypeError.
+    assert trust.tokens_equal("tökén", "abc123") is False

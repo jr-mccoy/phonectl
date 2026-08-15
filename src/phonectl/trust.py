@@ -1,9 +1,30 @@
 """Companion trust model — handshake, per-capability toggles, emergency-stop flag."""
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass, field
 
 from phonectl.providers.transport import next_request_id
+
+
+def tokens_equal(presented, expected) -> bool:
+    """Constant-time shared-secret comparison for the daemon RPC and companion socket.
+
+    Loopback is not a UID boundary on Android (Finding 2), so this token is the only
+    thing keeping other local apps out — and such an attacker gets unlimited attempts
+    with no network jitter. A plain `!=` short-circuits on the first differing byte;
+    `compare_digest` does not.
+
+    `presented` is attacker-controlled JSON, so it may be any type (or absent, i.e.
+    None). `compare_digest` raises TypeError on non-ASCII str and on non-bytes-like
+    operands, so those are rejected as a mismatch rather than crashing the handler.
+    """
+    if not isinstance(presented, str) or not isinstance(expected, str):
+        return False
+    try:
+        return hmac.compare_digest(presented, expected)
+    except TypeError:   # non-ASCII str operands
+        return False
 
 
 @dataclass
