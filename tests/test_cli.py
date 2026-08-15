@@ -1124,7 +1124,7 @@ def test_cli_companion_status_dispatches(tmp_path, monkeypatch, capsys):
 
     def fake_run_adb(*a):
         if a[:3] == ("shell", "pm", "list"):
-            return subprocess.CompletedProcess(a, 0, stdout="package:com.phonectl.companion", stderr="")
+            return subprocess.CompletedProcess(a, 0, stdout="package:com.droidjig.companion", stderr="")
         if a[:4] == ("shell", "settings", "get", "secure"):
             return subprocess.CompletedProcess(a, 0, stdout=companion_setup.ACCESSIBILITY_COMPONENT, stderr="")
         if a[:2] == ("shell", "ss"):

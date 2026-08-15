@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.phonectl.companion"
+    namespace = "com.droidjig.companion"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.phonectl.companion"
+        applicationId = "com.droidjig.companion"
         // minSdk 31 is security-relevant: the trust model relies on Android 12+
         // per-app loopback network-namespace isolation (foreground-service SPEC §9),
         // and takeScreenshot (API 30+) is used directly.

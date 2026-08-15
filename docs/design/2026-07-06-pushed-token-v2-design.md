@@ -8,7 +8,7 @@ is enabled for release builds.
 Today the companion mints its own pairing token on first read of
 `SharedPrefsTrustState.companionToken()` and droidjig obtains it one of two ways:
 
-- **B (debug builds):** `adb shell run-as com.phonectl.companion cat …` reads the SharedPrefs value.
+- **B (debug builds):** `adb shell run-as com.droidjig.companion cat …` reads the SharedPrefs value.
 - **C (fallback):** the token is shown in the Settings UI and the user pastes it into
   `droidjig config` (`companion_token`).
 
@@ -21,8 +21,8 @@ neither `run-as` nor manual paste.
 droidjig generates a random token and sends it to the companion:
 
 ```
-adb shell am broadcast -n com.phonectl.companion/.service.LifecycleReceiver \
-    -a com.phonectl.companion.action.SET_TOKEN --es token <minted-token>
+adb shell am broadcast -n com.droidjig.companion/.service.LifecycleReceiver \
+    -a com.droidjig.companion.action.SET_TOKEN --es token <minted-token>
 ```
 
 The companion adopts it **trust-on-first-use**: only when no token is set yet. Once a token exists,

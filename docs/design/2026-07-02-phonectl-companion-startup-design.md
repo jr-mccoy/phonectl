@@ -60,7 +60,7 @@ Everything in bring-up is mechanical `adb` **except** obtaining the token. That 
 real design fork. Decision:
 
 **Primary — (B) read the companion's token via `run-as`.** Debug APKs are debuggable, so
-`adb shell run-as com.phonectl.companion cat shared_prefs/droidjig_companion.xml` succeeds and
+`adb shell run-as com.droidjig.companion cat shared_prefs/droidjig_companion.xml` succeeds and
 exposes `<string name="companion_token">…</string>`. droidjig parses it, no user involvement.
 
 **Fallback — (C) guided prompt.** When `run-as` is denied (release build, or run-as
@@ -105,7 +105,7 @@ it unit-tests without a device.
 
 | Step | Function | Idempotency check | Needs `--yes`? |
 |---|---|---|---|
-| 1 | `ensure_installed(adb, apk_path)` | `pm list packages` has `com.phonectl.companion` **and** installed hash == apk hash | no (install is benign) |
+| 1 | `ensure_installed(adb, apk_path)` | `pm list packages` has `com.droidjig.companion` **and** installed hash == apk hash | no (install is benign) |
 | 2 | `ensure_accessibility(adb)` | `settings get secure enabled_accessibility_services` already contains the component | **yes** |
 | 3 | `ensure_notifications(adb, out)` | `POST_NOTIFICATIONS` already granted (`dumpsys package`) | no |
 | 4 | `acquire_token(run_as, prompt, cfg)` | `cfg["companion_token"]` already present **and** validates against a live handshake | no |
@@ -121,7 +121,7 @@ it unit-tests without a device.
 - **Step 4** parses `shared_prefs/droidjig_companion.xml` for `companion_token` (B); on `None`
   from `run_as`, launches the app and prompts (C). Persists via the new `config set` path.
 - **Step 5** fires the token-authenticated `START_SERVICE` broadcast
-  (`am broadcast -a com.phonectl.companion.action.START_SERVICE --es token <t> -n …/.service.LifecycleReceiver`),
+  (`am broadcast -a com.droidjig.companion.action.START_SERVICE --es token <t> -n …/.service.LifecycleReceiver`),
   then polls `ss -tln` for `:8765` up to a timeout.
 - **Step 6** runs `trust.negotiate` over a token'd `SocketTransport` and prints
   `reachable`, `stopped`, and the capability list — identical to the manual verification used

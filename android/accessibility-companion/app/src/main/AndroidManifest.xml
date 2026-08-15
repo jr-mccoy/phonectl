@@ -21,7 +21,7 @@
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.PhonectlCompanion">
+        android:theme="@style/Theme.DroidjigCompanion">
 
         <activity
             android:name=".ui.SettingsActivity"
@@ -33,7 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Foreground service: hosts the loopback NDJSON server + ongoing "Stop phonectl"
+        <!-- Foreground service: hosts the loopback NDJSON server + ongoing "Stop droidjig"
              notification. FOREGROUND_SERVICE_SPECIAL_USE: a local automation IPC surface
              that has no better-fitting foreground-service type. -->
         <service
@@ -42,7 +42,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="phonectl local automation transport (loopback only)" />
+                android:value="droidjig local automation transport (loopback only)" />
         </service>
 
         <!-- AccessibilityService — flags per accessibility-companion SPEC §1. -->
@@ -93,9 +93,9 @@
             android:name=".service.LifecycleReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.phonectl.companion.action.START_SERVICE" />
-                <action android:name="com.phonectl.companion.action.STOP_SERVICE" />
-                <action android:name="com.phonectl.companion.action.SET_TOKEN" />
+                <action android:name="com.droidjig.companion.action.START_SERVICE" />
+                <action android:name="com.droidjig.companion.action.STOP_SERVICE" />
+                <action android:name="com.droidjig.companion.action.SET_TOKEN" />
             </intent-filter>
         </receiver>
 

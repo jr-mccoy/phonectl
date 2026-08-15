@@ -731,7 +731,7 @@ posture as every other mutating command — they print what they're about to do 
 `--yes`, or an interactive `y/N` confirmation, before proceeding.
 
 **Token acquisition:** on a debug build, the token is read automatically off-device via
-`adb shell run-as com.phonectl.companion cat shared_prefs/droidjig_companion.xml` — no prompt
+`adb shell run-as com.droidjig.companion cat shared_prefs/droidjig_companion.xml` — no prompt
 needed. On other builds `run-as` doesn't work for a release-signed package, so droidjig opens the
 companion's Pairing screen instead and prompts you to paste the token shown there.
 

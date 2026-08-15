@@ -10,4 +10,4 @@
     android:canRequestFilterKeyEvents="false"
     android:canRetrieveWindowContent="true"
     android:notificationTimeout="100"
-    android:settingsActivity="com.phonectl.companion.ui.SettingsActivity" />
+    android:settingsActivity="com.droidjig.companion.ui.SettingsActivity" />

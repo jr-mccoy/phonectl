@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "phonectl-companion"
+rootProject.name = "droidjig-companion"
 include(":app")

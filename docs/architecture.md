@@ -24,7 +24,7 @@ Read this before changing a core layer.
 
 - The agent lives inside a **PRoot-Distro** inside **Termux** on an **unrooted Android 11+** device. `uid 0` in the distro is proot-root, not device root — assume no root anywhere.
 - ADB connects over **Wireless Debugging** on `127.0.0.1:<port>`. PRoot shares Termux's (and Android's) loopback, so `adb` runs inside the distro and dials adbd directly. If PRoot blocks the connection, the fallback is a thin shim to host Termux's `adb`; the interface above is unchanged.
-- The optional companion APK (✅ shipped, Kotlin `com.phonectl.companion`; see `android/`) communicates over a loopback `SocketTransport` (`providers/transport.py`). The transport degrades cleanly when the APK is absent.
+- The optional companion APK (✅ shipped, Kotlin `com.droidjig.companion`; see `android/`) communicates over a loopback `SocketTransport` (`providers/transport.py`). The transport degrades cleanly when the APK is absent.
 - `DROIDJIG_HOME` overrides the config dir (default `~/.config/droidjig`). `daemon.json` is written there by the daemon on startup and used for port discovery.
 
 ## Testing discipline

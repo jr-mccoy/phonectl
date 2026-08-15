@@ -12,11 +12,11 @@ import xml.etree.ElementTree as ET
 
 from droidjig import config as _config
 
-PACKAGE = "com.phonectl.companion"
+PACKAGE = "com.droidjig.companion"
 ACCESSIBILITY_COMPONENT = f"{PACKAGE}/{PACKAGE}.service.CompanionAccessibilityService"
 LIFECYCLE_COMPONENT = f"{PACKAGE}/.service.LifecycleReceiver"
-START_ACTION = "com.phonectl.companion.action.START_SERVICE"
-SET_TOKEN_ACTION = "com.phonectl.companion.action.SET_TOKEN"
+START_ACTION = "com.droidjig.companion.action.START_SERVICE"
+SET_TOKEN_ACTION = "com.droidjig.companion.action.SET_TOKEN"
 TOKEN_EXTRA = "token"
 PREFS_REL = "shared_prefs/droidjig_companion.xml"
 TOKEN_KEY = "companion_token"

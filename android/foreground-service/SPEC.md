@@ -1,10 +1,10 @@
 # Foreground Service Transport + Emergency-Stop + Trust UX — Android Design Spec
 
-**Plan 4.3** | Phase 4 of the phonectl platform roadmap.
+**Plan 4.3** | Phase 4 of the droidjig platform roadmap.
 
 This document specifies the Android-side foreground service that hosts the loopback TCP server
 the Python `SocketTransport` connects to. It was the design input to the build; the Kotlin
-implementation now ships as `com.phonectl.companion` (see `android/accessibility-companion/`,
+implementation now ships as `com.droidjig.companion` (see `android/accessibility-companion/`,
 built as a debug-APK artifact by the `android.yml` workflow).
 
 ---
@@ -21,7 +21,7 @@ serverSocket.bind(InetSocketAddress("127.0.0.1", port))
 ```
 
 The port is user-configurable (default `8765`) and is communicated to the Python side via
-`companion_port` in `~/.config/phonectl/config.json`.
+`companion_port` in `~/.config/droidjig/config.json`.
 
 ### Thread model
 
@@ -122,7 +122,7 @@ emergency-stop flag.
 per-capability UI). The Python side intersects this with each provider's technically-supported
 capabilities via `trust.gate_capabilities`.
 
-`stopped` is `true` when the user has engaged the "Stop phonectl" emergency control. A `true` value
+`stopped` is `true` when the user has engaged the "Stop droidjig" emergency control. A `true` value
 causes the Python `audit.kill_switch_active` to return `true` via the `extra_checks` mechanism,
 blocking all CLI, MCP, and daemon actions immediately.
 
@@ -131,12 +131,12 @@ All other methods (observe_native, act_gesture, etc.) are specified in
 
 ---
 
-## 4. Persistent "Stop phonectl" notification
+## 4. Persistent "Stop droidjig" notification
 
 The foreground service posts a persistent **ongoing** notification that cannot be dismissed while
 the service is running. The notification has a single action button:
 
-- **Label:** "Stop phonectl"
+- **Label:** "Stop droidjig"
 - **Action:** Sets `stopped = true` in the handshake response and posts a second notification
   confirming the stop. Does **not** kill the service process — the Python side re-reads `handshake`
   on the next cycle and blocks actions via `kill_switch_active`.
@@ -157,7 +157,7 @@ The notification must be posted with `NotificationCompat.FLAG_ONGOING_EVENT` and
 A `TileService` toggles the entire automation surface on/off:
 
 - **Active state:** companion running, `stopped=false`. Tile shows a distinct icon.
-- **Inactive state:** sets `stopped=true` (equivalent to tapping "Stop phonectl" notification).
+- **Inactive state:** sets `stopped=true` (equivalent to tapping "Stop droidjig" notification).
   Tile shows a greyed icon.
 - Tapping the tile again while inactive sets `stopped=false` (resume).
 
@@ -206,16 +206,16 @@ The companion settings screen must display a **Trust & Safety** section explaini
    notifications (title, text, actions). **No passwords are read** from password fields
    (`inputType == TYPE_TEXT_VARIATION_PASSWORD`); the service must explicitly guard these.
 2. **What is controlled:** touch gestures (within the user's gesture-enabled area), text insertion,
-   and notification actions — only on behalf of phonectl CLI/MCP commands, never autonomously.
+   and notification actions — only on behalf of droidjig CLI/MCP commands, never autonomously.
 3. **Local only:** the TCP server binds `127.0.0.1` only. No data leaves the device over the
    network. The loopback + Android app sandboxing is the trust boundary.
-4. **Audit visibility:** every action is logged to `~/.config/phonectl/actions.jsonl` on the Python
+4. **Audit visibility:** every action is logged to `~/.config/droidjig/actions.jsonl` on the Python
    side. Users can read this log at any time.
 5. **Password/payment screen warnings:** the service detects password fields and payment-screen
    indicators (app package allowlist, window title heuristics) and sets a flag in `observe_native`
    responses. The Python `policy` module uses these flags to deny or confirm-gate actions.
 6. **Guarded-app behavior:** the service refuses gesture actions in apps on the guarded-app list
-   (configured in `~/.config/phonectl/config.json`). It returns `{"ok": false, "error": {"code":
+   (configured in `~/.config/droidjig/config.json`). It returns `{"ok": false, "error": {"code":
    "guarded_action", ...}}` for these requests.
 
 ---

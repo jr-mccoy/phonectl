@@ -54,7 +54,7 @@ def test_ensure_installed_skips_when_sha_matches(tmp_path):
     import hashlib
     cfg = {"companion_apk_sha": hashlib.sha256(b"APKBYTES").hexdigest()}
     adb = FakeAdb([(lambda a: a[:3] == ("shell", "pm", "list"),
-                    cp(out="package:com.phonectl.companion"))])
+                    cp(out="package:com.droidjig.companion"))])
     r = cs.ensure_installed(adb, str(apk), cfg, (lambda m: None))
     assert r["status"] == "skipped"
     assert not any(a[0] == "install" for a in adb.calls)
@@ -68,7 +68,7 @@ def test_ensure_installed_signature_mismatch_reinstalls(tmp_path):
     def adb(*a):
         calls.append(a)
         if a[:3] == ("shell", "pm", "list"):
-            return cp(out="package:com.phonectl.companion")
+            return cp(out="package:com.droidjig.companion")
         if a[0] == "install":
             installs.append(a); return seq.pop(0) if len(seq) > 1 else seq[0]
         if a[0] == "uninstall":
@@ -277,7 +277,7 @@ def test_orchestrator_stops_on_failed_step(tmp_path, monkeypatch):
 
 def test_status_reports_state():
     adb = FakeAdb([
-        (lambda a: a[:3] == ("shell", "pm", "list"), cp(out="package:com.phonectl.companion")),
+        (lambda a: a[:3] == ("shell", "pm", "list"), cp(out="package:com.droidjig.companion")),
         (lambda a: a[:4] == ("shell", "settings", "get", "secure"), cp(out=cs.ACCESSIBILITY_COMPONENT)),
         (lambda a: a[:2] == ("shell", "ss"), cp(out="LISTEN 0 0 [::ffff:127.0.0.1]:8765 *:*")),
     ])
