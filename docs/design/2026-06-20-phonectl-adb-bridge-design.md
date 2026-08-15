@@ -1,4 +1,4 @@
-# phonectl — Android computer-use bridge over ADB (no root)
+# droidjig — Android computer-use bridge over ADB (no root)
 
 **Date:** 2026-06-20
 **Status:** Design approved, pending spec review
@@ -42,7 +42,7 @@ Android (unrooted)
     ▲  loopback TCP (shared net namespace)
   Termux
     PRoot distro (agent lives here)
-      agent → phonectl → adb client → 127.0.0.1:<port>
+      agent → droidjig → adb client → 127.0.0.1:<port>
 ```
 
 `adb` runs **inside the PRoot distro**, co-located with the agent. PRoot shares Termux's
@@ -57,7 +57,7 @@ backend-agnostic interface, so a future **AccessibilityService APK backend** is 
 swap with no changes to `observer`, `actuator`, or the CLI.
 
 **Provider graph (Phase 3.1):** The `Backend` seam is now a `ProviderRegistry`
-(`src/phonectl/providers/registry.py`) that selects the best-available provider per
+(`src/droidjig/providers/registry.py`) that selects the best-available provider per
 capability. `AdbBackend` is the sole provider in Phase 3.1, but the registry is
 extensible: adding `TermuxApiProvider` (Phase 3.5) or `AccessibilityServiceProvider`
 (Phase 4.1) means prepending it to the list in `cli.build_runtime()` with no other
@@ -65,8 +65,8 @@ changes required. Every result envelope includes a `provider` field (the class n
 the provider that handled the last call) so callers can observe which path was used.
 
 **AccessibilityService is an additional `Backend` provider (Phase 4.1):** `AccessibilityProvider`
-(`src/phonectl/providers/accessibility.py`) talks to a companion Android AccessibilityService APK
-through an injected `Transport` (`src/phonectl/providers/transport.py`). It never calls
+(`src/droidjig/providers/accessibility.py`) talks to a companion Android AccessibilityService APK
+through an injected `Transport` (`src/droidjig/providers/transport.py`). It never calls
 `adb`/`subprocess` and never imports `adb_backend`. It is prepended to the provider list in
 `build_runtime()` ahead of `TermuxApiProvider` and `AdbBackend`, so it wins for
 `observe_ui_tree`/`act_*` when the companion is reachable. ADB remains the shell/system provider
@@ -76,7 +76,7 @@ the companion is absent, `_make_accessibility_provider()` returns `None` and the
 ADB-first, unchanged.
 
 **Notifications are a first-class provider, not UI-scraping (Phase 4.2):** `NotificationsProvider`
-(`src/phonectl/providers/notifications.py`) exposes notifications as structured data rather than
+(`src/droidjig/providers/notifications.py`) exposes notifications as structured data rather than
 requiring agents to parse notification shade UI. It is prepended ahead of `TermuxApiProvider` in
 `build_runtime()`. When the companion's `NotificationListenerService` is reachable, the provider
 delivers full capability (`observe_notifications`, `notifications_wait`, `notifications_reply`,
@@ -89,7 +89,7 @@ notification capabilities return `capability_unavailable`. `notifications_reply`
 `runtime.run_action` for mode/kill-switch/risk gating, matching the policy contract of `tap`/`type`.
 
 **OCR is the lowest-priority, optional `observe_ocr` provider (Phase 4.4):** `OcrProvider`
-(`src/phonectl/providers/ocr.py`) reads text from screenshots when the structured UI tree is
+(`src/droidjig/providers/ocr.py`) reads text from screenshots when the structured UI tree is
 empty or unavailable — custom-drawn surfaces, canvas/game UIs, WebViews that don't expose
 nodes, or image content. It is **appended last** in `build_runtime()`, so it never shadows
 `observe_ui_tree`. It activates when `tesseract` is found on `PATH` (local path, no companion
@@ -107,7 +107,7 @@ The a11y service's only advantages are persistence and event latency, not power.
 
 ## 5. The agent-facing contract
 
-Module `phonectl`, built as **library + CLI first** (scriptable, testable), wrapped as an
+Module `droidjig`, built as **library + CLI first** (scriptable, testable), wrapped as an
 **MCP server** in phase 2 so verbs appear as native agent tools.
 
 ### 5.1 `observe()` → JSON snapshot
@@ -156,13 +156,13 @@ screen sizes and minor layout shifts across users' phones.
 | `actuator` | Implement `act()` verbs; resolve index→coords via last snapshot; re-observe | backend, session | canned backend |
 | `session` | Hold last snapshot, screen dims, conn handle | — | trivial |
 | `connection` | Pair, connect, health-check, mDNS rediscover, re-pair, persisted keys | backend | wrong-port sim |
-| `cli` (`phonectl`) | Arg parsing → call the above | all | smoke |
+| `cli` (`droidjig`) | Arg parsing → call the above | all | smoke |
 | `mcp_server` (phase 2) | Expose verbs as MCP tools | actuator/observer | — |
 | `setup` | Interactive onboarding wizard | connection | manual |
 
 ## 7. Setup & pairing UX
 
-A `phonectl setup` wizard (the product's first impression for other users):
+A `droidjig setup` wizard (the product's first impression for other users):
 
 1. Install `android-tools` (pkg/apt).
 2. Guide `Settings → Developer options → Wireless debugging` (detect Android version; require 11+).
@@ -205,9 +205,9 @@ The agent can tap anything, so v1 ships with:
 ### 9.1 Structured result invariant
 
 All new agent-facing JSON surfaces return structured result envelopes rather than
-bare tuples or raw tracebacks. The canonical homes are `phonectl.errors` for stable
-error codes and retry/user-action flags, `phonectl.results` for `ok`/`err`
-envelope builders, and `phonectl.capabilities` for provider capability discovery.
+bare tuples or raw tracebacks. The canonical homes are `droidjig.errors` for stable
+error codes and retry/user-action flags, `droidjig.results` for `ok`/`err`
+envelope builders, and `droidjig.capabilities` for provider capability discovery.
 Providers expose capabilities through the backend seam so unavailable features can
 be explained before an agent attempts them.
 
@@ -229,15 +229,15 @@ numbers, and URL token parameters from audit targets while preserving benign sel
 ### 9.3 Risk ledger and policy explain
 
 Risk classification now generalizes the earlier guarded-package denylist and single
-actions-per-minute limit. `phonectl.risk` and `phonectl.policy` are pure modules: they read the
+actions-per-minute limit. `droidjig.risk` and `droidjig.policy` are pure modules: they read the
 parsed snapshot and configured policy only, never adb. `runtime.run_action` observes, calls
 `policy.explain(snapshot, verb, target, cfg)`, then denies, requires `--yes`, or proceeds. Denied,
 confirmation-required, and rate-limited outcomes are returned as structured envelopes with
 `risk_level`, `reasons`, and, for rate limits, the blocked `bucket`.
 
-Rate-limit history is persisted as `$PHONECTL_HOME/ratelimit.json`; each allowed action counts
+Rate-limit history is persisted as `$DROIDJIG_HOME/ratelimit.json`; each allowed action counts
 against `global` and its verb bucket, with `high_risk` added for high or critical actions. Audit
-records include `outcome` so blocked policy decisions are traceable. The `phonectl policy explain`
+records include `outcome` so blocked policy decisions are traceable. The `droidjig policy explain`
 verb exposes the same classifier/decision result for agents and users before a mutating action is
 attempted.
 
@@ -261,7 +261,7 @@ The Phase-2 MCP server is a thin frontend over the existing observation seams an
 - **Python** — already present; strong at XML→JSON, subprocess, and has a first-class MCP SDK
   for phase 2. Chosen over shell because the riskiest logic (XML→structured elements) must be
   a pure, fixture-tested function, not unverifiable string-mangling.
-- CLI via argparse; minimal dependencies; `pipx`-installable `phonectl` with a console-script
+- CLI via argparse; minimal dependencies; `pipx`-installable `droidjig` with a console-script
   entry point. `adb` (android-tools) is the only external dependency.
 - Repo ships the `setup` wizard and a short Termux + PRoot install guide.
 
@@ -313,7 +313,7 @@ Actions can carry `expected_hash` and `stale_ok`. On hash mismatch, the actuator
 ## Emergency-stop precedence and loopback-only constraint (Plan 4.3)
 
 **Emergency-stop precedence rule:** `audit.kill_switch_active()` returns `True` if **either** the
-`$PHONECTL_HOME/STOP` sentinel file exists **or** any callable in `extra_checks` returns `True`.
+`$DROIDJIG_HOME/STOP` sentinel file exists **or** any callable in `extra_checks` returns `True`.
 The companion APK's `stopped=true` handshake flag is registered as such an extra check when a
 transport is configured. Both sources must be cleared to resume: removing the file AND having the
 companion report `stopped=false`. A flaky transport never blocks actions — socket exceptions are

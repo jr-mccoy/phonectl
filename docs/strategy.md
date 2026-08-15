@@ -1,14 +1,14 @@
-# phonectl Automation Platform Strategy
+# droidjig Automation Platform Strategy
 
 **Date:** 2026-06-21  
 **Status:** Strategy / critique / standalone roadmap  
-**Scope:** This document reviews the project's original design plans and turns the critique into a standalone product and architecture roadmap for evolving `phonectl` from an ADB observe/act bridge into a local Android automation platform for agents.
+**Scope:** This document reviews the project's original design plans and turns the critique into a standalone product and architecture roadmap for evolving `droidjig` from an ADB observe/act bridge into a local Android automation platform for agents.
 
 ## 1. Executive summary
 
 The existing plans are a strong foundation. They define a local, no-root Android control layer that observes the phone as structured JSON and acts through ADB primitives, then exposes those capabilities through CLI and MCP. The plans are especially strong on testability, stdlib-only Python for the core, real-device validation, backend isolation, auditability, and safety gating.
 
-The main strategic gap is that the current design is still mostly an **observe-command-act** bridge. Apps like Tasker and MacroDroid are broader automation systems: event engines, trigger/condition/action runtimes, plugin hosts, notification processors, intent senders, variable stores, schedulers, and permission brokers. If `phonectl` aims to give agents true phone “superpowers,” the current plans should become the lower layer of a richer automation platform.
+The main strategic gap is that the current design is still mostly an **observe-command-act** bridge. Apps like Tasker and MacroDroid are broader automation systems: event engines, trigger/condition/action runtimes, plugin hosts, notification processors, intent senders, variable stores, schedulers, and permission brokers. If `droidjig` aims to give agents true phone “superpowers,” the current plans should become the lower layer of a richer automation platform.
 
 The recommended direction is:
 
@@ -196,10 +196,10 @@ Keep index targeting, but add selector targeting:
 Suggested commands:
 
 ```bash
-phonectl tap --selector '{"text":"Wi-Fi","clickable":true}'
-phonectl tap --text "Wi-Fi"
-phonectl tap --id android:id/title --nth 1
-phonectl wait-for --selector '{"text_regex":"Continue|Next"}'
+droidjig tap --selector '{"text":"Wi-Fi","clickable":true}'
+droidjig tap --text "Wi-Fi"
+droidjig tap --id android:id/title --nth 1
+droidjig wait-for --selector '{"text_regex":"Continue|Next"}'
 ```
 
 MCP tools should accept both `i` and selector objects.
@@ -233,7 +233,7 @@ The snapshot should include both flat elements and hierarchy metadata:
 }
 ```
 
-If payload size is a concern, expose `phonectl observe --tree` or an MCP option.
+If payload size is a concern, expose `droidjig observe --tree` or an MCP option.
 
 ### 5.3 Capture richer element metadata
 
@@ -267,12 +267,12 @@ This matters for avoiding disabled controls, detecting switch state, preventing 
 Agents often need to read structured data, not only tap controls. Add commands/tools such as:
 
 ```bash
-phonectl find --text-regex "Total|Balance|Amount"
-phonectl extract list --container-id com.foo:id/recycler
-phonectl extract form
-phonectl get focused-field
-phonectl get clipboard
-phonectl notifications list
+droidjig find --text-regex "Total|Balance|Amount"
+droidjig extract list --container-id com.foo:id/recycler
+droidjig extract form
+droidjig get focused-field
+droidjig get clipboard
+droidjig notifications list
 ```
 
 Potential extraction targets:
@@ -349,10 +349,10 @@ AccessibilityService can dispatch gestures more naturally than ADB for some of t
 Named swipes are useful, but the runtime should support both screen-level and container-level scrolling:
 
 ```bash
-phonectl swipe up
-phonectl swipe up --within i=12
-phonectl scroll --selector '{"scrollable":true}' --direction down
-phonectl scroll-until --text "Advanced" --max 10
+droidjig swipe up
+droidjig swipe up --within i=12
+droidjig scroll --selector '{"scrollable":true}' --direction down
+droidjig scroll-until --text "Advanced" --max 10
 ```
 
 If an AccessibilityService provider exposes scroll actions, prefer semantic scroll actions over coordinate swipes.
@@ -364,11 +364,11 @@ ADB and Android intents are extremely powerful and more reliable than UI navigat
 Suggested commands:
 
 ```bash
-phonectl intent start --action android.intent.action.VIEW --data "geo:37.7749,-122.4194"
-phonectl intent start --component com.foo/.MainActivity
-phonectl intent broadcast --action com.example.ACTION
-phonectl app open-url "https://example.com"
-phonectl app open-settings com.foo
+droidjig intent start --action android.intent.action.VIEW --data "geo:37.7749,-122.4194"
+droidjig intent start --component com.foo/.MainActivity
+droidjig intent broadcast --action com.example.ACTION
+droidjig app open-url "https://example.com"
+droidjig app open-settings com.foo
 ```
 
 Risk-classify intents because they can send messages, open payment links, change settings, or trigger app-specific side effects.
@@ -403,7 +403,7 @@ Layered port recovery is important, but probing must be bounded and transparent:
 - Avoid broad network scans by default.
 - Persist failed ports with backoff.
 - Emit clear diagnostics explaining what was tried.
-- Provide `phonectl reconnect <port>` as a manual escape hatch.
+- Provide `droidjig reconnect <port>` as a manual escape hatch.
 
 ### 7.2 Return structured lock state
 
@@ -526,9 +526,9 @@ Add audit levels:
 Add commands:
 
 ```bash
-phonectl audit tail
-phonectl audit purge
-phonectl audit export --redacted
+droidjig audit tail
+droidjig audit purge
+droidjig audit export --redacted
 ```
 
 Add redaction for:
@@ -546,7 +546,7 @@ Add redaction for:
 
 For a companion APK or daemon:
 
-- Persistent notification with “Stop phonectl.”
+- Persistent notification with “Stop droidjig.”
 - Quick Settings tile kill switch.
 - Home-screen shortcut to pause automation.
 - Physical-button emergency gesture if possible.
@@ -559,12 +559,12 @@ For a companion APK or daemon:
 Current setup focuses on ADB/Wireless Debugging. A full platform needs modular setup:
 
 ```bash
-phonectl setup adb
-phonectl setup accessibility
-phonectl setup notifications
-phonectl setup termux-api
-phonectl setup shizuku
-phonectl setup all
+droidjig setup adb
+droidjig setup accessibility
+droidjig setup notifications
+droidjig setup termux-api
+droidjig setup shizuku
+droidjig setup all
 ```
 
 Each module should report:
@@ -597,8 +597,8 @@ Add checks for:
 Add:
 
 ```bash
-phonectl doctor --json
-phonectl doctor --bundle /tmp/phonectl-diagnostics.zip
+droidjig doctor --json
+droidjig doctor --bundle /tmp/droidjig-diagnostics.zip
 ```
 
 Bundle contents should include:
@@ -640,16 +640,16 @@ The CLI can map these structured errors to exit codes. MCP and daemon APIs shoul
 
 Suggested MCP tools:
 
-- `phonectl_capabilities`
-- `phonectl_policy_get`
-- `phonectl_policy_set`
-- `phonectl_mode_get`
-- `phonectl_mode_set`
-- `phonectl_guarded_packages_get`
-- `phonectl_audit_tail`
-- `phonectl_stop`
-- `phonectl_resume`
-- `phonectl_diagnostics`
+- `droidjig_capabilities`
+- `droidjig_policy_get`
+- `droidjig_policy_set`
+- `droidjig_mode_get`
+- `droidjig_mode_set`
+- `droidjig_guarded_packages_get`
+- `droidjig_audit_tail`
+- `droidjig_stop`
+- `droidjig_resume`
+- `droidjig_diagnostics`
 
 ### 10.3 Add selector-aware and dry-run tool calls
 
@@ -905,7 +905,7 @@ policy:
 
 ## 13. Open-source resources and proven ideas
 
-This section is not a commitment to vendor or license compatibility. When direct integration is not possible or not desirable, rebuild the relevant capability behind `phonectl`'s local-first provider interfaces.
+This section is not a commitment to vendor or license compatibility. When direct integration is not possible or not desirable, rebuild the relevant capability behind `droidjig`'s local-first provider interfaces.
 
 ### 13.1 Android UI automation and control
 
@@ -947,7 +947,7 @@ Study for:
 
 Potential use:
 
-- Inspiration for selector syntax and waits, even if `phonectl` keeps stdlib-only core.
+- Inspiration for selector syntax and waits, even if `droidjig` keeps stdlib-only core.
 
 #### Appium
 
@@ -1246,11 +1246,11 @@ If this strategy is converted into immediate implementation plans, start with:
 
 ## 17. Product principle
 
-`phonectl` should remain local-first, transparent, testable, and user-controlled. It should incorporate proven open-source ideas wherever licenses and architecture allow, but it should not depend on proprietary automation apps or closed ecosystems for its core value. If a useful Tasker/MacroDroid-style capability cannot be directly reused, rebuild the capability behind `phonectl`'s provider interfaces with explicit permissions, safety policy, auditability, and local execution.
+`droidjig` should remain local-first, transparent, testable, and user-controlled. It should incorporate proven open-source ideas wherever licenses and architecture allow, but it should not depend on proprietary automation apps or closed ecosystems for its core value. If a useful Tasker/MacroDroid-style capability cannot be directly reused, rebuild the capability behind `droidjig`'s provider interfaces with explicit permissions, safety policy, auditability, and local execution.
 
 ## 18. Additional brainstorming pass: turn primitives into an agent operating system
 
-The next strategic leap is to stop thinking of `phonectl` as a bag of tools and start treating it as a small **agent operating system for Android**. The agent should not merely ask for `tap(7)`; it should ask for durable capabilities such as "open this conversation," "collect the latest notification from this app," "wait until a login code arrives," "reply with this text after user confirmation," or "restore the phone to the previous foreground app." The platform can still execute those goals through low-level ADB, Accessibility, notification, intent, clipboard, and Termux providers, but the agent-facing layer should be semantic, observable, cancellable, and policy-checked.
+The next strategic leap is to stop thinking of `droidjig` as a bag of tools and start treating it as a small **agent operating system for Android**. The agent should not merely ask for `tap(7)`; it should ask for durable capabilities such as "open this conversation," "collect the latest notification from this app," "wait until a login code arrives," "reply with this text after user confirmation," or "restore the phone to the previous foreground app." The platform can still execute those goals through low-level ADB, Accessibility, notification, intent, clipboard, and Termux providers, but the agent-facing layer should be semantic, observable, cancellable, and policy-checked.
 
 This implies three product surfaces, all backed by the same runtime:
 
@@ -1335,7 +1335,7 @@ If the action is unavailable, the error should be actionable:
     "code": "CAPABILITY_UNAVAILABLE",
     "capability": "notifications.reply",
     "missing_provider": "notification_listener",
-    "user_action": "Enable phonectl Notification Access in Android Settings > Notifications > Device & app notifications > Notification access."
+    "user_action": "Enable droidjig Notification Access in Android Settings > Notifications > Device & app notifications > Notification access."
   }
 }
 ```
@@ -1353,7 +1353,7 @@ A daemon should become the single writer and event broker for all phone actions.
 - **Policy enforcement** at one choke point rather than duplicated safety checks in every command.
 - **Durable run records** with action IDs, parent task IDs, before/after snapshots, provider choice, errors, retries, and user approvals.
 
-The daemon should start as an explicit `phonectl daemon` process, then later support Termux boot integration or a companion APK foreground service. Do not require a daemon for v1 primitives, but design new APIs so daemonization is a compatible evolution.
+The daemon should start as an explicit `droidjig daemon` process, then later support Termux boot integration or a companion APK foreground service. Do not require a daemon for v1 primitives, but design new APIs so daemonization is a compatible evolution.
 
 ## 23. Macro/runtime design sketch
 
@@ -1441,12 +1441,12 @@ Benchmarks should report success rate, median latency, action count, stale-targe
 
 Convert this brainstorming into focused implementation docs in this order:
 
-1. `2026-06-21-phonectl-selector-and-tree-observation.md` — selectors, hierarchy, relations, stale snapshots, and matching confidence.
-2. `2026-06-21-phonectl-provider-capabilities.md` — capability schema, provider registry, graceful degradation, structured errors.
-3. `2026-06-21-phonectl-daemon-runtime.md` — single-writer action queue, event bus, run IDs, snapshot cache, audit schema v2.
-4. `2026-06-21-phonectl-notification-provider.md` — companion APK NotificationListener design, reply semantics, privacy redaction, permission UX.
-5. `2026-06-21-phonectl-accessibility-companion.md` — AccessibilityService event stream, gesture dispatch, text setting, transport, safety constraints.
-6. `2026-06-21-phonectl-macro-engine.md` — trigger/condition/action schema, variables, scheduler, policy gates, cancellation.
-7. `2026-06-21-phonectl-evaluation-suite.md` — benchmark tasks, fixtures, fake provider simulator, real-device manual lane.
+1. `2026-06-21-droidjig-selector-and-tree-observation.md` — selectors, hierarchy, relations, stale snapshots, and matching confidence.
+2. `2026-06-21-droidjig-provider-capabilities.md` — capability schema, provider registry, graceful degradation, structured errors.
+3. `2026-06-21-droidjig-daemon-runtime.md` — single-writer action queue, event bus, run IDs, snapshot cache, audit schema v2.
+4. `2026-06-21-droidjig-notification-provider.md` — companion APK NotificationListener design, reply semantics, privacy redaction, permission UX.
+5. `2026-06-21-droidjig-accessibility-companion.md` — AccessibilityService event stream, gesture dispatch, text setting, transport, safety constraints.
+6. `2026-06-21-droidjig-macro-engine.md` — trigger/condition/action schema, variables, scheduler, policy gates, cancellation.
+7. `2026-06-21-droidjig-evaluation-suite.md` — benchmark tasks, fixtures, fake provider simulator, real-device manual lane.
 
 The implementation order should still protect the already-planned ADB foundation. The mistake to avoid is bolting platform concepts onto ad hoc CLI commands later. Add small seams now: capability discovery, selectors, structured errors, request IDs, and audit fields. Those seams make the larger automation platform possible without rewriting v1.

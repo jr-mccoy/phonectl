@@ -1,25 +1,25 @@
-# phonectl
+# droidjig
 
 [![Python tests](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/python.yml)
 [![Android companion APK](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml/badge.svg)](https://github.com/jumbodaddystack/phonectl/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
-phonectl is an Android computer-use bridge over ADB (no root) — observe the screen as structured JSON, act (tap, type, swipe, send key events, launch apps), then re-observe to confirm the action landed. It is designed to run inside a Termux + PRoot-Distro environment on the device itself, with `adb` as the only external dependency, giving an AI agent a tight observe-act-observe loop over any Android app without requiring device root.
+droidjig is an Android computer-use bridge over ADB (no root) — observe the screen as structured JSON, act (tap, type, swipe, send key events, launch apps), then re-observe to confirm the action landed. It is designed to run inside a Termux + PRoot-Distro environment on the device itself, with `adb` as the only external dependency, giving an AI agent a tight observe-act-observe loop over any Android app without requiring device root.
 
 ```bash
 # Observe: the screen as indexed elements (each also carries content_desc, enabled,
 # scrollable, editable, package, center, and the other element flags — trimmed here)
-$ phonectl observe --json | jq '.data.elements[1:3] | map({i, text, id, clickable, bounds})'
+$ droidjig observe --json | jq '.data.elements[1:3] | map({i, text, id, clickable, bounds})'
 [
   { "i": 1, "text": "Wi-Fi",     "id": "android:id/title", "clickable": true, "bounds": [44, 380, 1036, 520] },
   { "i": 2, "text": "Bluetooth", "id": "android:id/title", "clickable": true, "bounds": [44, 540, 1036, 680] }
 ]
 
 # Act: by element, not by pixel
-$ phonectl tap --index 1
-$ phonectl tap --text "Wi-Fi"
-$ phonectl tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
+$ droidjig tap --index 1
+$ droidjig tap --text "Wi-Fi"
+$ droidjig tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
 ```
 
 **Why it's built this way.** Targeting elements instead of coordinates is what makes an agent
@@ -42,7 +42,7 @@ is no second path.
 
 ## Contents
 
-- [Install](#install) · [Pair and connect](#pair-and-connect-android-11-wireless-debugging) · [Getting started](#getting-started-phonectl-setup) · [Diagnostics](#diagnostics)
+- [Install](#install) · [Pair and connect](#pair-and-connect-android-11-wireless-debugging) · [Getting started](#getting-started-droidjig-setup) · [Diagnostics](#diagnostics)
 - [Command reference](#command-reference) — [`observe`](#observe), [`tap`](#tap), [`type`](#type), [`swipe`](#swipe), [gestures](#gestures), [`key`](#key), [`launch`](#launch), [`clipboard`](#clipboard), [`device`](#device), [`tts`](#tts), [`intent`](#intent), [`packages`](#packages), [`wait-for`](#wait-for), [`doctor`](#doctor), [`mcp`](#mcp)
 - [Safety](#safety) — [action modes](#three-action-modes), [audit log](#audit-log), [risk ledger & policy](#risk-ledger--policy), [kill switch](#kill-switch), [exit codes](#exit-codes)
 - Providers — [Termux:API](#termuxapi-provider-optional), [AccessibilityService companion APK](#accessibilityservice-provider-companion-apk), [OCR](#ocr-provider-optional), [provider graph](#provider-graph)
@@ -67,7 +67,7 @@ pkg install android-tools
 apt-get update && apt-get install -y android-tools-adb
 ```
 
-### 2. Install phonectl
+### 2. Install droidjig
 
 ```bash
 # From the repo root (requires setuptools):
@@ -92,17 +92,17 @@ adb pair 127.0.0.1:<pairPort> <code>
 adb connect 127.0.0.1:<connPort>
 
 # Step 3: verify
-phonectl doctor
-# Expected: phonectl: connected (serial=127.0.0.1:<connPort>, state=device)
+droidjig doctor
+# Expected: droidjig: connected (serial=127.0.0.1:<connPort>, state=device)
 ```
 
-If `phonectl doctor` prints a guidance message instead of "connected", see the topology fallback in [docs/integration-smoke.md](docs/integration-smoke.md).
+If `droidjig doctor` prints a guidance message instead of "connected", see the topology fallback in [docs/integration-smoke.md](docs/integration-smoke.md).
 
 ---
 
-## Getting started: `phonectl setup`
+## Getting started: `droidjig setup`
 
-`phonectl setup` is the recommended onboarding wizard. It detects whether `adb` is installed, guides Android 11+ Wireless Debugging pairing, connects to the device, verifies `adb get-state`, and persists the working serial plus the volatile Wireless Debugging connect port for later reconnect attempts.
+`droidjig setup` is the recommended onboarding wizard. It detects whether `adb` is installed, guides Android 11+ Wireless Debugging pairing, connects to the device, verifies `adb get-state`, and persists the working serial plus the volatile Wireless Debugging connect port for later reconnect attempts.
 
 If `adb` is missing in Termux, install it first:
 
@@ -113,37 +113,37 @@ pkg install android-tools
 Run the wizard and answer the three prompts from the Wireless Debugging screen:
 
 ```bash
-phonectl setup
+droidjig setup
 # Pairing host:port: 127.0.0.1:<pairPort>
 # 6-digit pairing code: <code>
 # Connect host:port: 127.0.0.1:<connPort>
 ```
 
-Re-running `phonectl setup` is idempotent: if the device is already connected, phonectl short-circuits with an "already connected" message and does not prompt again. Setup can also report provider modules:
+Re-running `droidjig setup` is idempotent: if the device is already connected, droidjig short-circuits with an "already connected" message and does not prompt again. Setup can also report provider modules:
 
 ```bash
-phonectl setup adb
-phonectl setup accessibility
-phonectl setup notifications
-phonectl setup termux-api
-phonectl setup all
+droidjig setup adb
+droidjig setup accessibility
+droidjig setup notifications
+droidjig setup termux-api
+droidjig setup all
 ```
 
 Each module report states the required permission, current availability, how to enable it, capabilities unlocked, and safety implications. `accessibility` and `notifications` are served by the companion APK; `termux-api` is optional and discovered from the local Termux:API commands.
 
 ## Diagnostics
 
-`phonectl doctor` checks connectivity; `phonectl doctor --json` returns the structured result envelope with connection state and backend capabilities.
+`droidjig doctor` checks connectivity; `droidjig doctor --json` returns the structured result envelope with connection state and backend capabilities.
 
 ```bash
-phonectl doctor
-phonectl doctor --json
+droidjig doctor
+droidjig doctor --json
 ```
 
 For support, write a redacted diagnostics bundle:
 
 ```bash
-phonectl doctor --bundle /tmp/phonectl-diag.zip
+droidjig doctor --bundle /tmp/droidjig-diag.zip
 ```
 
 The bundle contains `manifest.json`, `adb-version.txt`, and `adb-devices.txt`. The manifest includes config with secrets masked, capability status, device state, `adb version`, `adb devices -l`, mDNS results when available, host-shim status, and a metadata-only audit tail (`ts`/`verb`/`app`/`hash`).
@@ -152,16 +152,16 @@ The bundle contains `manifest.json`, `adb-version.txt`, and `adb-devices.txt`. T
 
 ## Command reference
 
-All subcommands connect to the device using the serial stored in `~/.config/phonectl/config.json` (override with `PHONECTL_HOME`).
+All subcommands connect to the device using the serial stored in `~/.config/droidjig/config.json` (override with `DROIDJIG_HOME`).
 
 ### `observe`
 
 Dump the current screen as a structured JSON snapshot: foreground app, screen dimensions, a hash of the element set, and a flat list of UI elements with indices, text, resource IDs, bounds, and click-targets.
 
 ```bash
-phonectl observe
-phonectl observe --screenshot                  # also capture a PNG
-phonectl observe --screenshot-path /tmp/snap.png
+droidjig observe
+droidjig observe --screenshot                  # also capture a PNG
+droidjig observe --screenshot-path /tmp/snap.png
 ```
 
 ### `tap`
@@ -169,8 +169,8 @@ phonectl observe --screenshot-path /tmp/snap.png
 Tap an element by its index from the last `observe` output (preferred — device-size-agnostic), or by raw coordinates.
 
 ```bash
-phonectl tap --index 7
-phonectl tap --xy 540 450
+droidjig tap --index 7
+droidjig tap --xy 540 450
 ```
 
 ### `type`
@@ -178,7 +178,7 @@ phonectl tap --xy 540 450
 Type text into the focused field.
 
 ```bash
-phonectl type "hello world"
+droidjig type "hello world"
 ```
 
 ### `swipe`
@@ -186,10 +186,10 @@ phonectl type "hello world"
 Swipe from (X1, Y1) to (X2, Y2), or in a named direction with density-aware scaling.
 
 ```bash
-phonectl swipe 540 1600 540 400          # coordinate form: scroll up
-phonectl swipe up                        # named direction (full screen)
-phonectl swipe down --within i=3         # scroll within container element 3
-phonectl swipe left --distance-pct 0.7  # custom distance
+droidjig swipe 540 1600 540 400          # coordinate form: scroll up
+droidjig swipe up                        # named direction (full screen)
+droidjig swipe down --within i=3         # scroll within container element 3
+droidjig swipe left --distance-pct 0.7  # custom distance
 ```
 
 ### Gestures
@@ -198,41 +198,41 @@ High-level gesture verbs built on ADB's `input swipe` primitive.
 
 **Named swipe** (density-aware — coordinates computed from `wm size`):
 ```bash
-phonectl swipe up|down|left|right [--within i=N] [--distance-pct 0.5]
+droidjig swipe up|down|left|right [--within i=N] [--distance-pct 0.5]
 ```
 
 **Long-press** (zero-distance swipe held for `--duration-ms`):
 ```bash
-phonectl long-press --i N [--duration-ms 1000]
-phonectl long-press --x X --y Y
+droidjig long-press --i N [--duration-ms 1000]
+droidjig long-press --x X --y Y
 ```
 
 **Double-tap** (two taps separated by `--interval-ms`):
 ```bash
-phonectl double-tap --i N [--interval-ms 100]
-phonectl double-tap --x X --y Y
+droidjig double-tap --i N [--interval-ms 100]
+droidjig double-tap --x X --y Y
 ```
 
 **Drag** (long-duration swipe — portable ADB drag primitive; `adb shell input draganddrop` is not universally available):
 ```bash
-phonectl drag --x1 X --y1 Y --x2 X --y2 Y [--duration-ms 500]
+droidjig drag --x1 X --y1 Y --x2 X --y2 Y [--duration-ms 500]
 ```
 
 **Fling** (velocity-scaled fast swipe):
 ```bash
-phonectl fling up|down|left|right
+droidjig fling up|down|left|right
 ```
 
 **Scroll** (container-aware; reads element bounds from snapshot when `--within` is set):
 ```bash
-phonectl scroll down [--within i=N]
-phonectl scroll up --within i=5
+droidjig scroll down [--within i=N]
+droidjig scroll up --within i=5
 ```
 
 **Scroll-until** (observe→scroll loop; returns the snapshot in which the target appeared, or the last snapshot if `--max` scrolls are exhausted):
 ```bash
-phonectl scroll-until --text "Advanced" [--direction down] [--within i=N] [--max 10]
-phonectl scroll-until --selector '{"resource_id":"com.example:id/item"}' --max 5
+droidjig scroll-until --text "Advanced" [--direction down] [--within i=N] [--max 10]
+droidjig scroll-until --selector '{"resource_id":"com.example:id/item"}' --max 5
 ```
 
 All gesture verbs route through `runtime.run_action` (kill switch, mode, audit, risk policy all apply). Use `--json` for structured output and `--yes` in confirm mode.
@@ -242,10 +242,10 @@ All gesture verbs route through `runtime.run_action` (kill switch, mode, audit, 
 Send a key event. Friendly names accepted: `back`, `home`, `recents`, `enter`. Any raw Android keycode string also works.
 
 ```bash
-phonectl key back
-phonectl key home
-phonectl key enter
-phonectl key KEYCODE_VOLUME_UP
+droidjig key back
+droidjig key home
+droidjig key enter
+droidjig key KEYCODE_VOLUME_UP
 ```
 
 ### `launch`
@@ -253,8 +253,8 @@ phonectl key KEYCODE_VOLUME_UP
 Start an app by package name using the monkey launcher-intent mechanism (`monkey -p <pkg> -c android.intent.category.LAUNCHER 1`). The package must expose a LAUNCHER activity.
 
 ```bash
-phonectl launch com.android.settings
-phonectl launch com.android.chrome
+droidjig launch com.android.settings
+droidjig launch com.android.chrome
 ```
 
 ### `clipboard`
@@ -262,38 +262,38 @@ phonectl launch com.android.chrome
 Read, write, or clear the system clipboard.
 
 ```bash
-phonectl clipboard read               # requires Termux:API (Plan 3.5)
-phonectl clipboard write "hello"      # via ADB service call (Android 10+)
-phonectl clipboard write "hello" --yes
-phonectl clipboard clear --yes
+droidjig clipboard read               # requires Termux:API (Plan 3.5)
+droidjig clipboard write "hello"      # via ADB service call (Android 10+)
+droidjig clipboard write "hello" --yes
+droidjig clipboard clear --yes
 ```
 
-**Note:** `clipboard read` is not available via plain ADB because the parcel-based read is ROM-specific and unreliable. It returns a `capability_unavailable` error with install instructions until Termux:API is configured (`phonectl setup termux-api`).
+**Note:** `clipboard read` is not available via plain ADB because the parcel-based read is ROM-specific and unreliable. It returns a `capability_unavailable` error with install instructions until Termux:API is configured (`droidjig setup termux-api`).
 
 `clipboard write` and `clipboard clear` are mutating operations that route through `runtime.run_action` (audit log, risk policy, kill switch, mode gates all apply).
 
 ### `device`
 
-Read device state via the Termux:API provider (requires `phonectl setup termux-api`).
+Read device state via the Termux:API provider (requires `droidjig setup termux-api`).
 
 ```bash
-phonectl device battery          # Battery percentage, status, health, temperature
-phonectl device battery --json   # Structured result envelope
-phonectl device wifi             # WiFi SSID, IP, BSSID, RSSI
-phonectl device wifi --json
+droidjig device battery          # Battery percentage, status, health, temperature
+droidjig device battery --json   # Structured result envelope
+droidjig device wifi             # WiFi SSID, IP, BSSID, RSSI
+droidjig device wifi --json
 ```
 
 Returns `capability_unavailable` with install instructions if Termux:API is not configured.
 
 ### `tts`
 
-Speak text via Android's TTS engine (requires `phonectl setup termux-api`).
+Speak text via Android's TTS engine (requires `droidjig setup termux-api`).
 
 ```bash
-phonectl tts speak "Hello, world"
-phonectl tts speak "Bonjour" --language fr
-phonectl tts speak "Fast" --rate 1.5
-phonectl tts speak "Hello" --json   # Structured result envelope
+droidjig tts speak "Hello, world"
+droidjig tts speak "Bonjour" --language fr
+droidjig tts speak "Fast" --rate 1.5
+droidjig tts speak "Hello" --json   # Structured result envelope
 ```
 
 TTS is fire-and-forget: the command returns as soon as the TTS engine accepts the request. The speech plays asynchronously. Returns `capability_unavailable` if Termux:API is not configured.
@@ -303,10 +303,10 @@ TTS is fire-and-forget: the command returns as soon as the TTS engine accepts th
 Start activities or send broadcasts via `am start` / `am broadcast`.
 
 ```bash
-phonectl intent start --action android.intent.action.VIEW --data "geo:37.422,-122.084"
-phonectl intent start --component com.android.settings/.wifi.WifiSettings --yes
-phonectl intent broadcast com.example.MY_ACTION --yes
-phonectl intent broadcast com.example.MY_ACTION --extra key=value --yes
+droidjig intent start --action android.intent.action.VIEW --data "geo:37.422,-122.084"
+droidjig intent start --component com.android.settings/.wifi.WifiSettings --yes
+droidjig intent broadcast com.example.MY_ACTION --yes
+droidjig intent broadcast com.example.MY_ACTION --extra key=value --yes
 ```
 
 Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) and require `--yes` or explicit policy override. The risk ledger classifies both `intent_start` and `intent_broadcast` as `high_risk_verb`; an `intent start` whose action or data targets the dialer or SMS (`tel:`, `sms:`/`smsto:`, `ACTION_CALL`/`DIAL`/`SENDTO`) is classified **critical** and denied by default policy. Multiple `--extra K=V` pairs are supported (string extras only; typed extras are deferred).
@@ -316,12 +316,12 @@ Intent `start` and `broadcast` are **high-risk** operations (risk level `high`) 
 List, inspect, launch, stop, or clear packages.
 
 ```bash
-phonectl packages list                          # user-installed packages only
-phonectl packages list --all                    # include system packages
-phonectl packages resolve com.android.settings  # version, launch activity
-phonectl packages launch com.android.settings   # same as `launch` verb
-phonectl packages stop com.example.app --yes    # force-stop (high risk)
-phonectl packages clear com.example.app --yes   # clear data (critical risk)
+droidjig packages list                          # user-installed packages only
+droidjig packages list --all                    # include system packages
+droidjig packages resolve com.android.settings  # version, launch activity
+droidjig packages launch com.android.settings   # same as `launch` verb
+droidjig packages stop com.example.app --yes    # force-stop (high risk)
+droidjig packages clear com.example.app --yes   # clear data (critical risk)
 ```
 
 Risk levels:
@@ -335,8 +335,8 @@ Risk levels:
 Re-observe on a short poll until a UI element matching `--text` or `--id` appears, or until `--timeout` seconds elapse. Requires exactly one of `--text` or `--id`.
 
 ```bash
-phonectl wait-for --text "Network & internet" --timeout 8
-phonectl wait-for --id "android:id/title" --timeout 5
+droidjig wait-for --text "Network & internet" --timeout 8
+droidjig wait-for --id "android:id/title" --timeout 5
 ```
 
 Exit codes: `0` on match, `1` on timeout, `2` if neither `--text` nor `--id` is provided.
@@ -346,20 +346,20 @@ Exit codes: `0` on match, `1` on timeout, `2` if neither `--text` nor `--id` is 
 Check device connectivity, print structured JSON, or create a redacted diagnostics bundle.
 
 ```bash
-phonectl doctor
-phonectl doctor --json
-phonectl doctor --bundle /tmp/phonectl-diag.zip
-# phonectl: connected (serial=127.0.0.1:PORT, state=device)
+droidjig doctor
+droidjig doctor --json
+droidjig doctor --bundle /tmp/droidjig-diag.zip
+# droidjig: connected (serial=127.0.0.1:PORT, state=device)
 ```
 
 
 ### `mcp`
 
-Launch the optional stdio MCP server so agents can call phonectl as native tools. The live transport needs the optional MCP SDK; handlers and tests remain stdlib-only.
+Launch the optional stdio MCP server so agents can call droidjig as native tools. The live transport needs the optional MCP SDK; handlers and tests remain stdlib-only.
 
 ```bash
-pip install 'phonectl[mcp]'
-phonectl mcp
+pip install 'droidjig[mcp]'
+droidjig mcp
 ```
 
 Every MCP tool returns the same structured result envelope used by `--json` CLI actions. Agents should branch on `ok`, `error.code`, `requires_user`, `risk_level`, and `reasons` instead of parsing human text.
@@ -432,12 +432,12 @@ The action tools are thin frontends over `runtime.run_action`, so MCP and CLI us
 There is deliberately **no `phone_resume` tool** (and no daemon `resume` RPC). Engaging the
 kill switch (`phone_stop`) is agent-reachable, but *clearing* it is a human-only, out-of-band
 action — a kill switch the agent can turn off is not a kill switch. Resume from the host with
-`phonectl resume`, by removing the `STOP` sentinel, or from the companion notification/tile.
+`droidjig resume`, by removing the `STOP` sentinel, or from the companion notification/tile.
 
 ### Global flag
 
 ```bash
-phonectl --version
+droidjig --version
 ```
 
 ---
@@ -446,7 +446,7 @@ phonectl --version
 
 ### Three action modes
 
-The `mode` key in `~/.config/phonectl/config.json` (or `$PHONECTL_HOME/config.json`) controls how action verbs behave:
+The `mode` key in `~/.config/droidjig/config.json` (or `$DROIDJIG_HOME/config.json`) controls how action verbs behave:
 
 | Mode | Behaviour |
 |---|---|
@@ -461,32 +461,32 @@ Set the mode by editing `config.json`:
 
 Then pass `--yes` to action verbs to permit execution in confirm mode:
 ```bash
-phonectl tap --index 3 --yes
-phonectl type "hello" --yes
+droidjig tap --index 3 --yes
+droidjig type "hello" --yes
 ```
 
 ### Audit log
 
-Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/phonectl/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, screen hash, and `outcome` (`ok` or `blocked`). Dry-run actions are not logged.
+Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/droidjig/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, screen hash, and `outcome` (`ok` or `blocked`). Dry-run actions are not logged.
 
 ### Single-writer runtime & audit
 
-All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers — both within a process (thread lock) and across phonectl processes (an `flock` on `$PHONECTL_HOME/action.lock`) — stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
+All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers — both within a process (thread lock) and across droidjig processes (an `flock` on `$DROIDJIG_HOME/action.lock`) — stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
 
 Action verbs accept `--json` to print the full structured result envelope:
 
 ```bash
-phonectl tap --xy 100 200 --json
-phonectl type "hello" --request-id req-123 --idempotency-key msg-1 --json
+droidjig tap --xy 100 200 --json
+droidjig type "hello" --request-id req-123 --idempotency-key msg-1 --json
 ```
 
-The action envelope includes `verb`, `target`, and `request_id`. A repeated `--idempotency-key` replays the first envelope with `idempotent_replay: true` instead of executing the action again. Replay envelopes persist to `$PHONECTL_HOME/idempotency.json` (TTL `idempotency_ttl`, default 300 s), so deduplication holds across one-shot CLI invocations, not just within the daemon process.
+The action envelope includes `verb`, `target`, and `request_id`. A repeated `--idempotency-key` replays the first envelope with `idempotent_replay: true` instead of executing the action again. Replay envelopes persist to `$DROIDJIG_HOME/idempotency.json` (TTL `idempotency_ttl`, default 300 s), so deduplication holds across one-shot CLI invocations, not just within the daemon process.
 
 Single-writer control errors use stable codes:
 
 | Code | Exit | Meaning |
 |---|---:|---|
-| `busy` | `1` | Another action (in this or another phonectl process) holds the single-writer lock; retry later. |
+| `busy` | `1` | Another action (in this or another droidjig process) holds the single-writer lock; retry later. |
 | `stopped` | `2` | The `STOP` kill-switch file is present. |
 | `confirmation_required` | `3` | Confirm mode refused the action because `--yes` was not supplied. |
 
@@ -531,12 +531,12 @@ Effective default policy:
 
 The `risk_policy` values are `allow`, `confirm`, or `deny`. A risk-policy `confirm` returns `confirmation_required` unless the action is re-run with `--yes`; `deny` returns `guarded_action`. Successful action envelopes and policy/rate failures include `risk_level` and `reasons`.
 
-Rate limits are bucketed sliding windows over the last minute. Every allowed action counts against `global` and its verb bucket; `high` and `critical` actions also count against `high_risk`. Rate state is stored in `$PHONECTL_HOME/ratelimit.json`. A limit breach returns `rate_limited` with `bucket`.
+Rate limits are bucketed sliding windows over the last minute. Every allowed action counts against `global` and its verb bucket; `high` and `critical` actions also count against `high_risk`. Rate state is stored in `$DROIDJIG_HOME/ratelimit.json`. A limit breach returns `rate_limited` with `bucket`.
 
 Use `policy explain` to inspect a decision before acting:
 
 ```bash
-phonectl policy explain --verb tap --text "Pay now" --json
+droidjig policy explain --verb tap --text "Pay now" --json
 ```
 
 ```json
@@ -562,10 +562,10 @@ Redaction scrubs OTP-like numeric codes, email addresses, phone numbers, card-li
 Audit inspection commands:
 
 ```bash
-phonectl audit tail --limit 20
-phonectl audit export audit.json
-phonectl audit export audit-full.json --no-redact
-phonectl audit purge
+droidjig audit tail --limit 20
+droidjig audit export audit.json
+droidjig audit export audit-full.json --no-redact
+droidjig audit purge
 ```
 
 ### Kill switch
@@ -573,23 +573,23 @@ phonectl audit purge
 Engage the kill switch to instantly refuse all action verbs regardless of mode. Any of these work:
 
 ```bash
-phonectl stop                    # engage (host CLI)
-touch ~/.config/phonectl/STOP    # engage (or create the sentinel directly)
+droidjig stop                    # engage (host CLI)
+touch ~/.config/droidjig/STOP    # engage (or create the sentinel directly)
 ```
 
 Clearing it is a **human-only, out-of-band** step — there is no agent-facing resume (no
 `phone_resume` MCP tool, no daemon `resume` RPC), so an agent cannot turn its own brakes off:
 
 ```bash
-phonectl resume                  # disengage (host CLI, human action)
-rm ~/.config/phonectl/STOP       # or remove the sentinel directly
+droidjig resume                  # disengage (host CLI, human action)
+rm ~/.config/droidjig/STOP       # or remove the sentinel directly
 ```
 
-`phonectl stop`/`resume` are host commands; the agent's only reachable control is engaging
+`droidjig stop`/`resume` are host commands; the agent's only reachable control is engaging
 `STOP` (via `phone_stop` or the daemon `stop` RPC). Any action verb while `STOP` is present
 exits with code `2` and prints:
 ```
-phonectl: action refused (kill switch STOP present)
+droidjig: action refused (kill switch STOP present)
 ```
 
 ---
@@ -602,16 +602,16 @@ phonectl: action refused (kill switch STOP present)
 | `1` | Timeout (`wait-for`), connection error, policy denial, rate limit, or busy writer |
 | `2` | Kill switch active, or `wait-for` called without `--text`/`--id` |
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
-| `4` | Internal error — a bug in phonectl, not a refusal. Reported as an `internal_error` envelope; set `PHONECTL_DEBUG=1` to re-raise and get the traceback |
+| `4` | Internal error — a bug in droidjig, not a refusal. Reported as an `internal_error` envelope; set `DROIDJIG_DEBUG=1` to re-raise and get the traceback |
 | `130` | Interrupted with Ctrl-C (128 + SIGINT) |
 
-Codes `1`–`3` mean phonectl worked and declined; `4` means phonectl itself broke. A closed
-pipe (`phonectl observe --json | head`) exits `0`.
+Codes `1`–`3` mean droidjig worked and declined; `4` means droidjig itself broke. A closed
+pipe (`droidjig observe --json | head`) exits `0`.
 
 
 ## Termux:API provider (optional)
 
-The `TermuxApiProvider` is an optional second provider that activates automatically when `termux-battery-status` is found on `PATH`. No configuration is required — phonectl detects it at startup.
+The `TermuxApiProvider` is an optional second provider that activates automatically when `termux-battery-status` is found on `PATH`. No configuration is required — droidjig detects it at startup.
 
 ### Install
 
@@ -620,7 +620,7 @@ The `TermuxApiProvider` is an optional second provider that activates automatica
 # 2. In Termux, install the CLI tools:
 pkg install termux-api
 # 3. On Android, grant Termux:API the permissions it requests (battery, clipboard, WiFi, etc.)
-phonectl setup termux-api   # verify detection and show capability status
+droidjig setup termux-api   # verify detection and show capability status
 ```
 
 ### What it enables
@@ -635,9 +635,9 @@ Once installed, the provider registers itself with the following capabilities:
 | `device_wifi_info` | ✓ | ✗ |
 | `tts_speak` | ✓ | ✗ |
 
-**Clipboard read upgrade:** `phonectl clipboard read` returns `capability_unavailable` without Termux:API because ADB clipboard reading is ROM-specific and unreliable on Android 10+. Once Termux:API is installed, `clipboard read` upgrades automatically — no configuration change needed.
+**Clipboard read upgrade:** `droidjig clipboard read` returns `capability_unavailable` without Termux:API because ADB clipboard reading is ROM-specific and unreliable on Android 10+. Once Termux:API is installed, `clipboard read` upgrades automatically — no configuration change needed.
 
-**New verbs:** `phonectl device battery`, `phonectl device wifi`, and `phonectl tts speak TEXT` are only available when Termux:API is present. All three return structured result envelopes with `--json`.
+**New verbs:** `droidjig device battery`, `droidjig device wifi`, and `droidjig tts speak TEXT` are only available when Termux:API is present. All three return structured result envelopes with `--json`.
 
 ### Provider priority
 
@@ -670,7 +670,7 @@ for `observe_ui_tree` and all `act_*` capabilities, providing a richer, lower-la
 `native_tree.to_compat_xml`), so element index `i` and all selectors work identically across
 providers. Existing code that uses index-based targeting is unaffected.
 
-**Optional:** absent the companion APK, phonectl is ADB-first and completely unchanged.
+**Optional:** absent the companion APK, droidjig is ADB-first and completely unchanged.
 `_make_accessibility_provider()` returns `None` by default until Plan 4.3 supplies a
 `SocketTransport`; at that point the provider activates automatically when the companion is
 reachable.
@@ -704,24 +704,24 @@ surface, message contract, permissions, and error codes.
 
 ## Companion setup
 
-`phonectl companion setup` is the one-command bring-up for the companion APK: install the APK,
+`droidjig companion setup` is the one-command bring-up for the companion APK: install the APK,
 enable the AccessibilityService, grant `POST_NOTIFICATIONS`, acquire the pairing token, start the
 socket server, and verify the connection with an authenticated handshake. It's **idempotent** —
 each step checks whether it's already done and skips if so, so re-running it is safe.
 
 ```bash
-phonectl companion setup                                # auto-detects the newest app-debug.apk
-phonectl companion setup --apk /path/to/app-debug.apk    # use an explicit APK path
-phonectl companion setup --yes                           # non-interactive: accept the grant/start prompts
-phonectl companion setup --json                          # structured step-by-step result envelope
+droidjig companion setup                                # auto-detects the newest app-debug.apk
+droidjig companion setup --apk /path/to/app-debug.apk    # use an explicit APK path
+droidjig companion setup --yes                           # non-interactive: accept the grant/start prompts
+droidjig companion setup --json                          # structured step-by-step result envelope
 ```
 
 | Command | What it does |
 |---|---|
-| `phonectl companion setup [--apk PATH] [--yes] [--json]` | Installs → enables AccessibilityService → grants notifications → pairs token → starts server → verifies |
-| `phonectl companion status [--json]` | Read-only report: `installed`, `accessibility`, `socket`, `token_paired` |
+| `droidjig companion setup [--apk PATH] [--yes] [--json]` | Installs → enables AccessibilityService → grants notifications → pairs token → starts server → verifies |
+| `droidjig companion status [--json]` | Read-only report: `installed`, `accessibility`, `socket`, `token_paired` |
 
-When `--apk` is omitted, phonectl auto-detects the newest `app-debug.apk` under `~/Download`,
+When `--apk` is omitted, droidjig auto-detects the newest `app-debug.apk` under `~/Download`,
 `/sdcard/Download`, or `/storage/emulated/0/Download`; if none is found it exits `2` and asks for
 `--apk PATH`. Each run prints one line per step (`install`, `accessibility`, `notifications`,
 `token`, `server`, `verify`) with a `skipped`/`done`/`failed` status.
@@ -731,8 +731,8 @@ posture as every other mutating command — they print what they're about to do 
 `--yes`, or an interactive `y/N` confirmation, before proceeding.
 
 **Token acquisition:** on a debug build, the token is read automatically off-device via
-`adb shell run-as com.phonectl.companion cat shared_prefs/phonectl_companion.xml` — no prompt
-needed. On other builds `run-as` doesn't work for a release-signed package, so phonectl opens the
+`adb shell run-as com.phonectl.companion cat shared_prefs/droidjig_companion.xml` — no prompt
+needed. On other builds `run-as` doesn't work for a release-signed package, so droidjig opens the
 companion's Pairing screen instead and prompts you to paste the token shown there.
 
 **The one manual step `setup` can't automate:** enabling **Notification access**
@@ -741,7 +741,7 @@ equivalent for this toggle. `companion setup` prints a reminder to open the comp
 **Notification access** yourself; everything else in the flow is automated.
 
 ```bash
-phonectl companion status --json
+droidjig companion status --json
 # {
 #   "installed": true,
 #   "accessibility": true,
@@ -752,14 +752,14 @@ phonectl companion status --json
 
 ### `config get` / `config set`
 
-Typed access to `~/.config/phonectl/config.json` keys (`companion_port`, `companion_host`,
+Typed access to `~/.config/droidjig/config.json` keys (`companion_port`, `companion_host`,
 `companion_token`, `companion_timeout`, and the rest of the config defaults table):
 
 ```bash
-phonectl config get companion_port
-phonectl config get companion_port --json
-phonectl config set companion_port 8765
-phonectl config set companion_host 127.0.0.1
+droidjig config get companion_port
+droidjig config get companion_port --json
+droidjig config set companion_port 8765
+droidjig config set companion_host 127.0.0.1
 ```
 
 `config get` returns the raw value (`null` if unset). `config set` validates the key against the
@@ -770,11 +770,11 @@ exiting `2` with `unknown config key` for anything not in the defaults table.
 
 ## Companion transport & trust controls
 
-The companion APK communicates with phonectl over a **loopback TCP socket** — a newline-delimited
-JSON protocol running on `127.0.0.1` only. Configure the port phonectl connects to:
+The companion APK communicates with droidjig over a **loopback TCP socket** — a newline-delimited
+JSON protocol running on `127.0.0.1` only. Configure the port droidjig connects to:
 
 ```json
-// ~/.config/phonectl/config.json
+// ~/.config/droidjig/config.json
 {
   "companion_port": 8765,
   "companion_host": "127.0.0.1",
@@ -785,7 +785,7 @@ JSON protocol running on `127.0.0.1` only. Configure the port phonectl connects 
 
 `companion_port` defaults to `null` (unset). When unset, `_make_accessibility_provider()` and
 `_make_notifications_provider()` skip the transport and the build stays ADB-first — no companion
-required. When set, phonectl pings the companion on startup; if it does not respond, the providers
+required. When set, droidjig pings the companion on startup; if it does not respond, the providers
 are omitted silently.
 
 ### Pairing: loopback is not a security boundary on Android
@@ -799,7 +799,7 @@ So the companion requires a **shared-secret token** on every request except the 
 probe. Pair it once:
 
 1. Open the companion app → **Pairing** → copy the **Companion token**.
-2. Put it in `~/.config/phonectl/config.json` as `companion_token` (above).
+2. Put it in `~/.config/droidjig/config.json` as `companion_token` (above).
 
 `SocketTransport` stamps the token onto every request; the companion refuses any action, read, or
 handshake that lacks it with an `unauthorized` error. Without a matching token the companion is
@@ -807,16 +807,16 @@ unusable — a companion with a configured port but no paired token reports `rea
 
 The token defends the companion from being *driven* by other apps. It does **not** by itself stop
 a hostile app that binds the fixed default port `8765` *first* from impersonating the companion to
-phonectl (the client would send its token to the imposter). If that matters in your threat model,
+droidjig (the client would send its token to the imposter). If that matters in your threat model,
 set a non-default `companion_port` and start the companion before any untrusted app.
 
-### `phonectl trust status`
+### `droidjig trust status`
 
 Inspect the current handshake from the companion:
 
 ```bash
-phonectl trust status
-phonectl trust status --json
+droidjig trust status
+droidjig trust status --json
 ```
 
 ```json
@@ -863,7 +863,7 @@ companion's own app storage — a client-supplied output path outside it is refu
 
 ### Emergency stop
 
-The companion APK's persistent "Stop phonectl" notification and Quick-Settings tile set a
+The companion APK's persistent "Stop droidjig" notification and Quick-Settings tile set a
 `stopped=true` flag in the `handshake` response. This flag is registered as an `extra_check` in
 `audit.kill_switch_active`. When either the `STOP` sentinel file **or** `stopped=true` is active,
 **all** action verbs (CLI, MCP, and later daemon) are blocked immediately with exit code `2`.
@@ -878,16 +878,16 @@ configured never consults this check.
 
 The companion also enforces its stop **on-device**: while `stopped=true`, the companion's own
 dispatcher refuses every method except `ping` (liveness) and `handshake` (how the stop is
-observed) with a `stopped` error. A direct socket client — anything that bypasses the phonectl
+observed) with a `stopped` error. A direct socket client — anything that bypasses the droidjig
 Python layer entirely — cannot act through the companion while it is stopped.
 
 ```bash
 # File-based kill switch (always available, no companion needed)
-touch ~/.config/phonectl/STOP    # engage
-rm ~/.config/phonectl/STOP       # disengage
+touch ~/.config/droidjig/STOP    # engage
+rm ~/.config/droidjig/STOP       # disengage
 
 # Companion-based stop (requires APK running and connected)
-# Tap "Stop phonectl" in the persistent notification or the Quick-Settings tile
+# Tap "Stop droidjig" in the persistent notification or the Quick-Settings tile
 ```
 
 **Design spec:** `android/foreground-service/SPEC.md` covers the foreground service, loopback TCP
@@ -898,7 +898,7 @@ guarantees.
 
 ## Notifications
 
-phonectl treats notifications as a **first-class provider**, not UI-scraping. The `NotificationsProvider` exposes four capabilities with per-notification `can_reply`/`can_dismiss` flags derived from each notification's actions and `RemoteInput`.
+droidjig treats notifications as a **first-class provider**, not UI-scraping. The `NotificationsProvider` exposes four capabilities with per-notification `can_reply`/`can_dismiss` flags derived from each notification's actions and `RemoteInput`.
 
 ### Source precedence
 
@@ -933,18 +933,18 @@ Each notification item in the `list` result has:
 ### CLI verbs
 
 ```bash
-phonectl notifications list                          # list all current notifications
-phonectl notifications list --package com.msg        # filter by package
-phonectl notifications list --json                   # structured result envelope
+droidjig notifications list                          # list all current notifications
+droidjig notifications list --package com.msg        # filter by package
+droidjig notifications list --json                   # structured result envelope
 
-phonectl notifications wait --package com.msg --timeout 30  # poll until match
-phonectl notifications wait --title-contains "Alice" --json
+droidjig notifications wait --package com.msg --timeout 30  # poll until match
+droidjig notifications wait --title-contains "Alice" --json
 
-phonectl notifications reply KEY "on my way" --yes  # send RemoteInput reply (high-risk)
-phonectl notifications reply KEY "ok" --json --yes
+droidjig notifications reply KEY "on my way" --yes  # send RemoteInput reply (high-risk)
+droidjig notifications reply KEY "ok" --json --yes
 
-phonectl notifications dismiss KEY --yes             # dismiss one notification
-phonectl notifications dismiss KEY --json --yes
+droidjig notifications dismiss KEY --yes             # dismiss one notification
+droidjig notifications dismiss KEY --json --yes
 ```
 
 `KEY` is the opaque `key` field from a `notifications list` item.
@@ -958,7 +958,7 @@ phonectl notifications dismiss KEY --json --yes
 | `notifications_reply` | **high** | Sends visible content into arbitrary apps |
 | `notifications_dismiss` | low (default) | Removes a notification |
 
-`notifications_reply` is a `high_risk_verb` — it requires `--yes` in confirm mode or a `high: allow` policy override. In the default policy it triggers confirmation. Use `phonectl policy explain --verb notifications_reply` to inspect before acting.
+`notifications_reply` is a `high_risk_verb` — it requires `--yes` in confirm mode or a `high: allow` policy override. In the default policy it triggers confirmation. Use `droidjig policy explain --verb notifications_reply` to inspect before acting.
 
 ---
 
@@ -1022,7 +1022,7 @@ When the backend is a bare `AdbBackend` (not wrapped in a registry), `provider` 
 
 ## Structured results & capabilities
 
-`phonectl` now has a stable structured-result contract for JSON-capable surfaces. `phonectl observe --json` and `phonectl doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
+`droidjig` now has a stable structured-result contract for JSON-capable surfaces. `droidjig observe --json` and `droidjig doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
 
 Successful envelope shape:
 
@@ -1060,7 +1060,7 @@ Stable error codes:
 | `capability_unavailable` | false | true | The active provider cannot perform the requested capability. |
 | `guarded_action` | false | true | Policy or a guardrail blocked the action. |
 | `rate_limited` | true | false | Action rate limiting blocked the request temporarily. |
-| `busy` | true | false | Another action (in this or another phonectl process) holds the single-writer lock. |
+| `busy` | true | false | Another action (in this or another droidjig process) holds the single-writer lock. |
 | `stopped` | false | true | The kill switch is active. |
 | `confirmation_required` | false | true | The action requires explicit confirmation. |
 
@@ -1099,7 +1099,7 @@ Capability keys exposed by providers:
 Examples:
 
 ```bash
-phonectl observe --json
+droidjig observe --json
 ```
 
 ```json
@@ -1115,7 +1115,7 @@ phonectl observe --json
 ```
 
 ```bash
-phonectl doctor --json
+droidjig doctor --json
 ```
 
 ```json
@@ -1144,7 +1144,7 @@ phonectl doctor --json
 
 ## Configuration
 
-Config directory: `~/.config/phonectl/` (override: `PHONECTL_HOME` env var)
+Config directory: `~/.config/droidjig/` (override: `DROIDJIG_HOME` env var)
 
 | File | Purpose |
 |---|---|
@@ -1177,26 +1177,26 @@ security posture and remaining risk in
 
 ## Selector targeting and tree observation
 
-`phonectl` supports durable selector-based targeting in addition to snapshot-local element indices and raw coordinates. Selectors are JSON objects whose present keys all match: `text`, `text_regex`, `content_desc`, `resource_id`, `class`, boolean element flags such as `clickable`, `enabled`, `checked`, `editable`, relation predicates `ancestor_text` and `sibling_text`, `bounds_near` (`[x1,y1,x2,y2]` center-in-box), and `nth_match` (zero-based pick after ranking).
+`droidjig` supports durable selector-based targeting in addition to snapshot-local element indices and raw coordinates. Selectors are JSON objects whose present keys all match: `text`, `text_regex`, `content_desc`, `resource_id`, `class`, boolean element flags such as `clickable`, `enabled`, `checked`, `editable`, relation predicates `ancestor_text` and `sibling_text`, `bounds_near` (`[x1,y1,x2,y2]` center-in-box), and `nth_match` (zero-based pick after ranking).
 
 Examples:
 
 ```bash
-phonectl tap --text "Wi-Fi"
-phonectl tap --id android:id/title --nth 1
-phonectl tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
-phonectl observe --tree --relations
+droidjig tap --text "Wi-Fi"
+droidjig tap --id android:id/title --nth 1
+droidjig tap --selector '{"text_regex":"^(Wi-?Fi|Bluetooth)$","clickable":true}'
+droidjig observe --tree --relations
 ```
 
-Use `--expected-hash HASH` on actions to prevent acting when the observed screen has changed. If the current hash differs, `phonectl` re-observes once and raises the typed `stale_snapshot` error unless `--stale-ok` is supplied, in which case it proceeds against the fresh snapshot.
+Use `--expected-hash HASH` on actions to prevent acting when the observed screen has changed. If the current hash differs, `droidjig` re-observes once and raises the typed `stale_snapshot` error unless `--stale-ok` is supplied, in which case it proceeds against the fresh snapshot.
 
 ## Resilience and connection recovery
 
-`phonectl` is designed to survive common unattended-use failures without exposing raw Python tracebacks.
+`droidjig` is designed to survive common unattended-use failures without exposing raw Python tracebacks.
 
 ### Config keys
 
-The config file (`~/.config/phonectl/config.json`, or `$PHONECTL_HOME/config.json`) supports these connection recovery keys:
+The config file (`~/.config/droidjig/config.json`, or `$DROIDJIG_HOME/config.json`) supports these connection recovery keys:
 
 | Key | Meaning |
 |---|---|
@@ -1217,27 +1217,27 @@ Example:
 
 ### `reconnect`
 
-Use `phonectl reconnect [port]` when Wireless Debugging rotated or dropped its connection:
+Use `droidjig reconnect [port]` when Wireless Debugging rotated or dropped its connection:
 
 ```bash
-phonectl reconnect 127.0.0.1:43210  # explicitly connect and persist this port
-phonectl reconnect                   # layered recovery: last_port/serial, mDNS, probe_ports, shim seam
+droidjig reconnect 127.0.0.1:43210  # explicitly connect and persist this port
+droidjig reconnect                   # layered recovery: last_port/serial, mDNS, probe_ports, shim seam
 ```
 
 Without an explicit port, recovery tries the last-known-good address first, then `adb mdns services`, then any configured `probe_ports` on the same device IP. If every layer fails, it prints the normal setup guidance and exits nonzero.
 
 ## Performance tuning
 
-Over Wireless Debugging the adb round trip dominates every operation, so `phonectl` spends round trips sparingly:
+Over Wireless Debugging the adb round trip dominates every operation, so `droidjig` spends round trips sparingly:
 
-- **Combined observe dump (automatic).** `observe` fetches the UI hierarchy and the window state (focused app + lock screen) in a **single** adb call, with the `dumpsys window` output filtered device-side down to the handful of lines the parsers read. If the device shell can't serve the combined form, `phonectl` transparently falls back to separate calls.
+- **Combined observe dump (automatic).** `observe` fetches the UI hierarchy and the window state (focused app + lock screen) in a **single** adb call, with the `dumpsys window` output filtered device-side down to the handful of lines the parsers read. If the device shell can't serve the combined form, `droidjig` transparently falls back to separate calls.
 - **`wm_size` caching (automatic).** The physical screen size is cached for 300 s and invalidated on serial change.
 - **`ensure_ttl`** (default `5.0`): how long a successful connection check stays trusted before the next `adb get-state`. Set `0` to re-check before every command.
 - **`action_observe_ttl`** (default `0` = off): opt-in for agent/daemon loops. When set (e.g. `1.0`), an action skips its pre-action observe if the session already holds a snapshot younger than the window — typically the previous action's post-act observe. Policy, risk, and rate limiting still run against that snapshot, and every action still **re-observes after acting**. Leave at `0` for one-shot CLI use (each CLI process starts with no snapshot, so it always observes anyway) or whenever you want policy to always see a freshly fetched screen:
 
 ```bash
-phonectl config set action_observe_ttl 1.0   # daemon-driven agent loops
-phonectl config set ensure_ttl 0             # most conservative: re-check the link every command
+droidjig config set action_observe_ttl 1.0   # daemon-driven agent loops
+droidjig config set ensure_ttl 0             # most conservative: re-check the link every command
 ```
 
 With the daemon warm, a typical `tap` costs ~4 adb round trips (connection check + pre-observe + input + post-observe), dropping to ~2 in-window with `action_observe_ttl` set.
@@ -1277,7 +1277,7 @@ If the device is locked, `observe --json` returns an error envelope with the sam
 }
 ```
 
-Plain-text output stays one line, e.g. `phonectl: Unlock the phone manually.` If `uiautomator` reports the transient idle-state failure after retries, the typed observation error is `screen not idle — is it asleep or locked?` rather than an XML parse traceback.
+Plain-text output stays one line, e.g. `droidjig: Unlock the phone manually.` If `uiautomator` reports the transient idle-state failure after retries, the typed observation error is `screen not idle — is it asleep or locked?` rather than an XML parse traceback.
 
 ## Structured extraction
 
@@ -1285,25 +1285,25 @@ Read structured data from the UI — enumerate RecyclerView rows, extract form l
 
 ```bash
 # Extract all rows from a scrollable list (auto-detects the container)
-phonectl extract list --json
+droidjig extract list --json
 
 # Extract rows from a specific container by element index
-phonectl extract list --container-i 3 --json
+droidjig extract list --container-i 3 --json
 
 # Extract form fields with associated labels
-phonectl extract form --json
+droidjig extract form --json
 
 # Find elements whose text matches a regex (UI tree)
-phonectl find --text-regex "Total|Balance" --json
+droidjig find --text-regex "Total|Balance" --json
 
 # Find text by OCR when the UI tree returns nothing (canvas/game/WebView surfaces)
-phonectl find --ocr-text "Balance" --json
+droidjig find --ocr-text "Balance" --json
 
 # Get the currently focused text field
-phonectl get focused-field --json
+droidjig get focused-field --json
 
 # Get all elements overlapping a screen region (x1 y1 x2 y2)
-phonectl get text-in-region --bounds 0 0 1080 400 --json
+droidjig get text-in-region --bounds 0 0 1080 400 --json
 ```
 
 `extract form` automatically requests the UI relations graph to resolve label–field associations via sibling proximity; if no relations are available it falls back to Y-coordinate overlap. Password fields have their value replaced with `[redacted]` in all outputs.
@@ -1333,7 +1333,7 @@ apt-get install -y tesseract-ocr
 ```
 
 Once installed, the provider registers itself automatically — no configuration required.
-`phonectl doctor --json` will show `observe_ocr: true` in the capabilities map.
+`droidjig doctor --json` will show `observe_ocr: true` in the capabilities map.
 
 ### What it enables
 
@@ -1362,17 +1362,17 @@ Each region returned by `ocr screen` has:
 
 ```bash
 # OCR the current screen and print all detected text regions
-phonectl ocr screen
+droidjig ocr screen
 
 # Structured result envelope
-phonectl ocr screen --json
+droidjig ocr screen --json
 
 # Filter by minimum confidence
-phonectl ocr screen --min-confidence 0.5 --json
+droidjig ocr screen --min-confidence 0.5 --json
 
 # Find text by OCR when the UI tree returns nothing
-phonectl find --ocr-text "Balance" --json
-phonectl find --ocr-text "Total.*Due" --json
+droidjig find --ocr-text "Balance" --json
+droidjig find --ocr-text "Total.*Due" --json
 ```
 
 ### Priority
@@ -1385,32 +1385,32 @@ UI tree always takes precedence. OCR is strictly a **fallback** for surfaces the
 
 ## Daemon
 
-`phonectl daemon` makes the runtime a **long-lived single-writer process** that keeps the provider graph, session, and connection warm across requests and brokers all actions through one global write lock.
+`droidjig daemon` makes the runtime a **long-lived single-writer process** that keeps the provider graph, session, and connection warm across requests and brokers all actions through one global write lock.
 
 ### Starting the daemon
 
 ```bash
-phonectl daemon start
-# phonectl daemon listening on 127.0.0.1:<PORT> (Ctrl-C to stop)
+droidjig daemon start
+# droidjig daemon listening on 127.0.0.1:<PORT> (Ctrl-C to stop)
 ```
 
-The daemon binds to an **ephemeral loopback TCP port** (`127.0.0.1` only — non-loopback is refused). It writes its address to `$PHONECTL_HOME/daemon.json` and removes it on clean shutdown.
+The daemon binds to an **ephemeral loopback TCP port** (`127.0.0.1` only — non-loopback is refused). It writes its address to `$DROIDJIG_HOME/daemon.json` and removes it on clean shutdown.
 
-Because loopback is not an app boundary on Android, the daemon also mints a **per-run shared-secret token** on startup and writes it into `daemon.json` — which lives under `$PHONECTL_HOME` (the Termux app's private storage), unreadable by other apps. Every RPC except the `ping` liveness probe must present that token; an unauthenticated request is refused with an `unauthorized` error. The CLI/MCP read the token out of `daemon.json` automatically, so this is invisible in normal use.
+Because loopback is not an app boundary on Android, the daemon also mints a **per-run shared-secret token** on startup and writes it into `daemon.json` — which lives under `$DROIDJIG_HOME` (the Termux app's private storage), unreadable by other apps. Every RPC except the `ping` liveness probe must present that token; an unauthenticated request is refused with an `unauthorized` error. The CLI/MCP read the token out of `daemon.json` automatically, so this is invisible in normal use.
 
 ### Frontend auto-routing
 
-Once a daemon is running, every `phonectl` CLI command (and the MCP server) **transparently routes through it** — no flags needed. `discover()` reads `daemon.json`, pings the endpoint, and on success the frontend sends a JSON-RPC call instead of building an in-process runtime. When no daemon is found, the original in-process path is used unchanged — daemonization is a **compatible evolution**.
+Once a daemon is running, every `droidjig` CLI command (and the MCP server) **transparently routes through it** — no flags needed. `discover()` reads `daemon.json`, pings the endpoint, and on success the frontend sends a JSON-RPC call instead of building an in-process runtime. When no daemon is found, the original in-process path is used unchanged — daemonization is a **compatible evolution**.
 
 ### Daemon commands
 
 ```bash
-phonectl daemon start          # run daemon in foreground (Ctrl-C to stop)
-phonectl daemon status --json  # check if a daemon is running and its state
-phonectl daemon stop           # send the shutdown RPC and terminate the daemon
+droidjig daemon start          # run daemon in foreground (Ctrl-C to stop)
+droidjig daemon status --json  # check if a daemon is running and its state
+droidjig daemon stop           # send the shutdown RPC and terminate the daemon
 ```
 
-`phonectl daemon stop` calls the daemon's `shutdown` RPC and waits for it to exit cleanly. This is **distinct** from the emergency kill-switch: the `STOP` sentinel (`STOP` file or companion flag) still interrupts individual actions regardless of daemon state. The daemon exposes a `stop` RPC (engage), but **no `resume` RPC** — clearing the kill switch is a host-only human action (`phonectl resume` or removing the sentinel).
+`droidjig daemon stop` calls the daemon's `shutdown` RPC and waits for it to exit cleanly. This is **distinct** from the emergency kill-switch: the `STOP` sentinel (`STOP` file or companion flag) still interrupts individual actions regardless of daemon state. The daemon exposes a `stop` RPC (engage), but **no `resume` RPC** — clearing the kill switch is a host-only human action (`droidjig resume` or removing the sentinel).
 
 ### Async job model
 
@@ -1419,16 +1419,16 @@ When a daemon is running, `act`, `observe`, and `find` verbs are dispatched as *
 **`--detach`** on any action verb returns immediately with a job id instead of waiting:
 
 ```bash
-phonectl tap --index 3 --detach
-# phonectl: job job_abc123 (use: phonectl job job_abc123)
+droidjig tap --index 3 --detach
+# droidjig: job job_abc123 (use: droidjig job job_abc123)
 ```
 
-**`phonectl job <id> [--wait] [--json]`** queries or waits on a job:
+**`droidjig job <id> [--wait] [--json]`** queries or waits on a job:
 
 ```bash
-phonectl job job_abc123           # print current status
-phonectl job job_abc123 --wait    # block until terminal (cap = act_timeout)
-phonectl job job_abc123 --json    # structured job envelope
+droidjig job job_abc123           # print current status
+droidjig job job_abc123 --wait    # block until terminal (cap = act_timeout)
+droidjig job job_abc123 --json    # structured job envelope
 ```
 
 Job statuses: `accepted` (queued), `running`, `done`, `error`.
@@ -1445,11 +1445,11 @@ The daemon binds and listens on **`127.0.0.1` exclusively**. `daemon_host` is va
 | `daemon_autostart` | `false` | Reserved for Termux:Boot autostart (not yet wired) |
 | `act_timeout` | `60.0` | Wall-clock cap (seconds) for CLI block-and-poll on async jobs |
 | `sync_timeout` | `15.0` | Client timeout for fast synchronous RPCs (status, shutdown, etc.) |
-| `poll_interval` | `0.5` | Cadence (seconds) for `job_poll` during block-and-poll and `phonectl job --wait` |
+| `poll_interval` | `0.5` | Cadence (seconds) for `job_poll` during block-and-poll and `droidjig job --wait` |
 | `job_queue_max` | `8` | Maximum pending-job FIFO depth; excess submissions return a `busy` error |
 | `idempotency_ttl` | `300.0` | How long (seconds) a finished job stays eligible for idempotency deduplication |
 
-Set via `$PHONECTL_HOME/config.json`:
+Set via `$DROIDJIG_HOME/config.json`:
 
 ```json
 {
@@ -1463,7 +1463,7 @@ Set via `$PHONECTL_HOME/config.json`:
 
 ### Run records (`runs.jsonl`)
 
-Every action dispatched through the daemon is appended as a structured run record to `$PHONECTL_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before`, `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
+Every action dispatched through the daemon is appended as a structured run record to `$DROIDJIG_HOME/runs.jsonl`. Each record carries: `action_id`, `parent_task_id` (optional, for multi-step task tracking), `request_id`, `verb`, `target`, `provider`, `snapshot_before`, `snapshot_after`, `risk` decision, `retries`, `outcome`, and `user_approved`. This is a new layer on top of `actions.jsonl` — audit logging is unchanged.
 
 ### Events & snapshots
 
@@ -1503,7 +1503,7 @@ The daemon is the single writer **and** event broker.
 }
 ```
 
-The `token` is the shared secret every RPC (except `ping`) must present. `daemon.json` lives under `$PHONECTL_HOME` — the app's private storage — so other apps cannot read it.
+The `token` is the shared secret every RPC (except `ping`) must present. `daemon.json` lives under `$DROIDJIG_HOME` — the app's private storage — so other apps cannot read it.
 
 ### No daemon required
 
@@ -1511,7 +1511,7 @@ In-process primitives (`observe`, `tap`, `type`, etc.) work exactly as they alwa
 
 ### Termux:Boot autostart (seam only)
 
-The `daemon_autostart` config key exists and `phonectl daemon start` runs in the foreground. Autostart via Termux:Boot and companion foreground-service hosting are deliberate seams — the interfaces are in place, the wiring is not yet built.
+The `daemon_autostart` config key exists and `droidjig daemon start` runs in the foreground. Autostart via Termux:Boot and companion foreground-service hosting are deliberate seams — the interfaces are in place, the wiring is not yet built.
 
 
 ## Macros
@@ -1519,10 +1519,10 @@ The `daemon_autostart` config key exists and `phonectl daemon start` runs in the
 Macros are declarative JSON documents that run a sequence of phone actions, control-flow steps, and variable interpolations through the standard safety funnel (`runtime.run_action`). Every action is kill-switch-gated, rate-limited, policy-checked, and appended to `actions.jsonl` with `parent_task_id` linking it to the macro run.
 
 ```bash
-phonectl macro validate path/to/macro.json   # lint
-phonectl macro run     path/to/macro.json     # execute
-phonectl macro status                         # list recent runs
-phonectl macro cancel  <run_id>               # cancel (daemon only)
+droidjig macro validate path/to/macro.json   # lint
+droidjig macro run     path/to/macro.json     # execute
+droidjig macro status                         # list recent runs
+droidjig macro cancel  <run_id>               # cancel (daemon only)
 ```
 
 See [docs/macros.md](docs/macros.md) for the full schema reference and control-flow step catalogue.
@@ -1530,12 +1530,12 @@ See [docs/macros.md](docs/macros.md) for the full schema reference and control-f
 ### Autonomy grants & memory
 
 ```bash
-phonectl autonomy grant <macro> --max-risk high   # allow unattended run up to high risk
-phonectl autonomy revoke <macro>                  # revoke all grants for a macro
-phonectl autonomy list                            # list live grants
-phonectl memory show [<store>]                    # inspect a memory store (or all)
-phonectl memory export [<file>]                   # export all stores
-phonectl memory delete [<store>]                  # delete a store (or all)
+droidjig autonomy grant <macro> --max-risk high   # allow unattended run up to high risk
+droidjig autonomy revoke <macro>                  # revoke all grants for a macro
+droidjig autonomy list                            # list live grants
+droidjig memory show [<store>]                    # inspect a memory store (or all)
+droidjig memory export [<file>]                   # export all stores
+droidjig memory delete [<store>]                  # delete a store (or all)
 ```
 
 See [docs/macros.md § Progressive autonomy & memory](docs/macros.md#progressive-autonomy--memory) for the confirm-default rule, critical-risk policy, and the D12 redaction promise.
@@ -1546,7 +1546,7 @@ See [docs/macros.md § Progressive autonomy & memory](docs/macros.md#progressive
 
 ```bash
 git clone https://github.com/jumbodaddystack/phonectl.git
-cd phonectl
+cd droidjig
 pip install -e ".[dev]"     # package + console script + pytest
 pip install -e ".[dev,mcp]" # also the optional FastMCP transport
 

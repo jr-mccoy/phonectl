@@ -1,4 +1,4 @@
-# phonectl — Architecture Invariants
+# droidjig — Architecture Invariants
 
 The load-bearing rules of the codebase: properties that must hold across changes, and the
 reasoning behind them. Stable over time, unlike phase status (see `docs/roadmap.md`).
@@ -14,18 +14,18 @@ Read this before changing a core layer.
 - **Injectable `runner`.** `AdbBackend.__init__(runner=subprocess.run)` — tests pass a fake runner that records calls. Do not bypass it.
 - **Stdlib only at runtime.** Python ≥ 3.10. `pytest` is dev-only. The `mcp` optional extra (`pip install -e ".[mcp]"`) gates the FastMCP transport in `mcp_server.py` — the rest of the runtime stays stdlib-only. Adding a hard runtime dep needs an explicit reason.
 - **Every runtime action goes through `runtime.run_action`.** This is the single choke-point for mode gating (`auto`/`confirm`/`dry-run`), kill-switch check (`audit.kill_switch_active()`), risk classification + policy decision, rate limiting, idempotency, and audit logging. Do not bypass it.
-- **Daemon is the single writer in daemon mode.** When `phonectl daemon` is running, `cli._dispatch` auto-routes actions to it over loopback JSON-RPC. The daemon reuses `runtime.run_action` verbatim — the safety invariants hold identically in-process and over the wire.
+- **Daemon is the single writer in daemon mode.** When `droidjig daemon` is running, `cli._dispatch` auto-routes actions to it over loopback JSON-RPC. The daemon reuses `runtime.run_action` verbatim — the safety invariants hold identically in-process and over the wire.
 - **Every action appends to `actions.jsonl`** via `audit.log_action` with `ts`, `verb`, `target`, resulting `app`, `hash`. Durable `runs.jsonl` records are appended by the daemon for each async job.
 - **Structured results everywhere.** Every runtime/provider/MCP call returns a `results` envelope (`results.ok` / `results.err`). Never return bare tuples from these layers.
 - **All JSON state goes through `state.py`.** Reads use `state.read_json`/`state.read_jsonl` (a corrupt, truncated or unreadable file degrades to the default — it must never raise out of a command); writes use `state.write_json` (temp file + `fsync` + `os.replace`, so a reader never sees a half-written file and an interrupted write keeps the previous good state). These files live on a phone, where `kill -9`, a dead battery and a full disk are routine. Never call `json.loads(path.read_text())` or `path.write_text(json.dumps(...))` on a state file directly.
-- **`PHONECTL_HOME` isolation.** Tests use `monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))` to isolate config + audit + kill-switch + rate-limit history. Keep using this pattern.
+- **`DROIDJIG_HOME` isolation.** Tests use `monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))` to isolate config + audit + kill-switch + rate-limit history. Keep using this pattern.
 
 ## Environment & runtime topology
 
 - The agent lives inside a **PRoot-Distro** inside **Termux** on an **unrooted Android 11+** device. `uid 0` in the distro is proot-root, not device root — assume no root anywhere.
 - ADB connects over **Wireless Debugging** on `127.0.0.1:<port>`. PRoot shares Termux's (and Android's) loopback, so `adb` runs inside the distro and dials adbd directly. If PRoot blocks the connection, the fallback is a thin shim to host Termux's `adb`; the interface above is unchanged.
 - The optional companion APK (✅ shipped, Kotlin `com.phonectl.companion`; see `android/`) communicates over a loopback `SocketTransport` (`providers/transport.py`). The transport degrades cleanly when the APK is absent.
-- `PHONECTL_HOME` overrides the config dir (default `~/.config/phonectl`). `daemon.json` is written there by the daemon on startup and used for port discovery.
+- `DROIDJIG_HOME` overrides the config dir (default `~/.config/droidjig`). `daemon.json` is written there by the daemon on startup and used for port discovery.
 
 ## Testing discipline
 

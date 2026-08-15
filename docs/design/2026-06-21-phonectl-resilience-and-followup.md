@@ -1,9 +1,9 @@
-# phonectl — Follow-up work: resilience, polish & deferred backlog
+# droidjig — Follow-up work: resilience, polish & deferred backlog
 
 **Date:** 2026-06-21
 **Status:** Backlog / next-iteration planning
 **Author:** Jeremy McCoy (with Claude)
-**Predecessor:** [`2026-06-20-phonectl-adb-bridge-design.md`](2026-06-20-phonectl-adb-bridge-design.md) (the foundational spec)
+**Predecessor:** [`2026-06-20-droidjig-adb-bridge-design.md`](2026-06-20-droidjig-adb-bridge-design.md) (the foundational spec)
 
 ## 1. Where we are
 
@@ -38,7 +38,7 @@ items the original plan **deliberately deferred**, but real-device testing showe
 ### 2.1 Wireless-Debugging connect-port volatility → silent disconnect
 **Symptom:** After the phone slept, the wireless-debugging **connect port rotated** and the established
 connection was torn down by the ROM. `adb connect <ip>:<old-port>` then returns `Connection refused`, and
-every `phonectl` command fails with the `ConnectionError` guidance until the user reads the *new* port off
+every `droidjig` command fails with the `ConnectionError` guidance until the user reads the *new* port off
 the phone and reconnects by hand.
 
 **Root cause / constraint:** Android regenerates the wireless-debugging connect port across
@@ -53,12 +53,12 @@ work inside this PRoot environment** (no mDNS daemon; `adb mdns services` return
   3. Final fallback: the **host-Termux shim** path (run `adb` from host Termux, which may have mDNS),
      keeping the `adb_backend` interface unchanged (already anticipated in the spec §4.1).
 - Persist the last-known-good port and retry it first.
-- Consider a `phonectl reconnect <port>` convenience verb so manual recovery is one short command.
+- Consider a `droidjig reconnect <port>` convenience verb so manual recovery is one short command.
 
 ### 2.2 `observe()` crashes on `uiautomator` "could not get idle state"
 **Symptom:** When the screen is asleep, mid-animation, or on the lock screen, `uiautomator dump` returns the
 literal text `ERROR: could not get idle state.` (not XML). `ui_parser.parse_elements` then raises an
-unhandled `xml.etree.ElementTree.ParseError` and `phonectl observe` dies with a traceback.
+unhandled `xml.etree.ElementTree.ParseError` and `droidjig observe` dies with a traceback.
 
 **Root cause:** The plan deferred "`uiautomator` retry/settle on animated screens," and the backend treats
 any `ui_dump()` output as XML.
@@ -78,7 +78,7 @@ any `ui_dump()` output as XML.
 These were always planned as follow-on work; listed here so they live in one place:
 
 - **mDNS auto-discovery** for silent reconnect after reboot (see §2.1 for the PRoot caveat).
-- **Full `phonectl setup` interactive onboarding wizard** (install adb, guide Wireless Debugging, pair,
+- **Full `droidjig setup` interactive onboarding wizard** (install adb, guide Wireless Debugging, pair,
   persist config + adbkey).
 - **Guarded-package denylist enforcement** in the action path (spec §9) — refuse/force-confirm on
   banking/purchase screens keyed off `observe().app.package`.
@@ -119,7 +119,7 @@ Carried from the per-task reviews and the final whole-branch review:
    then the layered reconnect/port-recovery strategy. This is what makes the tool usable unattended.
 2. **Safety completeness (§3):** rate limiting + guarded-package enforcement (the spec §9 model is only
    half-shipped without them).
-3. **Onboarding (§3):** the `phonectl setup` wizard, so other users can reach build-step-zero without the
+3. **Onboarding (§3):** the `droidjig setup` wizard, so other users can reach build-step-zero without the
    manual pairing dance.
 4. **MCP wrapper (§3):** expose verbs as native agent tools — the original phase-2 milestone.
 5. **Polish (§4)** folded in opportunistically as the above files are touched.

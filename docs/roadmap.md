@@ -1,8 +1,8 @@
-# phonectl Platform Roadmap
+# droidjig Platform Roadmap
 
 **Date:** 2026-06-22
 **Status:** Active source-of-truth roadmap (supersedes the six 2026-06-21 follow-up plans)
-**Scope:** Sequences phonectl's evolution from a shipped observe→act ADB bridge into a fully
+**Scope:** Sequences droidjig's evolution from a shipped observe→act ADB bridge into a fully
 autonomous AI harness/toolkit for Android — an "agent operating system for Android" — as a set of
 phased, test-first implementation plans.
 
@@ -10,7 +10,7 @@ phased, test-first implementation plans.
 
 ## 1. Why this document exists
 
-phonectl began as an **observe→act→observe ADB bridge** (the shipped core: 9 modules, 45 tests,
+droidjig began as an **observe→act→observe ADB bridge** (the shipped core: 9 modules, 45 tests,
 validated on a real Samsung Galaxy S25 Ultra). A first wave of six follow-up plans
 (resilience, safety-completeness, mcp-server, setup-wizard, accessibility-backend, polish) was written
 to harden that bridge.
@@ -27,13 +27,13 @@ still-valuable, fully-specified work into a north-star arc, so no test-first tas
 larger platform takes shape. It is the document to read **before** writing or executing any plan.
 
 **Reading order:**
-1. The design spec — `docs/design/2026-06-20-phonectl-adb-bridge-design.md` (foundational
+1. The design spec — `docs/design/2026-06-20-droidjig-adb-bridge-design.md` (foundational
    architecture; still valid).
 2. The strategy — `docs/strategy.md` (the vision being
    operationalized).
 3. **This roadmap** (the phase model + plan index).
 4. The active plan you are executing (Phase 1.1 and 1.2 are written; the rest are stubbed in the
-   meta-plan, `plans/2026-06-22-phonectl-remaining-plans-meta-plan.md`).
+   meta-plan, `plans/2026-06-22-droidjig-remaining-plans-meta-plan.md`).
 
 ## 2. North star
 
@@ -79,7 +79,7 @@ These are non-negotiable and are restated in each plan's **Global Constraints**:
 - **Every `act()` re-observes** and returns the post-action snapshot; the screen-hash change is how the
   loop knows the action landed.
 - **Injectable seams** (`runner`, `sleep`, `prompt`, `build`) — no real I/O or wall-clock waits in unit
-  tests; isolate config/audit/kill-switch via `monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))`.
+  tests; isolate config/audit/kill-switch via `monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))`.
 - **Modes + kill-switch gate every mutating action** through one funnel.
 - **Every action is audited.** (Phase 2.1 adds audit levels/redaction v2.)
 - **One commit per task. TDD order is non-negotiable:** write the failing test, run it to confirm it
@@ -97,7 +97,7 @@ is scoped in the meta-plan and written when its phase begins.
 
 | Phase | Theme | Plans | Re-homes / draws from |
 |---|---|---|---|
-| **0** | Observe→act core | *(done — shipped, 45 tests, real-device validated)* | `2026-06-20-phonectl-observe-act-core.md` |
+| **0** | Observe→act core | *(done — shipped, 45 tests, real-device validated)* | `2026-06-20-droidjig-observe-act-core.md` |
 | **1** | Platform-ready foundation (the seams) | ★**1.1** Structured results, errors & capabilities · ★**1.2** Selector + tree observation · **1.3** Resilience & connection recovery · **1.4** Setup wizard + diagnostics bundle | old *resilience*, *setup-wizard*, *polish*; strategy §4.2, §5, §7, §9, §10.1, §21, §27#1–2 |
 | **2** | Single-writer runtime & safety policy | **2.1** Action serialization + request IDs + audit v2 · **2.2** Risk classifier / risk ledger · **2.3** Structured-result MCP server | old *safety-completeness*, *mcp-server*; strategy §7.4, §8, §10, §20, §22, §24 |
 | **3** | Practical automation primitives (provider graph) | **3.1** Provider/capability graph refactor · **3.2** Clipboard + intent + app/package providers · **3.3** Scroll-until + gestures · **3.4** Structured extraction APIs · **3.5** Termux:API provider | old *polish* (named swipe); strategy §4.3, §5.4, §6, §13.2 |
@@ -132,12 +132,12 @@ Their fully-specified tasks are re-homed (no work lost); the meta-plan carries t
 
 | Superseded plan | Re-homed into |
 |---|---|
-| `2026-06-21-phonectl-resilience.md` | Plan **1.3** (errors hierarchy split to **1.1**) |
-| `2026-06-21-phonectl-safety-completeness.md` | Plan **2.2** (risk ledger generalizes rate-limit + guarded-package) |
-| `2026-06-21-phonectl-mcp-server.md` | Plan **2.3** (re-targeted onto the structured-result envelope) |
-| `2026-06-21-phonectl-setup-wizard.md` | Plan **1.4** |
-| `2026-06-21-phonectl-accessibility-backend.md` | Plan **4.1** (`Backend` Protocol seam pulled forward to **1.1**) |
-| `2026-06-21-phonectl-polish.md` | Distributed: named swipe → **3.3**; monotonic `wait_for` + rotation-aware orientation → **1.2/1.3**; remaining cleanups → opportunistic within the touching plan |
+| `2026-06-21-droidjig-resilience.md` | Plan **1.3** (errors hierarchy split to **1.1**) |
+| `2026-06-21-droidjig-safety-completeness.md` | Plan **2.2** (risk ledger generalizes rate-limit + guarded-package) |
+| `2026-06-21-droidjig-mcp-server.md` | Plan **2.3** (re-targeted onto the structured-result envelope) |
+| `2026-06-21-droidjig-setup-wizard.md` | Plan **1.4** |
+| `2026-06-21-droidjig-accessibility-backend.md` | Plan **4.1** (`Backend` Protocol seam pulled forward to **1.1**) |
+| `2026-06-21-droidjig-polish.md` | Distributed: named swipe → **3.3**; monotonic `wait_for` + rotation-aware orientation → **1.2/1.3**; remaining cleanups → opportunistic within the touching plan |
 
 ## 7. Coverage check against the strategy
 
@@ -165,25 +165,25 @@ steps are explicitly flagged and never run in CI.
   run-record path; activation requires action-record enrichment (selector `matched_i` + `app_version`/`locale`
   context) and is deferred with the selector-library override work (Phase 7+).
 
-## 10. Companion setup (`phonectl companion setup`) — implemented
+## 10. Companion setup (`droidjig companion setup`) — implemented
 
 ✅ Done (design spec:
-`docs/design/2026-07-02-phonectl-companion-startup-design.md`). `phonectl companion
+`docs/design/2026-07-02-droidjig-companion-startup-design.md`). `droidjig companion
 setup` is the idempotent one-command bring-up for the Phase 4 companion APK — install → enable
 AccessibilityService → grant `POST_NOTIFICATIONS` → acquire the pairing token → start the socket
 server → verify with an authenticated handshake — gated by `--yes`/y-N confirmation on the
-grant/start steps. `phonectl companion status` and `phonectl config get`/`config set` shipped
+grant/start steps. `droidjig companion status` and `droidjig config get`/`config set` shipped
 alongside it. See the README's "Companion setup" section for usage.
 
 Follow-ups intentionally left out of scope (each needs its own plan):
 
 1. **ADB Wireless-Debugging port-rotation reconnect.** Port rotation, dead mDNS, and reconnect
    handling is a separate connection-layer concern. Candidate directions: one-time USB
-   `adb tcpip <fixed-port>`, persistent `rediscover()` on every command, or a dedicated `phonectl
+   `adb tcpip <fixed-port>`, persistent `rediscover()` on every command, or a dedicated `droidjig
    reconnect` flow. `companion setup` assumes a live adb connection and only surfaces `device
    offline` today.
-2. **Approach A — phonectl-minted pushed token (v2).** Release-build token automation via a
-   phonectl-minted secret pushed at first pair (replacing `adb run-as` / manual paste for
+2. **Approach A — droidjig-minted pushed token (v2).** Release-build token automation via a
+   droidjig-minted secret pushed at first pair (replacing `adb run-as` / manual paste for
    non-debug builds). Requires an APK/Kotlin change (a TOFU first-pair path) — a natural v2 once
    an Android build loop exists.
 3. **Current status hygiene.** Historical companion-side Finding-5 notes in older docs are

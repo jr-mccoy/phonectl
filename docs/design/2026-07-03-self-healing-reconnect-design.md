@@ -1,4 +1,4 @@
-# phonectl — self-healing wireless-debug reconnection
+# droidjig — self-healing wireless-debug reconnection
 
 **Date:** 2026-07-03
 **Status:** Design spec. Required before its implementation plan.
@@ -6,12 +6,12 @@
 
 **Reads with:**
 
-- `src/phonectl/connection.py` — the `Connection` class this spec extends (`ensure`, `rediscover`).
-- `src/phonectl/adb_backend.py` — the backend that owns all external device I/O; the new port scan lives here
+- `src/droidjig/connection.py` — the `Connection` class this spec extends (`ensure`, `rediscover`).
+- `src/droidjig/adb_backend.py` — the backend that owns all external device I/O; the new port scan lives here
   to preserve the backend-isolation invariant.
-- Memory `phonectl-adb-reconnect` — the operational incident (2026-07-03) that motivated this: the port shown
+- Memory `droidjig-adb-reconnect` — the operational incident (2026-07-03) that motivated this: the port shown
   on the phone's Wireless Debugging screen was **not** the live adbd connect port (displayed `:44063`, actual
-  `:43091`), mDNS returned nothing in Termux, and phonectl's stored serial was stale — stranding reconnection.
+  `:43091`), mDNS returned nothing in Termux, and droidjig's stored serial was stale — stranding reconnection.
 
 This is a **design document** — goals, the problem, locked decisions, interfaces, testing. No TDD tasks;
 those live in the plan.
@@ -21,7 +21,7 @@ those live in the plan.
 ## 1. Problem
 
 Android assigns a **new random port** to Wireless Debugging every time it is toggled, reboots, or the Wi-Fi
-reconnects. phonectl stores the last-known `serial`/`last_port` in config and, when that goes stale, cannot
+reconnects. droidjig stores the last-known `serial`/`last_port` in config and, when that goes stale, cannot
 recover on this host:
 
 - `Connection.ensure()` (the pre-action guard) tries only the **stored serial** + `wake()`, then raises

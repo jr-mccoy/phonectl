@@ -1,4 +1,4 @@
-# phonectl — macro runtime & progressive autonomy (declarative automations)
+# droidjig — macro runtime & progressive autonomy (declarative automations)
 
 **Date:** 2026-06-22
 **Status:** Design spec (Phase 6 brainstorm→spec). Required before Plans 6.1, 6.2, and 6.3.
@@ -14,7 +14,7 @@
   autonomy), **§23** (macro/runtime design sketch: `run_id`, scoped variables, idempotency, bounded
   backoff with high-risk re-check, foreground approval), **§24** (risk ledger the policy gate reuses),
   **§25** (memory/state/knowledge layer — narrow + user-controlled).
-- `docs/design/2026-06-22-phonectl-daemon-event-runtime-design.md` — the daemon spec this builds
+- `docs/design/2026-06-22-droidjig-daemon-event-runtime-design.md` — the daemon spec this builds
   on: the **single-writer `run_action` choke-point**, the **event bus** (`events_poll` cursor contract),
   **snapshot IDs**, and **`runs.jsonl`** run-record lineage (`action_id`/`parent_task_id`).
 - `docs/architecture.md` — the load-bearing invariants this design must not break
@@ -32,7 +32,7 @@ risks, and a handoff to the implementation plans. It contains **no TDD tasks**; 
 
 ## 1. Goal
 
-Turn phonectl's primitives into **declarative automations that run without the agent polling.** Today an
+Turn droidjig's primitives into **declarative automations that run without the agent polling.** Today an
 agent (or a human at the CLI/MCP) drives every step of an observe→act loop. A macro is a **signed,
 auditable plan** (strategy §23) that the platform executes on its own: a trigger fires, conditions are
 checked, a sequence of actions runs through the *existing* single-writer funnel, every step is audited and
@@ -110,7 +110,7 @@ daemonization stays a compatible evolution.
 - **Plan 6.1 — runtime core.** The pure `schema` (parse/validate), `variables` (scoped resolution +
   interpolation), and `engine` (control-flow executor that dispatches action steps through `run_action`)
   plus the `macro_validate/run/cancel/status` surface and macro-run records. No triggers yet — a macro is
-  run *explicitly* (`phonectl macro run <doc>`), which is fully testable without the event bus.
+  run *explicitly* (`droidjig macro run <doc>`), which is fully testable without the event bus.
 - **Plan 6.2 — triggers + scheduler.** The pure `triggers` (match an event envelope/snapshot against a
   trigger spec), `conditions` (evaluate a condition list against device/snapshot/variable state), and
   `scheduler` (compute next-fire for time/schedule triggers), wired into a daemon **TriggerManager** that
@@ -223,7 +223,7 @@ so action lineage joins to the macro. The engine additionally appends one **`Mac
 run (`run_id`, `macro_name`, `trigger`/`parent_event_seq`, `policy_decision`, `outcome`, `steps_run`,
 `started_at`/`ended_at`, `cancelled`) to `runs.jsonl` (a `kind` field distinguishes action vs macro-run
 records). `actions.jsonl` (audit v2) is unchanged.
-**Rationale.** This reuses the daemon's run-ledger discipline (one append-only file, `PHONECTL_HOME`
+**Rationale.** This reuses the daemon's run-ledger discipline (one append-only file, `DROIDJIG_HOME`
 isolation) and gives the eventual UI/agent a single place to ask "what did this macro do."
 **Trade-off.** Two record kinds in one file; the `kind` discriminator + the `read(kind=…)` helper keep
 readers simple.
@@ -255,7 +255,7 @@ revoke story for free.
 
 ### D12 — Memory is narrow, operational-only, redacted, and user-exportable/deletable
 
-`memory.py` persists JSON under `$PHONECTL_HOME/memory/` with five typed stores: **device profile**, **app
+`memory.py` persists JSON under `$DROIDJIG_HOME/memory/` with five typed stores: **device profile**, **app
 profiles**, **user preferences**, **selector library**, **failure memory** (strategy §25). Capture hooks
 record *operational metadata only* (which selector resolved, which command was flaky, reconnect counts) —
 **all text passes through `redact.py`**. `memory export`/`memory delete` dump/clear the stores; nothing is
@@ -274,7 +274,7 @@ A macro is a JSON object (YAML accepted via the optional extra, D2). Top-level k
 | `name` | string (required) | Stable macro identifier. |
 | `version` | int (default 1) | Macro-document schema version. |
 | `permissions` | object | Capability grants the macro requests, e.g. `{"notifications.reply": ["com.whatsapp"], "ui.act": "confirm"}` (strategy §23). |
-| `trigger` | object | Trigger spec (6.2). Absent ⇒ manual-only (`phonectl macro run`). |
+| `trigger` | object | Trigger spec (6.2). Absent ⇒ manual-only (`droidjig macro run`). |
 | `conditions` | list | Condition specs (6.2); all must hold for the run to proceed. |
 | `variables` | object | Initial `macro`-scope variables. |
 | `actions` | list | Ordered action/control-flow steps (6.1). |
@@ -337,15 +337,15 @@ bool`); the daemon TriggerManager and the engine supply the event/context.
 | `autonomy_grant` / `autonomy_revoke` / `autonomy_list` | 6.3 | control/no | Manage the progressive-autonomy grant ledger. |
 | `memory_show` / `memory_export` / `memory_delete` | 6.3 | no/control | Inspect / export / clear the memory stores. |
 
-**CLI verbs:** `phonectl macro validate|run|cancel|status|enable|disable|list`,
-`phonectl autonomy grant|revoke|list`, `phonectl memory show|export|delete`. Each routes through the daemon
+**CLI verbs:** `droidjig macro validate|run|cancel|status|enable|disable|list`,
+`droidjig autonomy grant|revoke|list`, `droidjig memory show|export|delete`. Each routes through the daemon
 when reachable (Plan 5.1 `_dispatch`) or runs in-process. **MCP tools** (Plan 2.3 registry):
 `phone.macro.create/validate/run/cancel/status`, `phone.events.subscribe` (already in 5.2),
 `phone.policy.explain` (already in 2.3) — the engine adds the macro tools onto the existing registry.
 
 ## 8. Memory & state layer (6.3)
 
-Stores under `$PHONECTL_HOME/memory/` (one JSON file each), all redacted on write:
+Stores under `$DROIDJIG_HOME/memory/` (one JSON file each), all redacted on write:
 
 - **`device.json`** — Android version, OEM skin, screen metrics/density, navigation mode, wireless-debugging
   behavior, installed providers, granted permissions, known-flaky commands.
@@ -375,7 +375,7 @@ persisted.
   and `macro_cancel` cooperatively stops the orchestration (D8).
 - **Inert documents.** No `eval`/shell/code step (D1); the only network-leaving action (`http`/`webhook`)
   is deferred and, when added, is risk-classified as a leaving-the-device action (strategy §24).
-- **Narrow, deletable memory.** Operational metadata only, redacted, `PHONECTL_HOME`-isolated, exportable
+- **Narrow, deletable memory.** Operational metadata only, redacted, `DROIDJIG_HOME`-isolated, exportable
   and deletable (D12).
 - **Loopback only.** No new socket; triggers ride the daemon's loopback event bus.
 
@@ -409,7 +409,7 @@ persisted.
    only when the author's selector fails and the library has a higher-confidence match for this app
    version/locale?
 6. **Scheduler hosting.** When the daemon is absent, who fires time triggers — only Termux:Boot/companion
-   (D5 seam), or a best-effort foreground `phonectl macro watch`?
+   (D5 seam), or a best-effort foreground `droidjig macro watch`?
 
 ## 12. Handoff to implementation plans
 
@@ -432,7 +432,7 @@ matching), `macro/conditions.py` (pure condition evaluation), `macro/scheduler.p
 
 **Plan 6.3 — progressive autonomy + memory/state layer.** `macro/autonomy.py` (append-only grant ledger +
 pure `decide`), wired as the engine's per-action gate above `run_action`; `macro/memory.py` (five redacted,
-`PHONECTL_HOME`-isolated stores + capture hooks from run records + export/delete), and the
+`DROIDJIG_HOME`-isolated stores + capture hooks from run records + export/delete), and the
 `autonomy_grant/revoke/list` + `memory_show/export/delete` RPC + CLI.
 
 Together, 6.1–6.3 deliver the strategy §12/§18/§23/§25 macro engine: declarative, auditable automations

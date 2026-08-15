@@ -1,4 +1,4 @@
-# phonectl Macros
+# droidjig Macros
 
 Macros are declarative JSON documents that drive the `observe→act→observe` loop via the **macro engine** (Phase 6.1). They are executed through the same `runtime.run_action` funnel as CLI/MCP actions, so all safety invariants — kill-switch, rate-limiting, policy gate, audit log — apply identically.
 
@@ -85,7 +85,7 @@ A `trigger` block makes a macro fire automatically — either on a schedule or i
 
 ### Daemon scheduler
 
-The `Scheduler` class in `phonectl.daemon.triggers` arms each enabled scheduled macro on its first `due()` call and fires it once the wall-clock time reaches the armed target. It uses only injected time (`datetime.now`) — no real clock in tests.
+The `Scheduler` class in `droidjig.daemon.triggers` arms each enabled scheduled macro on its first `due()` call and fires it once the wall-clock time reaches the armed target. It uses only injected time (`datetime.now`) — no real clock in tests.
 
 The `TriggerManager` class drains the event bus on each `step()` call and fires any event-driven macros whose triggers match and whose conditions all hold.
 
@@ -127,7 +127,7 @@ The `limits` block prevents a macro from running too often. All fields are optio
 }
 ```
 
-Rate-limit history is stored in `$PHONECTL_HOME/macro_runs_history.json`.
+Rate-limit history is stored in `$DROIDJIG_HOME/macro_runs_history.json`.
 
 ## Phone verbs (action steps)
 
@@ -166,14 +166,14 @@ Variable interpolation works in string values: `"${variable_name}"`.
 ## CLI
 
 ```bash
-phonectl macro validate path/to/macro.json   # lint only
-phonectl macro run     path/to/macro.json     # execute
-phonectl macro run     path/to/macro.json --yes  # skip confirm steps
-phonectl macro status                         # list recent runs
-phonectl macro cancel  <run_id>               # cancel (daemon only)
-phonectl macro enable  path/to/macro.json     # register + enable a macro
-phonectl macro disable <name>                 # disable a macro by name
-phonectl macro list                           # list all registered macros and their enabled state
+droidjig macro validate path/to/macro.json   # lint only
+droidjig macro run     path/to/macro.json     # execute
+droidjig macro run     path/to/macro.json --yes  # skip confirm steps
+droidjig macro status                         # list recent runs
+droidjig macro cancel  <run_id>               # cancel (daemon only)
+droidjig macro enable  path/to/macro.json     # register + enable a macro
+droidjig macro disable <name>                 # disable a macro by name
+droidjig macro list                           # list all registered macros and their enabled state
 ```
 
 `enable`, `disable`, and `list` run in-process (they only touch the registry store; no daemon required). The `--json` flag is supported for all three.
@@ -188,7 +188,7 @@ phonectl macro list                           # list all registered macros and t
 
 ## Daemon routing
 
-When `phonectl daemon` is running, `phonectl macro run` routes to `macro_run` RPC under the single-writer lock. The daemon also exposes `macro_cancel` to cancel an in-flight run by `run_id`.
+When `droidjig daemon` is running, `droidjig macro run` routes to `macro_run` RPC under the single-writer lock. The daemon also exposes `macro_cancel` to cancel an in-flight run by `run_id`.
 
 ## Audit trail
 
@@ -201,12 +201,12 @@ Every macro run appends a `macro_run` record to `runs.jsonl` with `run_id`, `mac
 By default every macro action prompts for confirmation (`confirm`). An autonomy grant allows the daemon to skip the prompt for actions up to a specified risk level:
 
 ```bash
-phonectl autonomy grant reply --max-risk high     # allow auto-run up to high risk
-phonectl autonomy revoke reply                     # revoke all grants for macro "reply"
-phonectl autonomy list                             # show live (non-expired) grants
+droidjig autonomy grant reply --max-risk high     # allow auto-run up to high risk
+droidjig autonomy revoke reply                     # revoke all grants for macro "reply"
+droidjig autonomy list                             # show live (non-expired) grants
 ```
 
-Grant records are appended to `autonomy.jsonl` in `PHONECTL_HOME`. Revoking adds a revoke record; `list` replays the ledger at the current time, filtering expired entries. The grant ledger stores only operator-supplied identifiers (macro name, max_risk, scope, timestamps) — no device-captured content — so it is not redacted; the redaction guarantee (D12) applies to the `memory/` stores, which hold device-derived metadata.
+Grant records are appended to `autonomy.jsonl` in `DROIDJIG_HOME`. Revoking adds a revoke record; `list` replays the ledger at the current time, filtering expired entries. The grant ledger stores only operator-supplied identifiers (macro name, max_risk, scope, timestamps) — no device-captured content — so it is not redacted; the redaction guarantee (D12) applies to the `memory/` stores, which hold device-derived metadata.
 
 **Critical-risk actions are never fully autonomous.** A grant with `max_risk=critical` still requires a one-time human approval per action (`confirm`); it does not promote to `allow`. Any action whose risk classifier returns `critical` therefore always confirms.
 
@@ -225,12 +225,12 @@ The memory layer is a set of narrow, redacted key-value stores for operational m
 | `failures` | Retryable failure counts per verb+outcome |
 
 ```bash
-phonectl memory show prefs               # show the prefs store
-phonectl memory show                     # show all stores
-phonectl memory export                   # dump all stores to stdout
-phonectl memory export backup.json       # write to file
-phonectl memory delete prefs             # delete the prefs store
-phonectl memory delete                   # delete all stores
+droidjig memory show prefs               # show the prefs store
+droidjig memory show                     # show all stores
+droidjig memory export                   # dump all stores to stdout
+droidjig memory export backup.json       # write to file
+droidjig memory delete prefs             # delete the prefs store
+droidjig memory delete                   # delete all stores
 ```
 
 The memory stores and capture hooks (`capture_selector`, `capture_failure`, `capture_from_runs`) exist and are tested; automatic population from run records is a planned follow-up — currently memory is populated only via explicit writes/RPC. The capture hooks are not yet wired into the daemon run-record path; activation requires action-record enrichment (`matched_i`, `app_version`, `locale` context) and is deferred with the selector-library work.
