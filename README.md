@@ -602,6 +602,11 @@ phonectl: action refused (kill switch STOP present)
 | `1` | Timeout (`wait-for`), connection error, policy denial, rate limit, or busy writer |
 | `2` | Kill switch active, or `wait-for` called without `--text`/`--id` |
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
+| `4` | Internal error — a bug in phonectl, not a refusal. Reported as an `internal_error` envelope; set `PHONECTL_DEBUG=1` to re-raise and get the traceback |
+| `130` | Interrupted with Ctrl-C (128 + SIGINT) |
+
+Codes `1`–`3` mean phonectl worked and declined; `4` means phonectl itself broke. A closed
+pipe (`phonectl observe --json | head`) exits `0`.
 
 
 ## Termux:API provider (optional)

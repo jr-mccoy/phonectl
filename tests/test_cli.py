@@ -1158,3 +1158,78 @@ def test_exit_codes_uniform_across_commands():
     # A malformed error envelope (no code) still resolves to the generic failure code, never crashes.
     assert cli._exit_code({"ok": False}) == 1
     assert cli._exit_code({"ok": False, "error": {}}) == 1
+
+
+def _parser_returning(func, *, json_flag):
+    """A stand-in parser whose parsed args run `func` — lets the tests drive
+    main()'s error handling without depending on any real subcommand."""
+    import argparse
+
+    class _P:
+        def parse_args(self, argv):
+            return argparse.Namespace(func=func, json=json_flag)
+
+        def print_help(self):
+            pass
+
+    return lambda: _P()
+
+
+# ── Unexpected-error handling (audit D2) ───────────────────────────────────
+# errors.py promises envelopes "without raw tracebacks", but main() caught only
+# PhonectlError, so anything else — a bug, an OSError, a corrupt state file —
+# escaped as a traceback and bypassed the whole structured-result contract.
+
+def _boom(args):
+    raise RuntimeError("something unexpected went wrong")
+
+
+def test_unexpected_error_prints_a_message_not_a_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "build_parser", _parser_returning(_boom, json_flag=False))
+    rc = cli.main(["observe"])
+    out = capsys.readouterr()
+    assert rc == 4, "unexpected internal errors get their own exit code"
+    assert "Traceback" not in out.out + out.err
+    assert "something unexpected went wrong" in out.out
+    assert "internal error" in out.out.lower()
+
+
+def test_unexpected_error_is_reported_as_a_result_envelope_under_json(monkeypatch, capsys):
+    import json as _json
+    monkeypatch.setattr(cli, "build_parser", _parser_returning(_boom, json_flag=True))
+    rc = cli.main(["observe"])
+    env = _json.loads(capsys.readouterr().out)
+    assert rc == 4
+    assert env["ok"] is False
+    assert env["error"]["code"] == "internal_error"
+    assert env["error"]["user_action"], "must tell the user what to do (file an issue)"
+
+
+def test_unexpected_error_reraises_under_debug(monkeypatch):
+    # The traceback stays available for developers, just off the default path.
+    monkeypatch.setattr(cli, "build_parser", _parser_returning(_boom, json_flag=False))
+    monkeypatch.setenv("PHONECTL_DEBUG", "1")
+    with pytest.raises(RuntimeError):
+        cli.main(["observe"])
+
+
+def test_keyboard_interrupt_is_not_swallowed_as_an_internal_error(monkeypatch, capsys):
+    # Ctrl-C is a user action, not a bug: it must not print "please file an issue".
+    def interrupt(args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "build_parser", _parser_returning(interrupt, json_flag=False))
+    rc = cli.main(["observe"])
+    out = capsys.readouterr().out
+    assert rc == 130, "128 + SIGINT, the shell convention"
+    assert "internal error" not in out.lower()
+
+
+def test_broken_pipe_exits_quietly(monkeypatch, capsys):
+    # `phonectl observe --json | head` closes the pipe; that is not an error.
+    def broken(args):
+        raise BrokenPipeError
+
+    monkeypatch.setattr(cli, "build_parser", _parser_returning(broken, json_flag=False))
+    assert cli.main(["observe"]) == 0
+    assert "internal error" not in capsys.readouterr().out.lower()
