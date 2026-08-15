@@ -1,12 +1,11 @@
 """Single-writer action funnel for mutating UI operations."""
 from __future__ import annotations
 
-import json
 import threading
 import time
 import uuid
 
-from phonectl import audit, config, errors, observer, policy, ratelimit, results
+from phonectl import audit, config, errors, observer, policy, ratelimit, results, state
 
 _action_lock = threading.Lock()
 _idempotency_cache: dict = {}   # key -> (ts, env)
@@ -28,11 +27,8 @@ def _idempotency_path():
 
 
 def _load_idempotency() -> dict:
-    path = _idempotency_path()
-    try:
-        return json.loads(path.read_text()) if path.exists() else {}
-    except (OSError, ValueError):
-        return {}   # corrupt/unreadable store must never block actions
+    # A corrupt/unreadable store must never block actions -- see phonectl.state.
+    return state.read_json(_idempotency_path(), {})
 
 
 def _idempotency_lookup(key, now_ts, ttl):
@@ -57,7 +53,7 @@ def _idempotency_store(key, now_ts, env, ttl) -> None:
     store = {k: v for k, v in _load_idempotency().items() if now_ts - v[0] < ttl}
     store[key] = [now_ts, dict(env)]
     try:
-        _idempotency_path().write_text(json.dumps(store))
+        state.write_json(_idempotency_path(), store)
     except OSError:
         pass   # persistence is best-effort; the in-process cache still holds
 
@@ -124,12 +120,13 @@ def _rate_path():
 
 
 def _load_rate():
-    path = _rate_path()
-    return json.loads(path.read_text()) if path.exists() else []
+    # A corrupt history degrades to "no actions recorded yet" rather than raising out
+    # of run_action: losing rate-limit history is recoverable, a dead CLI is not.
+    return state.read_json(_rate_path(), [])
 
 
 def _save_rate(history) -> None:
-    _rate_path().write_text(json.dumps(history))
+    state.write_json(_rate_path(), history)
 
 
 def _blocked_result(session) -> dict:

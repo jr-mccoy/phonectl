@@ -17,6 +17,7 @@ Read this before changing a core layer.
 - **Daemon is the single writer in daemon mode.** When `phonectl daemon` is running, `cli._dispatch` auto-routes actions to it over loopback JSON-RPC. The daemon reuses `runtime.run_action` verbatim — the safety invariants hold identically in-process and over the wire.
 - **Every action appends to `actions.jsonl`** via `audit.log_action` with `ts`, `verb`, `target`, resulting `app`, `hash`. Durable `runs.jsonl` records are appended by the daemon for each async job.
 - **Structured results everywhere.** Every runtime/provider/MCP call returns a `results` envelope (`results.ok` / `results.err`). Never return bare tuples from these layers.
+- **All JSON state goes through `state.py`.** Reads use `state.read_json`/`state.read_jsonl` (a corrupt, truncated or unreadable file degrades to the default — it must never raise out of a command); writes use `state.write_json` (temp file + `fsync` + `os.replace`, so a reader never sees a half-written file and an interrupted write keeps the previous good state). These files live on a phone, where `kill -9`, a dead battery and a full disk are routine. Never call `json.loads(path.read_text())` or `path.write_text(json.dumps(...))` on a state file directly.
 - **`PHONECTL_HOME` isolation.** Tests use `monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))` to isolate config + audit + kill-switch + rate-limit history. Keep using this pattern.
 
 ## Environment & runtime topology

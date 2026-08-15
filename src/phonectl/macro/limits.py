@@ -1,7 +1,7 @@
 """Pure per-macro fire limits (cooldown + max_runs_per_hour), persisted history."""
 from __future__ import annotations
 
-import json
+from phonectl import state
 
 
 def allow(name, macro_limits, *, now, history):
@@ -19,10 +19,7 @@ def allow(name, macro_limits, *, now, history):
 
 
 def load(store_path) -> dict:
-    try:
-        return json.loads(store_path.read_text())
-    except (FileNotFoundError, ValueError):
-        return {}
+    return state.read_json(store_path, {})
 
 
 def record(name, *, now, store_path) -> None:
@@ -30,4 +27,4 @@ def record(name, *, now, store_path) -> None:
     hist = [t for t in data.get(name, []) if now - t < 3600]
     hist.append(now)
     data[name] = hist
-    store_path.write_text(json.dumps(data))
+    state.write_json(store_path, data)

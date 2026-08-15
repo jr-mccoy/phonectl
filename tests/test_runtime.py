@@ -808,3 +808,47 @@ def test_companion_transport_reused_across_actions(tmp_path, monkeypatch):
         )
         assert env["ok"] is True
     assert made == [("127.0.0.1", 8765, "tok")]   # built once, reused after
+
+
+# ── Crash-safe state files (audit D1) ──────────────────────────────────────
+
+def test_run_action_survives_a_corrupt_ratelimit_file(tmp_path, monkeypatch):
+    # A truncated ratelimit.json (kill -9 / full disk mid-write) used to raise
+    # JSONDecodeError straight out of run_action, blocking every action forever.
+    # Losing the history is recoverable; a dead CLI is not.
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    (tmp_path / "ratelimit.json").write_text('[{"bucket": "tap", "ts": 1')
+
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer, "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h", "app": {"package": "com.x"}}))
+
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}},
+        {"x": 1, "y": 2},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()), gen_id=lambda: "r1")
+
+    assert env["ok"] is True
+    # ...and the corrupt file is replaced by a valid one, so it self-heals.
+    import json
+    assert isinstance(json.loads((tmp_path / "ratelimit.json").read_text()), list)
+
+
+def test_run_action_survives_a_corrupt_idempotency_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    config.save({"mode": "auto"})
+    (tmp_path / "idempotency.json").write_text("{not json")
+
+    sess = FakeSession()
+    monkeypatch.setattr(
+        runtime.observer, "observe",
+        lambda b, s, **kw: s.set_snapshot({"hash": "h", "app": {"package": "com.x"}}))
+
+    env = runtime.run_action(
+        "tap", lambda b, s: {"hash": "after", "app": {"package": "com.x"}},
+        {"x": 1, "y": 2},
+        build=lambda cfg: (FakeBackend(), sess, FakeConn()), gen_id=lambda: "r1",
+        idempotency_key="k1")
+    assert env["ok"] is True

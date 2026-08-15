@@ -362,6 +362,10 @@ pip install 'phonectl[mcp]'
 phonectl mcp
 ```
 
+**Requires Python ≥ 3.10.** The MCP SDK dropped 3.9, so the extra is gated on the interpreter
+version: on 3.9 the install still succeeds and the stdlib-only core works normally, but the
+MCP transport is unavailable. Everything else in phonectl runs on 3.9.
+
 Every MCP tool returns the same structured result envelope used by `--json` CLI actions. Agents should branch on `ok`, `error.code`, `requires_user`, `risk_level`, and `reasons` instead of parsing human text.
 
 Tool catalog:
@@ -602,6 +606,11 @@ phonectl: action refused (kill switch STOP present)
 | `1` | Timeout (`wait-for`), connection error, policy denial, rate limit, or busy writer |
 | `2` | Kill switch active, or `wait-for` called without `--text`/`--id` |
 | `3` | Confirm-mode refusal (action verb called without `--yes`) |
+| `4` | Internal error — a bug in phonectl, not a refusal. Reported as an `internal_error` envelope; set `PHONECTL_DEBUG=1` to re-raise and get the traceback |
+| `130` | Interrupted with Ctrl-C (128 + SIGINT) |
+
+Codes `1`–`3` mean phonectl worked and declined; `4` means phonectl itself broke. A closed
+pipe (`phonectl observe --json | head`) exits `0`.
 
 
 ## Termux:API provider (optional)

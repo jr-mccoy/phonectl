@@ -6,7 +6,7 @@ import os
 import threading
 import time
 
-from phonectl import audit, errors, observer, policy, results
+from phonectl import audit, errors, observer, policy, results, trust
 from phonectl.daemon import PROTOCOL_VERSION
 from phonectl.daemon import rpc as rpc_mod
 from phonectl.daemon.discovery import LOOPBACK
@@ -416,7 +416,7 @@ class DaemonServer:
         # secret and every method except the liveness probe must present it. `ping`
         # stays open so discovery can detect the daemon without the token.
         if self._token is not None and method != "ping":
-            if req.get("token") != self._token:
+            if not trust.tokens_equal(req.get("token"), self._token):
                 return self._finish(
                     results.err(
                         errors.UnauthorizedError("missing or invalid daemon token"),

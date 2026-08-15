@@ -4,6 +4,7 @@ import argparse
 import glob as _glob
 import json
 import os
+import sys
 from phonectl import (
     __version__,
     actuator,
@@ -1900,6 +1901,15 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+# Exit code for a bug in phonectl itself, distinct from the documented 1/2/3
+# (policy denial, kill switch, confirm refusal) so scripts can tell "phonectl
+# refused" from "phonectl broke".
+INTERNAL_ERROR_EXIT = 4
+SIGINT_EXIT = 130   # 128 + SIGINT, the shell convention
+
+_ISSUES_URL = "https://github.com/jumbodaddystack/phonectl/issues"
+
+
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1914,3 +1924,34 @@ def main(argv=None) -> int:
         else:
             print(f"phonectl: {e}")
         return 1
+    except KeyboardInterrupt:
+        # A user action, not a bug — never route it through the issue-report path.
+        print("phonectl: interrupted")
+        return SIGINT_EXIT
+    except BrokenPipeError:
+        # `phonectl observe --json | head` closes the pipe on us. Redirect the
+        # dangling stdout to devnull so the interpreter does not print its own
+        # "Exception ignored" noise while flushing at shutdown.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        return 0
+    except Exception as e:   # noqa: BLE001 — deliberate catch-all, see below
+        # errors.py promises envelopes "without raw tracebacks". Anything that is
+        # not a PhonectlError is a bug in phonectl (or an unhandled OS condition),
+        # and users hit those too — so it gets the same structured treatment
+        # instead of a stack trace. PHONECTL_DEBUG=1 re-raises for developers.
+        if os.environ.get("PHONECTL_DEBUG"):
+            raise
+        env = results.err(
+            ("internal_error", f"{type(e).__name__}: {e}"),
+            user_action=f"This is a bug in phonectl. Please report it at {_ISSUES_URL} "
+                        f"(re-run with PHONECTL_DEBUG=1 for the traceback).",
+        )
+        if getattr(args, "json", False):
+            print(json.dumps(env, indent=2))
+        else:
+            print(f"phonectl: internal error — {env['error']['message']}")
+            print(f"phonectl: {env['error']['user_action']}")
+        return INTERNAL_ERROR_EXIT

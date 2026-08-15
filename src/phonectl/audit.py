@@ -1,7 +1,7 @@
 import json
 import time
 from pathlib import Path
-from phonectl import redact
+from phonectl import redact, state
 from phonectl.config import config_dir, load
 
 
@@ -78,10 +78,7 @@ def _log_path():
 
 
 def read_entries(limit: int | None = None) -> list[dict]:
-    p = _log_path()
-    if not p.exists():
-        return []
-    entries = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    entries = state.read_jsonl(_log_path())
     return entries[-limit:] if limit else entries
 
 

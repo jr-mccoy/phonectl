@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 
+from phonectl import state
 from phonectl.config import config_dir
 
 _ORDER = ["low", "medium", "high", "critical"]
@@ -45,10 +46,7 @@ def _path():
 
 
 def read_ledger() -> list:
-    p = _path()
-    if not p.exists():
-        return []
-    return [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+    return state.read_jsonl(_path())
 
 
 def append(record) -> None:
