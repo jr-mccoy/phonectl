@@ -1,4 +1,4 @@
-from phonectl.macro import records
+from droidjig.macro import records
 
 
 def test_macro_run_record_shape():
@@ -11,7 +11,7 @@ def test_macro_run_record_shape():
 
 
 def test_append_and_read_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     records.append({"kind": "macro_run", "run_id": "r1"})
     records.append({"kind": "action", "action_id": "a1"})
     assert [r["run_id"] for r in records.read(kind="macro_run")] == ["r1"]

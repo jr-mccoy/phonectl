@@ -1,4 +1,4 @@
-from phonectl import ratelimit
+from droidjig import ratelimit
 
 
 def test_buckets_for_includes_global_verb_and_high_risk():

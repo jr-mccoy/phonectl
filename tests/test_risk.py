@@ -1,4 +1,4 @@
-from phonectl import risk
+from droidjig import risk
 
 
 def _snap(package="com.x", elements=None):
@@ -77,7 +77,7 @@ def test_intent_broadcast_classifies_high():
 
 
 def test_notifications_reply_is_high_risk():
-    from phonectl import risk
+    from droidjig import risk
     assert "notifications_reply" in risk.HIGH_RISK_VERBS
 
 

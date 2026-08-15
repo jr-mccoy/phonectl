@@ -1,7 +1,7 @@
 import pytest
-from phonectl.providers.clipboard import ClipboardProvider
-from phonectl.providers.registry import ProviderRegistry
-from phonectl import capabilities, errors
+from droidjig.providers.clipboard import ClipboardProvider
+from droidjig.providers.registry import ProviderRegistry
+from droidjig import capabilities, errors
 
 
 class FakeClipProv:
@@ -61,9 +61,9 @@ class _Session:
 
 
 def _write_env(tmp_path, monkeypatch, text):
-    from phonectl import config, observer
+    from droidjig import config, observer
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     monkeypatch.setattr(
         observer, "observe",

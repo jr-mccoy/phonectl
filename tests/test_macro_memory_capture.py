@@ -1,9 +1,9 @@
 # tests/test_macro_memory_capture.py
-from phonectl.macro import memory
+from droidjig.macro import memory
 
 
 def test_capture_selector_on_ok(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     rec = {"kind": "action", "outcome": "ok", "verb": "tap",
            "target": {"selector": {"resource_id": "com.x:id/send"}, "matched_i": 14},
            "context": {"package": "com.x", "app_version": "2.1", "locale": "en"}}
@@ -13,7 +13,7 @@ def test_capture_selector_on_ok(tmp_path, monkeypatch):
 
 
 def test_capture_selector_skips_failures(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     rec = {"kind": "action", "outcome": "guarded_action",
            "target": {"selector": {"x": 1}}, "context": {"package": "com.x"}}
     memory.capture_selector(rec)
@@ -21,7 +21,7 @@ def test_capture_selector_skips_failures(tmp_path, monkeypatch):
 
 
 def test_capture_failure_counts(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     rec = {"kind": "action", "outcome": "stale_snapshot", "verb": "tap"}
     memory.capture_failure(rec)
     memory.capture_failure(rec)

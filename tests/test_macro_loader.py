@@ -1,8 +1,8 @@
 import json
 import pytest
 
-from phonectl import errors
-from phonectl.macro import loader
+from droidjig import errors
+from droidjig.macro import loader
 
 
 def test_load_json(tmp_path):

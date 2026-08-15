@@ -1,5 +1,5 @@
-from phonectl import trust
-from phonectl.providers.transport import LoopbackTransport
+from droidjig import trust
+from droidjig.providers.transport import LoopbackTransport
 
 
 def test_negotiate_returns_capabilities_and_version():
@@ -26,7 +26,7 @@ def test_companion_stopped_true():
     assert trust.companion_stopped(t) is True
 
 
-from phonectl import capabilities
+from droidjig import capabilities
 
 
 def test_gate_capabilities_removes_disabled():
@@ -114,7 +114,7 @@ def test_gate_capabilities_explicit_derived_key_wins_over_derivation():
 def test_gated_accessibility_provider_serves_the_tree_with_a_real_handshake():
     # End to end: with exactly the keys a real APK handshake advertises, the gated
     # provider must still advertise the registry-facing tree/gesture surface.
-    from phonectl.providers.accessibility import AccessibilityProvider
+    from droidjig.providers.accessibility import AccessibilityProvider
     enabled = {k: True for k in (
         "observe_ui_native", "observe_ui_events", "act_gesture_native",
         "act_set_text_native", "act_semantic_action", "launch_app",

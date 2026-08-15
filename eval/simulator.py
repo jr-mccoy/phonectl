@@ -1,6 +1,6 @@
 """A scripted, device-free Backend for the eval harness.
 
-``ScriptedBackend`` implements the ``phonectl.backend.Backend`` protocol over a fixed list of UI
+``ScriptedBackend`` implements the ``droidjig.backend.Backend`` protocol over a fixed list of UI
 screens. Navigational actions (tap, swipe) advance a cursor to the next screen, modelling a linear
 flow; text and key input are recorded but do not advance. Everything the real observe->act pipeline
 reads — ``ui_dump``/``window_dump``/``wm_size`` — is served from the current screen, so
@@ -10,7 +10,7 @@ Generalizes the ad-hoc ``CannedBackend``/``FakeBackend`` test doubles into one r
 """
 from __future__ import annotations
 
-from phonectl import capabilities
+from droidjig import capabilities
 
 
 def screen(*nodes: str, rotation: int = 0) -> str:

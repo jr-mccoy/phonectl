@@ -1,7 +1,7 @@
 import pytest
-from phonectl import errors, ui_parser
-from phonectl.providers.accessibility import AccessibilityProvider
-from phonectl.providers.transport import LoopbackTransport
+from droidjig import errors, ui_parser
+from droidjig.providers.accessibility import AccessibilityProvider
+from droidjig.providers.transport import LoopbackTransport
 
 
 # --- Task 2: capabilities ---
@@ -250,7 +250,7 @@ class ErrorTransport(LoopbackTransport):
     ("capability_disabled", errors.CapabilityUnavailableError),
     ("unauthorized", errors.UnauthorizedError),
     ("unknown_method", errors.UnknownMethodError),
-    ("handler_error", errors.PhonectlError),              # anything else stays typed but generic
+    ("handler_error", errors.DroidjigError),              # anything else stays typed but generic
 ])
 def test_companion_error_codes_map_to_typed_errors(code, exc):
     p = AccessibilityProvider(ErrorTransport(code))

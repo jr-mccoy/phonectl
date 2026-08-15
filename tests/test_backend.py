@@ -1,5 +1,5 @@
-from phonectl import backend, capabilities
-from phonectl.adb_backend import AdbBackend
+from droidjig import backend, capabilities
+from droidjig.adb_backend import AdbBackend
 
 
 def test_adb_backend_satisfies_protocol_runtime_checkable():

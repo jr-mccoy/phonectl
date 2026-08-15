@@ -1,6 +1,6 @@
 import pytest
-from phonectl import ui_parser, errors
-from phonectl.session import Session
+from droidjig import ui_parser, errors
+from droidjig.session import Session
 
 NESTED = (
     "<?xml version='1.0'?><hierarchy rotation=\"0\">"

@@ -1,7 +1,7 @@
 import json as _json
 import pytest
-from phonectl.providers.termux import TermuxApiProvider
-from phonectl import capabilities
+from droidjig.providers.termux import TermuxApiProvider
+from droidjig import capabilities
 
 
 def _fake_which_found(name):

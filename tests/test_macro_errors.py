@@ -1,5 +1,5 @@
-from phonectl import errors
-import phonectl.macro as macro
+from droidjig import errors
+import droidjig.macro as macro
 
 
 def test_macro_error_codes():

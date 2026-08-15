@@ -1,5 +1,5 @@
 import pytest
-from phonectl.adb_backend import AdbBackend
+from droidjig.adb_backend import AdbBackend
 
 class FakeCompleted:
     def __init__(self, stdout="", stdout_bytes=b"", returncode=0):
@@ -46,7 +46,7 @@ def test_wm_size_cache_invalidated_on_serial_change():
 
 
 def test_wm_size_cache_expires_after_ttl(monkeypatch):
-    import phonectl.adb_backend as mod
+    import droidjig.adb_backend as mod
     calls = []
     b = AdbBackend(serial="d", runner=make_runner(calls, stdout="Physical size: 1080x2400\n"))
     t = [1000.0]
@@ -358,7 +358,7 @@ def test_run_adb_returns_full_result_with_serial():
         calls.append(cmd)
         import subprocess
         return subprocess.CompletedProcess(cmd, 7, stdout="OUT", stderr="ERR")
-    from phonectl.adb_backend import AdbBackend
+    from droidjig.adb_backend import AdbBackend
     b = AdbBackend(serial="1.2.3.4:5", runner=fake_runner)
     res = b.run_adb("shell", "true")
     assert calls == [["adb", "-s", "1.2.3.4:5", "shell", "true"]]
@@ -465,7 +465,7 @@ def test_observe_dump_junk_window_section_returns_none():
 
 
 def test_observe_dump_keeps_lock_lines_for_parser():
-    from phonectl import ui_parser
+    from droidjig import ui_parser
     locked = ("  mDreamingLockscreen=true\n"
               "  KeyguardServiceDelegate showing=true secure=true\n")
     b = AdbBackend(serial="d", runner=make_runner([], stdout=_od_stdout(window=locked)))

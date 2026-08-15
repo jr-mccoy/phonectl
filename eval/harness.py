@@ -11,23 +11,23 @@ import os
 import tempfile
 import time
 
-from phonectl import config, runtime
+from droidjig import config, runtime
 from eval import metrics
 
 
 @contextlib.contextmanager
 def isolated_home():
-    """A fresh PHONECTL_HOME for a standalone run so benchmarks never touch real state."""
-    prev = os.environ.get("PHONECTL_HOME")
-    with tempfile.TemporaryDirectory(prefix="phonectl-eval-") as d:
-        os.environ["PHONECTL_HOME"] = d
+    """A fresh DROIDJIG_HOME for a standalone run so benchmarks never touch real state."""
+    prev = os.environ.get("DROIDJIG_HOME")
+    with tempfile.TemporaryDirectory(prefix="droidjig-eval-") as d:
+        os.environ["DROIDJIG_HOME"] = d
         try:
             yield d
         finally:
             if prev is None:
-                os.environ.pop("PHONECTL_HOME", None)
+                os.environ.pop("DROIDJIG_HOME", None)
             else:
-                os.environ["PHONECTL_HOME"] = prev
+                os.environ["DROIDJIG_HOME"] = prev
 
 
 def scripted_build(backend, session=None):
@@ -36,7 +36,7 @@ def scripted_build(backend, session=None):
     The returned build carries a ``.session`` attribute so scenarios can inspect ``session.last``
     (the post-action snapshot) after driving an action.
     """
-    from phonectl.session import Session
+    from droidjig.session import Session
 
     class _Conn:
         def ensure(self):

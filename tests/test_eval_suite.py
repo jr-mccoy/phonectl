@@ -18,7 +18,7 @@ METRIC_KEYS = {
 
 @pytest.fixture(autouse=True)
 def _isolated_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
 
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda s: s.__name__)

@@ -1,4 +1,4 @@
-from phonectl import companion_setup as cs
+from droidjig import companion_setup as cs
 import subprocess
 
 XML_OK = ('<?xml version="1.0"?><map>'
@@ -139,16 +139,16 @@ def test_read_token_via_runas_denied_returns_none():
     assert cs.read_token_via_runas(adb) is None
 
 def test_acquire_token_runas(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: "run-as" in a, cp(out=XML_OK))])
     cfg = {}
     r = cs.acquire_token(adb, cfg, (lambda m: None), prompt=(lambda m="": "SHOULD_NOT_BE_USED"))
     assert r["status"] == "done" and cfg["companion_token"] == "abc123"
-    from phonectl import config
+    from droidjig import config
     assert config.load()["companion_token"] == "abc123"
 
 def test_acquire_token_prompt_fallback(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: "run-as" in a, cp(rc=1, err="not debuggable"))])
     cfg = {}
     r = cs.acquire_token(adb, cfg, (lambda m: None), prompt=(lambda m="": "  pasted-tok  "))
@@ -160,7 +160,7 @@ def _listening(port=8765):
     return cp(out=f"LISTEN 0 0 [::ffff:127.0.0.1]:{port} *:*")
 
 def test_start_server_skips_when_already_up(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), _listening())])
     r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=True,
                         prompt=(lambda m="": "n"), sleep=(lambda s: None))
@@ -168,7 +168,7 @@ def test_start_server_skips_when_already_up(tmp_path, monkeypatch):
     assert not any(a[:3] == ("shell", "am", "broadcast") for a in adb.calls)
 
 def test_start_server_declined_without_yes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), cp(out=""))])
     r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=False,
                         prompt=(lambda m="": "n"), sleep=(lambda s: None))
@@ -176,7 +176,7 @@ def test_start_server_declined_without_yes(tmp_path, monkeypatch):
     assert not any(a[:3] == ("shell", "am", "broadcast") for a in adb.calls)
 
 def test_start_server_broadcasts_then_up(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     seq = [cp(out=""), _listening()]  # down, then up after broadcast
     calls = []
     def ss_dispatch(*a):
@@ -191,12 +191,12 @@ def test_start_server_broadcasts_then_up(tmp_path, monkeypatch):
     assert any(a[:3] == ("shell", "am", "broadcast") and "tok" in a and cs.LIFECYCLE_COMPONENT in a
                for a in calls)
     assert cfg["companion_port"] == cs.DEFAULT_PORT
-    from phonectl import config
+    from droidjig import config
     assert config.load()["companion_port"] == cs.DEFAULT_PORT
     assert config.load()["companion_host"] == "127.0.0.1"
 
 def test_start_server_timeout(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), cp(out=""))])
     r = cs.start_server(adb, "tok", {}, (lambda m: None), assume_yes=True,
                         prompt=(lambda m="": "n"), sleep=(lambda s: None), attempts=3)
@@ -233,7 +233,7 @@ def test_verify_none_port_falls_back_to_default():
     assert r["status"] == "done" and seen["port"] == cs.DEFAULT_PORT
 
 def test_start_server_skip_persists_port(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([(lambda a: a[:2] == ("shell", "ss"), _listening())])
     cfg = {}
     r = cs.start_server(adb, "tok", cfg, (lambda m: None), assume_yes=True,
@@ -243,7 +243,7 @@ def test_start_server_skip_persists_port(tmp_path, monkeypatch):
 
 
 def test_orchestrator_runs_all_steps_happy(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
     def adb(*a):
         if a[:3] == ("shell", "pm", "list"): return cp(out="")
@@ -263,7 +263,7 @@ def test_orchestrator_runs_all_steps_happy(tmp_path, monkeypatch):
         ["install", "accessibility", "notifications", "token", "server", "verify"]
 
 def test_orchestrator_stops_on_failed_step(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
     def adb(*a):
         if a[:3] == ("shell", "pm", "list"): return cp(out="")
@@ -286,7 +286,7 @@ def test_status_reports_state():
 
 
 def test_push_token_mints_and_broadcasts(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([])
     cfg = {}
     out_lines = []
@@ -301,7 +301,7 @@ def test_push_token_mints_and_broadcasts(tmp_path, monkeypatch):
 
 
 def test_push_token_skips_when_already_paired(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = FakeAdb([])
     cfg = {"companion_token": "existing"}
     res = cs.push_token(adb, cfg, lambda _m: None, mint=lambda: "new")

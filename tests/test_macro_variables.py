@@ -1,4 +1,4 @@
-from phonectl.macro import variables as V
+from droidjig.macro import variables as V
 
 
 def test_read_order_runtime_beats_macro():

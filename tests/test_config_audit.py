@@ -1,10 +1,10 @@
 import json
 import pytest
-from phonectl import config, audit
+from droidjig import config, audit
 
 
 def test_config_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     # no file: returns defaults only
     assert config.load().get("serial") is None
     config.save({"serial": "127.0.0.1:5555", "mode": "auto"})
@@ -15,20 +15,20 @@ def test_config_roundtrip(tmp_path, monkeypatch):
 
 def test_default_mode_is_confirm(tmp_path, monkeypatch):
     # Finding 5: unconfirmed execution must be opt-in, not the default.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     assert config.get_mode(config.load()) == "confirm"
     assert config.get_mode({}) == "confirm"
 
 
 def test_kill_switch(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     assert audit.kill_switch_active() is False
     (tmp_path / "STOP").write_text("")
     assert audit.kill_switch_active() is True
 
 
 def test_log_action_appends_jsonl(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 7}, {"app": {"package": "com.x"}, "hash": "abc"})
     lines = (tmp_path / "actions.jsonl").read_text().strip().splitlines()
     rec = json.loads(lines[0])
@@ -38,7 +38,7 @@ def test_log_action_appends_jsonl(tmp_path, monkeypatch):
 
 
 def test_log_action_appends_multiple_lines(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 1}, {"app": {"package": "com.a"}, "hash": "h1"})
     audit.log_action("key", {"key": "back"}, {"app": {"package": "com.b"}, "hash": "h2"})
     lines = (tmp_path / "actions.jsonl").read_text().strip().splitlines()
@@ -48,14 +48,14 @@ def test_log_action_appends_multiple_lines(tmp_path, monkeypatch):
 
 
 def test_log_action_defensive_when_result_missing_keys(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 0}, {})
     rec = json.loads((tmp_path / "actions.jsonl").read_text().strip().splitlines()[0])
     assert rec["app"] == "" and rec["hash"] == ""
 
 
 def test_log_action_default_redacted_scrubs_sensitive_target(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action(
         "type",
         {"text": "code 482913"},
@@ -69,7 +69,7 @@ def test_log_action_default_redacted_scrubs_sensitive_target(tmp_path, monkeypat
 
 
 def test_log_action_redacted_is_noop_on_benign_target(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action(
         "tap",
         {"selector": {"text": "Wi-Fi"}},
@@ -80,7 +80,7 @@ def test_log_action_redacted_is_noop_on_benign_target(tmp_path, monkeypatch):
 
 
 def test_log_action_metadata_level_drops_target(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"audit_level": "metadata"})
     audit.log_action(
         "tap",
@@ -93,14 +93,14 @@ def test_log_action_metadata_level_drops_target(tmp_path, monkeypatch):
 
 
 def test_log_action_none_level_writes_nothing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"audit_level": "none"})
     audit.log_action("tap", {"i": 1}, {"app": {"package": "com.x"}, "hash": "h"})
     assert not (tmp_path / "actions.jsonl").exists()
 
 
 def test_log_action_full_level_keeps_raw_target(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"audit_level": "full"})
     audit.log_action("type", {"text": "code 482913"}, {"app": {}, "hash": "h"})
     rec = json.loads((tmp_path / "actions.jsonl").read_text().strip())
@@ -108,7 +108,7 @@ def test_log_action_full_level_keeps_raw_target(tmp_path, monkeypatch):
 
 
 def test_read_entries_returns_last_n(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"audit_level": "metadata"})
     for n in range(5):
         audit.log_action(
@@ -119,7 +119,7 @@ def test_read_entries_returns_last_n(tmp_path, monkeypatch):
 
 
 def test_purge_removes_log_and_counts(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 0}, {"app": {}, "hash": "h"})
     assert audit.purge() == 1
     assert not (tmp_path / "actions.jsonl").exists()
@@ -127,7 +127,7 @@ def test_purge_removes_log_and_counts(tmp_path, monkeypatch):
 
 
 def test_export_redacts_targets(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"audit_level": "full"})
     audit.log_action("type", {"text": "code 482913"}, {"app": {}, "hash": "h"})
     out = tmp_path / "bundle.json"

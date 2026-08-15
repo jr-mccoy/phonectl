@@ -1,6 +1,6 @@
 """Standalone benchmark runner: ``python -m eval``.
 
-Runs the seven §26 scenarios in an isolated PHONECTL_HOME and prints a per-scenario pass/fail line
+Runs the seven §26 scenarios in an isolated DROIDJIG_HOME and prints a per-scenario pass/fail line
 plus the aggregate metrics. Exit code is non-zero if any scenario fails, so it can gate CI too.
 """
 from __future__ import annotations

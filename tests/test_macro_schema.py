@@ -1,7 +1,7 @@
 import pytest
 
-from phonectl import errors
-from phonectl.macro import schema
+from droidjig import errors
+from droidjig.macro import schema
 
 
 def test_validate_ok_minimal():

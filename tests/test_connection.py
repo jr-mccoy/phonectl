@@ -1,8 +1,8 @@
 import pytest
-from phonectl.connection import Connection, GUIDANCE
-from phonectl import capabilities as caps_mod
-from phonectl import config
-from phonectl.providers.registry import ProviderRegistry
+from droidjig.connection import Connection, GUIDANCE
+from droidjig import capabilities as caps_mod
+from droidjig import config
+from droidjig.providers.registry import ProviderRegistry
 
 
 class ScanBackend:
@@ -37,27 +37,27 @@ class AdbProvider(StateBackend):
         return caps_mod.make(requires_adb=True)
 
 def test_ensure_noop_when_already_device(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["device"])
     Connection(b, {"serial": "127.0.0.1:5555"}).ensure()
     assert b.adb_calls == []  # no reconnect attempted
 
 def test_ensure_reconnects_when_offline(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["offline", "device"])
     Connection(b, {"serial": "127.0.0.1:5555"}).ensure()
     assert ("connect", "127.0.0.1:5555") in b.adb_calls
     assert b.serial == "127.0.0.1:5555"
 
 def test_ensure_raises_guidance_when_no_serial(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["offline", "offline"])
     with pytest.raises(ConnectionError) as e:
         Connection(b, {}).ensure()
     assert GUIDANCE in str(e.value)
 
 def test_ensure_raises_guidance_when_reconnect_fails(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["offline", "offline"])
     with pytest.raises(ConnectionError) as e:
         Connection(b, {"serial": "127.0.0.1:5555"}).ensure()
@@ -69,7 +69,7 @@ def test_ensure_raises_guidance_when_reconnect_fails(tmp_path, monkeypatch):
 def test_ensure_reconnects_through_provider_registry(tmp_path, monkeypatch):
     # build_runtime wraps the backend in a ProviderRegistry, whose `serial` is a
     # read-only property. The reconnect path assigns backend.serial, which must not crash.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     p = AdbProvider(["offline", "device"])
     registry = ProviderRegistry([p])
     Connection(registry, {"serial": "127.0.0.1:5555"}).ensure()
@@ -78,7 +78,7 @@ def test_ensure_reconnects_through_provider_registry(tmp_path, monkeypatch):
     assert registry.serial == "127.0.0.1:5555"
 
 def test_rediscover_finds_live_port_via_scan(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = ScanBackend(open_ports=[43091], target="192.168.0.109:43091")
     cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
     addr = Connection(b, cfg).rediscover()
@@ -87,7 +87,7 @@ def test_rediscover_finds_live_port_via_scan(tmp_path, monkeypatch):
     assert config.load()["serial"] == "192.168.0.109:43091"
 
 def test_rediscover_skips_open_non_device_ports(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     # 8765 (companion) is open but never 'device'; 43091 is the real adbd port
     b = ScanBackend(open_ports=[8765, 43091], target="192.168.0.109:43091")
     cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
@@ -95,7 +95,7 @@ def test_rediscover_skips_open_non_device_ports(tmp_path, monkeypatch):
     assert addr == "192.168.0.109:43091"
 
 def test_ensure_auto_recovers_via_scan(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = ScanBackend(open_ports=[43091], target="192.168.0.109:43091")
     cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
     Connection(b, cfg).ensure()  # must not raise
@@ -103,7 +103,7 @@ def test_ensure_auto_recovers_via_scan(tmp_path, monkeypatch):
     assert config.load()["serial"] == "192.168.0.109:43091"
 
 def test_ensure_raises_guidance_when_scan_finds_nothing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = ScanBackend(open_ports=[], target="192.168.0.109:43091")
     cfg = {"serial": "192.168.0.109:44063", "last_port": "192.168.0.109:44063"}
     with pytest.raises(ConnectionError) as e:
@@ -114,7 +114,7 @@ def test_ensure_raises_guidance_when_scan_finds_nothing(tmp_path, monkeypatch):
 # ── ensure() freshness TTL: skip the per-action get-state round trip ─────────
 
 def test_ensure_within_ttl_skips_get_state(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["device"])
     calls = []
     orig = b.get_state
@@ -128,7 +128,7 @@ def test_ensure_within_ttl_skips_get_state(tmp_path, monkeypatch):
 
 
 def test_ensure_rechecks_after_ttl_expiry(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["device"])
     calls = []
     orig = b.get_state
@@ -142,7 +142,7 @@ def test_ensure_rechecks_after_ttl_expiry(tmp_path, monkeypatch):
 
 
 def test_ensure_ttl_zero_always_checks(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["device"])
     calls = []
     orig = b.get_state
@@ -156,7 +156,7 @@ def test_ensure_ttl_zero_always_checks(tmp_path, monkeypatch):
 def test_ensure_failure_does_not_mark_fresh(tmp_path, monkeypatch):
     # An ensure() that raised must not leave a freshness stamp behind: the
     # next call has to re-check rather than assume a device that never was.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = StateBackend(["offline"])
     b.mdns_services = lambda: []
     b.scan_ports = lambda ip, ports, **kw: []
@@ -176,7 +176,7 @@ class CompanionProvider:
 
 
 def test_ensure_degrades_to_companion_when_adb_unreachable(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     adb = AdbProvider(["offline", "offline"])
     registry = ProviderRegistry([CompanionProvider(), adb])
     Connection(registry, {"serial": "127.0.0.1:5555"}).ensure()   # must NOT raise
@@ -185,7 +185,7 @@ def test_ensure_degrades_to_companion_when_adb_unreachable(tmp_path, monkeypatch
 
 
 def test_ensure_still_raises_when_no_companion_serves_observe(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry = ProviderRegistry([AdbProvider(["offline", "offline"])])
     with pytest.raises(ConnectionError) as e:
         Connection(registry, {"serial": "127.0.0.1:5555"}).ensure()

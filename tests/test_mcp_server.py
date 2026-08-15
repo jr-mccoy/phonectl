@@ -3,8 +3,8 @@ import inspect
 
 import pytest
 
-from phonectl import audit, capabilities as caps, cli, errors, mcp_server
-from phonectl.config import config_dir
+from droidjig import audit, capabilities as caps, cli, errors, mcp_server
+from droidjig.config import config_dir
 
 
 class FakeConn:
@@ -61,7 +61,7 @@ class FakeBackend:
 
 
 def make_build(backend=None):
-    from phonectl.session import Session
+    from droidjig.session import Session
 
     backend = backend or FakeBackend()
 
@@ -119,7 +119,7 @@ def test_capabilities_tool_describes_backend():
 
 
 def test_tap_by_selector_routes_through_run_action(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, backend = make_build()
     env = mcp_server.tap(build, selector={"text": "Wi-Fi"}, confirm=True)
     assert env["ok"] is True and env["verb"] == "tap"
@@ -129,7 +129,7 @@ def test_tap_by_selector_routes_through_run_action(tmp_path, monkeypatch):
 
 
 def test_tap_dry_run_does_not_act(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, backend = make_build()
     env = mcp_server.tap(build, index=0, dry_run=True)
     assert env["ok"] is True and env["dry_run"] is True
@@ -138,7 +138,7 @@ def test_tap_dry_run_does_not_act(tmp_path, monkeypatch):
 
 
 def test_tap_kill_switch_returns_stopped(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "STOP").write_text("")
     build, backend = make_build()
     env = mcp_server.tap(build, index=0, confirm=True)
@@ -147,7 +147,7 @@ def test_tap_kill_switch_returns_stopped(tmp_path, monkeypatch):
 
 
 def test_type_text_routes_and_audits_redacted(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, backend = make_build()
     env = mcp_server.type_text(build, text="hunter2", confirm=True)
     assert env["ok"] is True
@@ -157,7 +157,7 @@ def test_type_text_routes_and_audits_redacted(tmp_path, monkeypatch):
 
 
 def test_policy_explain_tool(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class PayBackend(FakeBackend):
         def ui_dump(self):
@@ -175,7 +175,7 @@ def test_policy_explain_tool(tmp_path, monkeypatch):
 
 
 def test_audit_query_returns_recent_entries(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 1}, {"app": {"package": "com.x"}, "hash": "h1"})
     env = mcp_server.audit_query(limit=5)
     assert env["ok"] is True
@@ -183,7 +183,7 @@ def test_audit_query_returns_recent_entries(tmp_path, monkeypatch):
 
 
 def test_stop_engages_kill_switch(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     assert mcp_server.stop()["data"]["stopped"] is True
     assert (config_dir() / "STOP").exists()
 
@@ -191,7 +191,7 @@ def test_stop_engages_kill_switch(tmp_path, monkeypatch):
 def test_mcp_resume_not_agent_accessible(tmp_path, monkeypatch):
     # Finding 1: phone_resume is not a registered MCP tool — an agent cannot clear
     # its own kill switch. call_tool must reject it, and STOP must survive.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     mcp_server.stop()
     assert "phone_resume" not in mcp_server.TOOLS
     env = mcp_server.call_tool("phone_resume", {})
@@ -211,14 +211,14 @@ def test_registry_lists_stable_tool_names():
 
 
 def test_call_tool_dispatches_observe(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_observe_ui", {}, build=build)
     assert env["ok"] is True and env["capability"] == "ui.observe"
 
 
 def test_call_tool_dispatches_buildless_audit(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     audit.log_action("tap", {"i": 1}, {"app": {}, "hash": "h"})
     env = mcp_server.call_tool("phone_audit_query", {"limit": 1})
     assert env["ok"] is True and env["data"]["entries"][0]["hash"] == "h"
@@ -230,7 +230,7 @@ def test_call_tool_unknown_name_errors():
 
 
 def test_register_registers_all_tools_on_fake_app(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class FakeApp:
         def __init__(self):
@@ -266,7 +266,7 @@ def test_register_fastmcp_tools_have_named_arguments_when_sdk_available():
     pytest.importorskip("mcp")
     from mcp.server.fastmcp import FastMCP
 
-    app = FastMCP("phonectl-test")
+    app = FastMCP("droidjig-test")
     mcp_server._register(app)
     tool = app._tool_manager.get_tool("phone_observe_ui")
     assert tool is not None
@@ -300,7 +300,7 @@ class FakePackageBackend(FakeBackend):
 
 
 def make_build_with_packages():
-    from phonectl.session import Session
+    from droidjig.session import Session
     backend = FakePackageBackend()
 
     def build(cfg):
@@ -310,7 +310,7 @@ def make_build_with_packages():
 
 
 def test_phone_clipboard_read_returns_unavailable_without_termux(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_clipboard_read", {}, build)
     assert env["ok"] is False
@@ -318,7 +318,7 @@ def test_phone_clipboard_read_returns_unavailable_without_termux(tmp_path, monke
 
 
 def test_phone_packages_list_returns_list(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build_with_packages()
     env = mcp_server.call_tool("phone_packages_list", {}, build)
     assert env["ok"] is True
@@ -328,7 +328,7 @@ def test_phone_packages_list_returns_list(tmp_path, monkeypatch):
 # ── Task 6: extraction MCP tools ─────────────────────────────────────────────
 
 def test_phone_extract_list_returns_rows(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_extract_list", {}, build)
     assert env["ok"] is True
@@ -336,7 +336,7 @@ def test_phone_extract_list_returns_rows(tmp_path, monkeypatch):
 
 
 def test_phone_extract_form_returns_fields(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_extract_form", {}, build)
     assert env["ok"] is True
@@ -344,7 +344,7 @@ def test_phone_extract_form_returns_fields(tmp_path, monkeypatch):
 
 
 def test_phone_get_focused_field_returns_element_or_none(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_get_focused_field", {}, build)
     assert env["ok"] is True
@@ -352,7 +352,7 @@ def test_phone_get_focused_field_returns_element_or_none(tmp_path, monkeypatch):
 
 
 def test_phone_find_text_returns_matches(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_find_text", {"pattern": "Wi.*Fi"}, build)
     assert env["ok"] is True
@@ -360,7 +360,7 @@ def test_phone_find_text_returns_matches(tmp_path, monkeypatch):
 
 
 def test_unknown_tool_still_returns_err(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_clipboard_read_UNKNOWN", {}, build)
     assert env["ok"] is False
@@ -370,7 +370,7 @@ def test_unknown_tool_still_returns_err(tmp_path, monkeypatch):
 
 @pytest.fixture
 def build(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b, _ = make_build()
     return b
 
@@ -390,8 +390,8 @@ def test_phone_scroll_until_returns_ok(build):
 
 # ── Task 7 (Plan 4.2): notification MCP tools ────────────────────────────────
 
-from phonectl.providers.notifications import NotificationsProvider
-from phonectl.providers.transport import LoopbackTransport as _LoopbackTransport
+from droidjig.providers.notifications import NotificationsProvider
+from droidjig.providers.transport import LoopbackTransport as _LoopbackTransport
 
 _NOTIF_RAW = {
     "key": "k1", "package": "com.msg", "title": "Alice", "text": "hi",
@@ -401,7 +401,7 @@ _NOTIF_RAW = {
 
 
 def _fake_build_with_companion(tmp_path):
-    from phonectl.session import Session
+    from droidjig.session import Session
     np = NotificationsProvider(transport=_LoopbackTransport({
         "notifications_list": lambda _p: {"notifications": [_NOTIF_RAW]},
         "notifications_reply": lambda p: {"sent": True},
@@ -410,13 +410,13 @@ def _fake_build_with_companion(tmp_path):
 
     class _FakeBackend(FakeBackend):
         def capabilities(self):
-            from phonectl import capabilities as caps
+            from droidjig import capabilities as caps
             return caps.make(observe_ui_tree=True, act_tap=True, requires_adb=True)
 
     fb = _FakeBackend()
 
     def build(cfg):
-        from phonectl.providers.registry import ProviderRegistry
+        from droidjig.providers.registry import ProviderRegistry
         registry = ProviderRegistry([np, fb])
         return registry, Session(), FakeConn()
 
@@ -440,7 +440,7 @@ def test_phone_notifications_dismiss_tool_registered():
 
 
 def test_phone_notifications_list_returns_items(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build = _fake_build_with_companion(tmp_path)
     env = mcp_server.call_tool("phone_notifications_list", {}, build)
     assert env["ok"] is True
@@ -449,7 +449,7 @@ def test_phone_notifications_list_returns_items(tmp_path, monkeypatch):
 
 
 def test_phone_notifications_reply_routes_through_policy(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build = _fake_build_with_companion(tmp_path)
     env = mcp_server.call_tool("phone_notifications_reply",
                                {"key": "k1", "text": "hi"}, build)
@@ -457,7 +457,7 @@ def test_phone_notifications_reply_routes_through_policy(tmp_path, monkeypatch):
 
 
 def test_phone_notifications_unavailable_returns_err(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_notifications_list", {}, build)
     assert env["ok"] is False
@@ -467,12 +467,12 @@ def test_phone_notifications_unavailable_returns_err(tmp_path, monkeypatch):
 # --- Plan 4.4: OCR MCP tool ---
 
 def test_phone_ocr_screen_tool_registered():
-    from phonectl import mcp_server
+    from droidjig import mcp_server
     assert "phone_ocr_screen" in mcp_server.TOOLS
 
 
 def test_phone_ocr_screen_unavailable_returns_err(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_ocr_screen", {}, build)
     assert env["ok"] is False
@@ -481,21 +481,21 @@ def test_phone_ocr_screen_unavailable_returns_err(tmp_path, monkeypatch):
 
 # Phase 6.1: macro tools
 def test_phone_macro_validate_tool_registered():
-    from phonectl import mcp_server
+    from droidjig import mcp_server
     assert 'phone_macro_validate' in mcp_server.TOOLS
     assert 'phone_macro_run' in mcp_server.TOOLS
     assert 'phone_macro_status' in mcp_server.TOOLS
 
 
 def test_phone_macro_validate_valid(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_macro_validate", {"macro": {"name": "m", "actions": []}}, build)
     assert env["ok"] is True and env["data"]["valid"] is True
 
 
 def test_phone_macro_status_empty(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     build, _ = make_build()
     env = mcp_server.call_tool("phone_macro_status", {}, build)
     assert env["ok"] is True and env["data"]["runs"] == []
@@ -504,7 +504,7 @@ def test_phone_macro_status_empty(tmp_path, monkeypatch):
 # ── Finding 6: scroll_until must route through the run_action choke-point ────
 
 def test_scroll_until_mcp_routes_through_run_action(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b, _ = make_build()
     env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1,
                                       confirm=True)
@@ -514,7 +514,7 @@ def test_scroll_until_mcp_routes_through_run_action(tmp_path, monkeypatch):
 
 
 def test_scroll_until_mcp_respects_kill_switch(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "STOP").write_text("")
     b, backend = make_build()
     env = mcp_server.scroll_until_mcp(b, direction="down", text="x", max_scrolls=1)
@@ -523,7 +523,7 @@ def test_scroll_until_mcp_respects_kill_switch(tmp_path, monkeypatch):
 
 
 def test_scroll_until_mcp_supports_dry_run(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b, backend = make_build()
     env = mcp_server.scroll_until_mcp(b, direction="down", text="x", dry_run=True)
     assert env["ok"] is True and env["dry_run"] is True

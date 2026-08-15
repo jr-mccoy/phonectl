@@ -1,5 +1,5 @@
 import pytest
-from phonectl.providers.registry import ProviderRegistry
+from droidjig.providers.registry import ProviderRegistry
 
 
 class FakeProv:
@@ -12,7 +12,7 @@ class FakeProv:
 
 
 def _caps(**kw):
-    from phonectl import capabilities
+    from droidjig import capabilities
     return capabilities.make(**kw)
 
 
@@ -55,7 +55,7 @@ def test_empty_registry_has_all_false_capabilities():
 
 # Task 2 tests — Backend Protocol delegation
 
-from phonectl import errors
+from droidjig import errors
 
 
 class FakeAdbProv:
@@ -283,8 +283,8 @@ def test_gesture_verbs_delegate_to_priority_act_tap_provider():
 
 
 def test_unsupported_keycode_falls_to_adb_without_a_companion_rpc():
-    from phonectl.providers.accessibility import AccessibilityProvider
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.accessibility import AccessibilityProvider
+    from droidjig.providers.transport import LoopbackTransport
 
     class RecordingTransport(LoopbackTransport):
         def __init__(self):

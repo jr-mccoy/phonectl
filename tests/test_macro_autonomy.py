@@ -1,6 +1,6 @@
 # tests/test_macro_autonomy.py
-from phonectl.macro import autonomy
-from phonectl.macro.schema import parse
+from droidjig.macro import autonomy
+from droidjig.macro.schema import parse
 
 
 def _m(name="m", require_confirm=False):
@@ -67,7 +67,7 @@ def test_revoke_by_id_drops_only_that_grant():
 
 
 def test_grant_then_list_then_revoke(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     g = autonomy.grant("reply", max_risk="high", now=10.0)
     assert g["macro"] == "reply" and g["max_risk"] == "high"
     assert [x["macro"] for x in autonomy.list_live(now=11.0)] == ["reply"]

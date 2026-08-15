@@ -5,14 +5,14 @@ a report ``{name, passed, detail, summary}`` where ``summary`` is the §26 metri
 1-5 exercise the happy paths (nav, form-fill, OTP, list extraction) and the safety hand-off; 6-7 are
 adversarial probes asserting the structured-error and policy-deny paths. All run without a device.
 
-Callers must have PHONECTL_HOME isolated (the pytest gate uses monkeypatch; ``python -m eval`` uses
+Callers must have DROIDJIG_HOME isolated (the pytest gate uses monkeypatch; ``python -m eval`` uses
 ``harness.isolated_home``).
 """
 from __future__ import annotations
 
 import re
 
-from phonectl import actuator, config, ui_parser
+from droidjig import actuator, config, ui_parser
 from eval.harness import Harness, scripted_build
 from eval.simulator import ScriptedBackend, node, screen
 

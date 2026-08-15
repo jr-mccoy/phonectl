@@ -1,6 +1,6 @@
-from phonectl.providers.packages import PackageProvider
-from phonectl.providers.registry import ProviderRegistry
-from phonectl import capabilities
+from droidjig.providers.packages import PackageProvider
+from droidjig.providers.registry import ProviderRegistry
+from droidjig import capabilities
 
 
 class FakePkgProv:

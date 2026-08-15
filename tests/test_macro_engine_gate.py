@@ -1,6 +1,6 @@
 # tests/test_macro_engine_gate.py
-from phonectl.macro import schema
-from phonectl.macro.engine import Engine
+from droidjig.macro import schema
+from droidjig.macro.engine import Engine
 
 
 def _eng(decisions, recorder, unattended_confirm=False):
@@ -44,12 +44,12 @@ def test_confirm_interactive_proceeds_on_yes():
 
 
 def test_unattended_default_gate_blocks_without_grant(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))   # empty ledger -> no grants
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))   # empty ledger -> no grants
     rec = []
     def ra(verb, fn, target, **kw):
         rec.append(verb); return {"ok": True, "data": {}}
-    from phonectl.macro.engine import Engine
-    from phonectl.macro import schema as _schema
+    from droidjig.macro.engine import Engine
+    from droidjig.macro import schema as _schema
     eng = Engine(build=lambda cfg: (None, None, None), run_action=ra,
                  fn_for=lambda step, scopes: (lambda b, s: None))   # NOTE: no gate= -> default gate
     m = _schema.parse({"name": "m", "actions": [{"type": "tap", "target": {"i": 0}}]})

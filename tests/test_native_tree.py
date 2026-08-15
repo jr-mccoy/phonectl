@@ -1,4 +1,4 @@
-from phonectl import native_tree, ui_parser
+from droidjig import native_tree, ui_parser
 
 NATIVE = {
     "windows": [

@@ -1,4 +1,4 @@
-from phonectl import redact
+from droidjig import redact
 
 
 def test_redact_text_scrubs_otp_email_phone_card_and_token():

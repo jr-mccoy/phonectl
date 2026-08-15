@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "phonectl"
+name = "droidjig"
 version = "0.1.0"
 description = "Android computer-use bridge over ADB (no root)"
 readme = "README.md"
@@ -40,7 +40,9 @@ yaml = ["PyYAML>=6"]
 dev = ["pytest>=7"]
 
 [project.scripts]
-phonectl = "phonectl.cli:main"
+droidjig = "droidjig.cli:main"
+# Pre-0.1.0 name. Kept so existing scripts and docs keep working; removable at 1.0.
+phonectl = "droidjig.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

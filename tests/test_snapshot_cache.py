@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from phonectl.daemon.snapshots import SnapshotCache
+from droidjig.daemon.snapshots import SnapshotCache
 
 
 def _snap(pkg="com.android.settings", h="abc"):
@@ -45,7 +45,7 @@ def test_injectable_id_counter_is_used():
 
 
 # Task 3: validate
-from phonectl import errors
+from droidjig import errors
 
 
 def test_validate_passes_when_expected_matches_current():

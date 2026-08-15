@@ -1,5 +1,5 @@
-from phonectl import errors, results
-from phonectl.daemon.jobs import Job, JobRegistry
+from droidjig import errors, results
+from droidjig.daemon.jobs import Job, JobRegistry
 
 
 def _ok_runner(method, params):

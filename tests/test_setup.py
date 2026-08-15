@@ -1,5 +1,5 @@
 import pytest
-from phonectl import capabilities, setup
+from droidjig import capabilities, setup
 
 
 class RecordingConn:
@@ -38,7 +38,7 @@ def collector():
 
 
 def test_happy_path_pairs_connects_and_persists(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     conn = RecordingConn(states=["offline", "device"])
     out_lines, out = collector()
     rc = setup.run_setup(
@@ -54,7 +54,7 @@ def test_happy_path_pairs_connects_and_persists(tmp_path, monkeypatch):
     assert conn.cfg["serial"] == "127.0.0.1:41000"
     assert conn.cfg["mode"] == "confirm"   # safe default (Finding 5); auto is opt-in
     assert conn.cfg["last_port"] == "41000"
-    from phonectl import config
+    from droidjig import config
     saved = config.load()
     assert saved["serial"] == "127.0.0.1:41000"
     assert saved["last_port"] == "41000"
@@ -62,7 +62,7 @@ def test_happy_path_pairs_connects_and_persists(tmp_path, monkeypatch):
 
 
 def test_missing_adb_prints_termux_guidance_and_does_not_pair(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     conn = RecordingConn(states=["device"])
     out_lines, out = collector()
     rc = setup.run_setup(conn, prompt=scripted([]), out=out, which=lambda name: None, exists=lambda path: True)
@@ -74,7 +74,7 @@ def test_missing_adb_prints_termux_guidance_and_does_not_pair(tmp_path, monkeypa
 
 
 def test_verify_failure_returns_2_and_does_not_persist(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     conn = RecordingConn(states=["offline"])
     out_lines, out = collector()
     rc = setup.run_setup(
@@ -91,7 +91,7 @@ def test_verify_failure_returns_2_and_does_not_persist(tmp_path, monkeypatch):
 
 
 def test_adbkey_absent_emits_note_and_does_not_fabricate(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     conn = RecordingConn(states=["offline", "device"])
     out_lines, out = collector()
     checked = []
@@ -113,7 +113,7 @@ def test_adbkey_absent_emits_note_and_does_not_fabricate(tmp_path, monkeypatch):
 
 
 def test_already_connected_fast_path_skips_pairing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     conn = RecordingConn(states=["device"], cfg={"serial": "127.0.0.1:41000"})
     conn.backend.serial = "127.0.0.1:41000"
     out_lines, out = collector()
@@ -128,7 +128,7 @@ def test_already_connected_fast_path_skips_pairing(tmp_path, monkeypatch):
 
 
 def test_rediscover_branch_used_when_available(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class RediscoverConn(RecordingConn):
         def __init__(self):
@@ -175,7 +175,7 @@ def test_module_report_unknown_raises():
 
 
 def test_run_module_reports_without_pairing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class CapConn(RecordingConn):
         def __init__(self):
@@ -191,7 +191,7 @@ def test_run_module_reports_without_pairing(tmp_path, monkeypatch):
 
 
 def test_rediscover_error_falls_back_to_pairing(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class RediscoverFailsConn(RecordingConn):
         def __init__(self):
@@ -219,8 +219,8 @@ def test_rediscover_error_falls_back_to_pairing(tmp_path, monkeypatch):
 
 
 def test_verify_failure_with_real_connection_does_not_save_failed_serial(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl.connection import Connection
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig.connection import Connection
 
     class OfflineBackend:
         def __init__(self):
