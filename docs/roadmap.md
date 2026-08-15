@@ -68,7 +68,7 @@ CLI / MCP / local API / optional UI ← Phase 2.3 (structured MCP) + later
 
 These are non-negotiable and are restated in each plan's **Global Constraints**:
 
-- **Stdlib-only runtime** (Python ≥ 3.9; `pytest` dev-only). A new runtime dep needs an explicit reason
+- **Stdlib-only runtime** (Python ≥ 3.10; `pytest` dev-only). A new runtime dep needs an explicit reason
   and an optional extra (as the MCP SDK does), never a hard core dependency.
 - **Backend isolation.** Only `adb_backend.py` (and later `a11y_backend.py`, Termux/Shizuku providers)
   may touch `subprocess`/`adb`. Everything else speaks a backend-agnostic interface.
