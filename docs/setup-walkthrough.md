@@ -1,6 +1,6 @@
-# phonectl setup walkthrough
+# droidjig setup walkthrough
 
-`phonectl setup` is an interactive, testable onboarding flow for Android 11+ Wireless Debugging.
+`droidjig setup` is an interactive, testable onboarding flow for Android 11+ Wireless Debugging.
 
 ## Prompt-by-prompt flow
 
@@ -14,7 +14,7 @@
 6. Prompt for the main Wireless Debugging connect host and port, for example `127.0.0.1:41000`.
 7. Run the connection seam's `connect(host_port)`.
 8. Verify `backend.get_state() == "device"`.
-9. Persist `mode=auto`, `serial`, and `last_port` in phonectl config.
+9. Persist `mode=auto`, `serial`, and `last_port` in droidjig config.
 10. Report whether the adb identity key (`~/.android/adbkey`) exists yet.
 
 ## `adb` absent branch
@@ -23,7 +23,7 @@ If `adb` is not installed, setup prints Termux guidance and exits before prompti
 
 ```bash
 pkg install android-tools
-phonectl setup
+droidjig setup
 ```
 
 The wizard never silently installs packages.
@@ -36,15 +36,15 @@ If the device is offline but a previous serial is configured and the connection 
 
 ## Module reports
 
-`phonectl setup all` runs the ADB setup path and then reports the other provider modules. A sample report looks like:
+`droidjig setup all` runs the ADB setup path and then reports the other provider modules. A sample report looks like:
 
 ```text
-[accessibility] not available — AccessibilityService enabled for the phonectl companion app
-    enable: Settings > Accessibility > phonectl > On (companion APK, Phase 4).
+[accessibility] not available — AccessibilityService enabled for the droidjig companion app
+    enable: Settings > Accessibility > droidjig > On (companion APK, Phase 4).
     unlocks: native UI tree + UI event stream + reliable set-text/gestures.
     safety: Reads on-screen content and dispatches gestures; per-capability toggles in the app.
-[notifications] not available — Notification access for the phonectl companion app
-    enable: Settings > Notifications > Notification access > phonectl (companion APK, Phase 4).
+[notifications] not available — Notification access for the droidjig companion app
+    enable: Settings > Notifications > Notification access > droidjig (companion APK, Phase 4).
     unlocks: read/wait/reply/dismiss notifications.
     safety: Exposes notification contents; redaction policies apply to logs.
 [termux-api] not available — Termux:API app + termux-api package
@@ -55,7 +55,7 @@ If the device is offline but a previous serial is configured and the connection 
 
 ## `termux-api` setup module
 
-`phonectl setup termux-api` checks whether Termux:API is installed and reports what it enables.
+`droidjig setup termux-api` checks whether Termux:API is installed and reports what it enables.
 
 ### Detection
 
@@ -68,7 +68,7 @@ The provider calls `shutil.which("termux-battery-status")`. If the binary is fou
     enable: Install the Termux:API companion app (F-Droid / Termux add-ons page), then:
             pkg install termux-api
             Grant Termux:API app permissions on Android (battery, clipboard, WiFi).
-    unlocks: clipboard read, phonectl device battery, phonectl device wifi, phonectl tts speak.
+    unlocks: clipboard read, droidjig device battery, droidjig device wifi, droidjig tts speak.
     safety: Optional, never a hard dependency; discovered at runtime.
 ```
 
@@ -87,7 +87,7 @@ No configuration is written — discovery is fully automatic on every startup.
 Wireless Debugging connect ports are volatile across sleep, reboot, or toggling Wireless Debugging. The wizard stores `last_port` so the resilience reconnect path can retry it first. Manual recovery is simply re-running:
 
 ```bash
-phonectl setup
+droidjig setup
 ```
 
 ## Diagnostics bundle
@@ -95,7 +95,7 @@ phonectl setup
 After setup, collect a redacted support bundle:
 
 ```bash
-phonectl doctor --bundle /tmp/phonectl-diag.zip
+droidjig doctor --bundle /tmp/droidjig-diag.zip
 ```
 
 Inspect `manifest.json` in the zip to confirm sensitive config keys are masked and `audit_tail` contains only metadata (`ts`, `verb`, `app`, and `hash`).
@@ -104,11 +104,11 @@ Inspect `manifest.json` in the zip to confirm sensitive config keys are masked a
 
 ```bash
 pkg install android-tools          # if adb is missing
-phonectl setup                     # answer prompts from Wireless Debugging
-phonectl doctor                    # expect connected state
-phonectl setup                     # expect already-connected fast path
-phonectl setup all                 # expect module reports
-phonectl doctor --bundle /tmp/phonectl-diag.zip
+droidjig setup                     # answer prompts from Wireless Debugging
+droidjig doctor                    # expect connected state
+droidjig setup                     # expect already-connected fast path
+droidjig setup all                 # expect module reports
+droidjig doctor --bundle /tmp/droidjig-diag.zip
 ```
 
 Active Android-version gating is deferred; Android 11+ is surfaced as setup guidance because pairing-code Wireless Debugging is itself an Android 11+ feature.

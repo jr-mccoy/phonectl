@@ -1,5 +1,5 @@
-from phonectl.macro import schema
-from phonectl.macro.engine import Engine
+from droidjig.macro import schema
+from droidjig.macro.engine import Engine
 
 
 def _eng(rec, run_action=None):

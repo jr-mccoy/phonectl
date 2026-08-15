@@ -1,6 +1,6 @@
 import pytest
-from phonectl.session import Session
-from phonectl import observer
+from droidjig.session import Session
+from droidjig import observer
 
 class CannedBackend:
     def __init__(self, xml, window, size=(1080, 2400)):
@@ -94,7 +94,7 @@ class CountingBackend(CannedBackend):
         return super().window_dump()
 
     def lock_state(self):
-        from phonectl import ui_parser
+        from droidjig import ui_parser
         return ui_parser.parse_lock_state(self.window_dump())
 
 
@@ -106,7 +106,7 @@ def test_observe_calls_window_dump_exactly_once():
 
 
 def test_observe_locked_raises_device_locked_with_lock_state():
-    from phonectl import errors
+    from droidjig import errors
     b = CountingBackend(XML, LOCKED_WINDOW)
     with pytest.raises(errors.DeviceLockedError) as ei:
         observer.observe(b, Session())
@@ -115,7 +115,7 @@ def test_observe_locked_raises_device_locked_with_lock_state():
 
 
 def test_observe_error_dump_while_locked_raises_without_retry_sleeps():
-    from phonectl import errors
+    from droidjig import errors
     b = CountingBackend("ERROR: could not get idle state.", LOCKED_WINDOW)
     sleeps = []
     with pytest.raises(errors.DeviceLockedError):
@@ -125,7 +125,7 @@ def test_observe_error_dump_while_locked_raises_without_retry_sleeps():
 
 
 def test_observe_error_dump_unlocked_retries_then_observe_error():
-    from phonectl import errors
+    from droidjig import errors
     b = CountingBackend("ERROR: could not get idle state.", WINDOW)
     sleeps = []
     with pytest.raises(errors.ObserveError):
@@ -186,7 +186,7 @@ def test_observe_combined_locked_fail_fast_uses_combined_window():
               "mDreamingLockscreen=true\nKeyguardServiceDelegate showing=true secure=true\n")
     b = CombinedBackend("ERROR: could not get idle state.", locked)
     import pytest as _pytest
-    from phonectl import errors
+    from droidjig import errors
     with _pytest.raises(errors.DeviceLockedError):
         observer.observe(b, Session(), sleep=lambda s: None)
     assert b.combined_calls == 1   # fail-fast on the first attempt
@@ -198,8 +198,8 @@ def test_companion_path_snapshot_carries_real_app_and_lock_state():
     # snapshots used to carry an empty app package — blinding the
     # guarded_packages risk signal — and lock state fell back to a full
     # adb dumpsys. The registry now augments from ADB's brief window form.
-    from phonectl import capabilities as caps_mod
-    from phonectl.providers.registry import ProviderRegistry
+    from droidjig import capabilities as caps_mod
+    from droidjig.providers.registry import ProviderRegistry
 
     class NativeProv:
         def capabilities(self):
@@ -229,7 +229,7 @@ NATIVE_XML = ("<?xml version='1.0'?><hierarchy rotation=\"0\">"
               " bounds=\"[0,100][500,200]\"/></hierarchy>")
 
 
-from phonectl import errors
+from droidjig import errors
 
 
 class StructuredWindowBackend:

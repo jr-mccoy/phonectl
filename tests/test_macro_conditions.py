@@ -2,9 +2,9 @@
 import pytest
 from datetime import datetime
 
-from phonectl import errors
-from phonectl.macro import conditions as C
-from phonectl.macro import variables as V
+from droidjig import errors
+from droidjig.macro import conditions as C
+from droidjig.macro import variables as V
 
 
 def _ctx(**kw):

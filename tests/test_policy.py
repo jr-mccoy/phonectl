@@ -1,4 +1,4 @@
-from phonectl import policy
+from droidjig import policy
 
 
 def _snap(package="com.x", elements=None):

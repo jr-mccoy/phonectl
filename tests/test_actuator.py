@@ -1,6 +1,6 @@
 import pytest
-from phonectl.session import Session
-from phonectl import actuator, observer
+from droidjig.session import Session
+from droidjig import actuator, observer
 
 XML_A = """<?xml version='1.0'?><hierarchy rotation="0">
 <node index="0" text="Wi-Fi" resource-id="android:id/title" class="TextView"
@@ -26,7 +26,7 @@ class ScriptBackend:
 
 def test_tap_by_index_resolves_center_then_reobserves():
     s = Session()
-    from phonectl import observer
+    from droidjig import observer
     b = ScriptBackend()
     observer.observe(b, s)                 # seed snapshot (XML_A)
     snap = actuator.tap(b, s, i=0)
@@ -57,7 +57,7 @@ def test_wait_for_finds_text_after_polling():
 def test_swipe_records_and_reobserves():
     s = Session()
     b = ScriptBackend()
-    from phonectl import observer
+    from droidjig import observer
     observer.observe(b, s)  # seed snapshot (XML_A)
     snap = actuator.swipe(b, s, 100, 200, 100, 800)
     assert ("swipe", 100, 200, 100, 800, 200) in b.calls
@@ -70,7 +70,7 @@ def test_wait_for_requires_text_or_id():
         actuator.wait_for(b, s)
 
 import pytest
-from phonectl import errors
+from droidjig import errors
 
 SEL_XML = (
     "<?xml version='1.0'?><hierarchy rotation=\"0\">"
@@ -258,7 +258,7 @@ def test_scroll_until_finds_text_on_second_scroll(fake_backend, fake_session):
         s.last = snap
         return snap
 
-    import phonectl.observer as obs
+    import droidjig.observer as obs
     original_observe = obs.observe
     obs.observe = fake_observe
     try:
@@ -287,7 +287,7 @@ def test_scroll_until_requires_text_or_selector(fake_backend, fake_session):
 def test_scroll_until_halts_on_stop_midloop(fake_backend, fake_session):
     # Finding 6: the loop must re-check the kill switch between iterations,
     # not only once at entry.
-    from phonectl import errors
+    from droidjig import errors
 
     scrolls = []
     halted = [False]
@@ -334,7 +334,7 @@ class SemanticBackend:
         self.semantic_calls = []
 
     def capabilities(self):
-        from phonectl import capabilities
+        from droidjig import capabilities
         return capabilities.make(observe_ui_tree=True, act_tap=True,
                                  act_semantic_action=self._semantic)
 

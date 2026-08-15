@@ -1,4 +1,4 @@
-from phonectl.daemon import records
+from droidjig.daemon import records
 
 
 def test_build_record_from_ok_envelope():
@@ -58,7 +58,7 @@ def test_build_record_attaches_context():
 
 
 def test_append_and_read_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     records.append({"action_id": "a1", "verb": "tap"})
     records.append({"action_id": "a2", "verb": "type"})
     rows = records.read()

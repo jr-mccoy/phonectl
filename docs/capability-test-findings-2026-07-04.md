@@ -1,4 +1,4 @@
-# phonectl — Capability Sweep Findings (2026-07-04)
+# droidjig — Capability Sweep Findings (2026-07-04)
 
 **Date:** 2026-07-04
 **Scope:** Manual end-to-end capability sweep of the CLI against a live Samsung Galaxy S25
@@ -23,22 +23,22 @@ calling `grant()` / the `autonomy_grant` RPC (whose `expires_at` param was alrea
 absolute-epoch semantics). Regression tests cover grant-visible-immediately,
 lapse-after-duration, and absolute-timestamp-over-RPC.
 
-**Problem.** `phonectl autonomy grant <macro> --max-risk <level> --expires N` treats `N` as
+**Problem.** `droidjig autonomy grant <macro> --max-risk <level> --expires N` treats `N` as
 an absolute Unix epoch timestamp instead of "N seconds from now". `cli.py` passes
 `args.expires` straight through as `expires_at`:
 
 ```
-# src/phonectl/cli.py:1267
+# src/droidjig/cli.py:1267
 "expires_at": getattr(args, "expires", None)},
 ...
-# src/phonectl/cli.py:1271
+# src/droidjig/cli.py:1271
 expires_at=getattr(args, "expires", None),
 ```
 
 into `macro/autonomy.py:grant()`:
 
 ```
-# src/phonectl/macro/autonomy.py:59-64
+# src/droidjig/macro/autonomy.py:59-64
 def grant(macro_name, *, max_risk, scope="all", expires_at=None, now, gen_id=None) -> dict:
     ...
     "granted_at": now, "expires_at": expires_at}
@@ -47,7 +47,7 @@ def grant(macro_name, *, max_risk, scope="all", expires_at=None, now, gen_id=Non
 `autonomy list` (and presumably the unattended-mode gate) filters expired grants with:
 
 ```
-# src/phonectl/macro/autonomy.py:29
+# src/droidjig/macro/autonomy.py:29
 if not (g.get("expires_at") is not None and g["expires_at"] <= now)]
 ```
 
@@ -57,9 +57,9 @@ disappears from `autonomy list` immediately.
 
 **Repro:**
 ```
-$ phonectl autonomy grant my-macro --max-risk medium --expires 300 --json
+$ droidjig autonomy grant my-macro --max-risk medium --expires 300 --json
 {"data": {"granted_at": 1783135956.36, "expires_at": 300.0, ...}}   # expires_at way in the past
-$ phonectl autonomy list --json
+$ droidjig autonomy list --json
 {"data": {"grants": []}}   # gone immediately
 ```
 Control (no `--expires`): grant appears in `list` normally and persists.
@@ -87,20 +87,20 @@ envelope reports the job still running with the id to query). Also serializes ma
 under the daemon's single-writer lock, which the old synchronous handler bypassed.
 
 **Problem.** Running a multi-step macro (6 steps: `launch` + 5 `tap`s) via
-`phonectl macro run <path> --yes --json` over the daemon returned:
+`droidjig macro run <path> --yes --json` over the daemon returned:
 
 ```
 {"error": {"code": "timeout", "message": "daemon call 'macro_run' timed out"}}
 ```
 
-but `phonectl macro status --json` afterward showed the same run
+but `droidjig macro status --json` afterward showed the same run
 (`macro_name` matched, `outcome: "ok"`, `steps_run: 6`) had completed successfully about 32
 seconds after it started, and the on-device state (calculator result) matched what the
 macro should have produced. The daemon RPC client's timeout for `macro_run` is shorter than
 a realistic multi-step macro's wall-clock time (each step re-observes with settle/retry
 delays that add up across steps).
 
-**Impact.** A caller — human or an agent driving phonectl — that only reads the immediate
+**Impact.** A caller — human or an agent driving droidjig — that only reads the immediate
 `macro run` response will conclude the macro failed or hung, when it actually completed
 correctly. Anything scripted on top of `macro run` risks false-failure handling or
 duplicate re-runs of an already-successful macro.
@@ -123,10 +123,10 @@ for any macro with more than a couple of steps.
   (`installed/accessibility/socket/token_paired` all `true`). Not root-caused here — worth a
   closer look if OCR is load-bearing for downstream work (e.g. Logos screen-text
   extraction).
-- `clipboard read` and `tts speak` both require Termux:API (`phonectl setup termux-api`);
+- `clipboard read` and `tts speak` both require Termux:API (`droidjig setup termux-api`);
   ADB alone can't do either. `clipboard write` works fine over ADB.
-- `phonectl observe` (and raw `uiautomator dump`) fails with "screen not idle" whenever the
+- `droidjig observe` (and raw `uiautomator dump`) fails with "screen not idle" whenever the
   foreground app is a busy terminal (e.g. this same Termux session) — uiautomator's
   idle-state detector never settles against continuously-updating terminal output. This is
-  expected given the shared-screen setup, not a phonectl defect; pressing `HOME` before
+  expected given the shared-screen setup, not a droidjig defect; pressing `HOME` before
   observing resolves it.

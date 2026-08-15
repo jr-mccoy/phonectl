@@ -1,6 +1,6 @@
 """Crash-safe JSON state files (audit D1).
 
-Every phonectl state file lives on a phone, where `kill -9`, a dead battery, and a
+Every droidjig state file lives on a phone, where `kill -9`, a dead battery, and a
 full disk are routine. Writes must not be able to leave a half-written file behind,
 and a corrupt file must degrade to "no state" rather than taking the tool down.
 """
@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from phonectl import state
+from droidjig import state
 
 
 # ── read_json: never raises ────────────────────────────────────────────────

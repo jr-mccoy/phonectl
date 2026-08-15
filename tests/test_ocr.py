@@ -1,4 +1,4 @@
-from phonectl import ocr
+from droidjig import ocr
 
 # header row + two data rows (Tesseract TSV)
 TSV = "\n".join([

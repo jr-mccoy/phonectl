@@ -1,4 +1,4 @@
-from phonectl.daemon import rpc
+from droidjig.daemon import rpc
 
 
 def test_register_and_dispatch_ok():
@@ -6,7 +6,7 @@ def test_register_and_dispatch_ok():
 
     @reg.register("ping")
     def _ping(params, ctx):
-        from phonectl import results
+        from droidjig import results
         return results.ok(capability="daemon.ping", data={"pong": True})
 
     out = reg.dispatch("ping", {}, ctx=None)
@@ -20,12 +20,12 @@ def test_unknown_method_is_error_envelope():
     assert out["error"]["code"] == "unknown_method"
 
 
-def test_handler_phonectl_error_becomes_envelope():
+def test_handler_droidjig_error_becomes_envelope():
     reg = rpc.Registry()
 
     @reg.register("boom")
     def _boom(params, ctx):
-        from phonectl import errors
+        from droidjig import errors
         raise errors.CapabilityUnavailableError("nope")
 
     out = reg.dispatch("boom", {}, ctx=None)

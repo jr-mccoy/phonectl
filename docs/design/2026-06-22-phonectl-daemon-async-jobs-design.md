@@ -1,4 +1,4 @@
-# phonectl — daemon async job model (responsive single-writer + pollable jobs)
+# droidjig — daemon async job model (responsive single-writer + pollable jobs)
 
 **Date:** 2026-06-22
 **Status:** Design spec (Phase 5 follow-up). Required before the async-jobs implementation plan.
@@ -6,7 +6,7 @@
 
 **Reads with:**
 
-- `docs/design/2026-06-22-phonectl-daemon-event-runtime-design.md` — the daemon &
+- `docs/design/2026-06-22-droidjig-daemon-event-runtime-design.md` — the daemon &
   event-runtime design this spec amends. Plans 5.1 (daemon process + RPC) and 5.2 (event bus +
   snapshot cache) shipped; this spec fixes a correctness bug found in **live device testing** of 5.1.
 - Plan **2.1** (`runtime.run_action` single-writer funnel + audit v2) — reused verbatim inside the worker.
@@ -35,7 +35,7 @@ executed.** Verified evidence:
   accumulated 5 tap records, all `outcome: ok`, including every call the frontend reported as failed
   (rc=1). The agent sees "failure," may retry, and double-acts.
 
-A second, related lifecycle bug surfaced: `phonectl daemon stop` does **not** stop the daemon. The `stop`
+A second, related lifecycle bug surfaced: `droidjig daemon stop` does **not** stop the daemon. The `stop`
 RPC handler only writes the emergency-stop `STOP` sentinel file and returns; the process keeps running and
 discovery is never cleared. There is a name collision between *stop the kill-switch* and *stop the daemon*.
 
@@ -63,11 +63,11 @@ discovery is never cleared. There is a name collision between *stop the kill-swi
 | # | Decision | Rationale |
 |---|----------|-----------|
 | 1 | **Async scope = `act`, `observe`, `find`.** Fast RPCs (`ping`, `status`, `shutdown`, `resume`, `audit_query`, `capabilities`, `policy_explain`, `events_poll`) stay synchronous with a config-driven generous timeout (`sync_timeout`). | These three touch the device and are slow/variable; the rest are sub-second. `events_poll`'s first call lazily builds the poller and can be slow once — the generous `sync_timeout` covers it. |
-| 2 | **Client UX = block-and-poll by default**, `--detach` to return the job-id immediately. New `phonectl job <id>` to query/wait. | Preserves today's "run it, get the result" CLI/MCP contract; `--detach` enables fire-and-forget for autonomous flows. |
+| 2 | **Client UX = block-and-poll by default**, `--detach` to return the job-id immediately. New `droidjig job <id>` to query/wait. | Preserves today's "run it, get the result" CLI/MCP contract; `--detach` enables fire-and-forget for autonomous flows. |
 | 3 | **One background worker + bounded FIFO queue (`job_queue_max`, default 8).** Over the cap → `BusyError`. | One device job at a time = the real single-writer; avoids races on the shared, non-thread-safe `Session`/`Connection`. Bounded queue prevents runaway backlog while letting block-and-poll callers wait their turn. |
 | 4 | **Idempotency: auto-keyed dedupe.** CLI/MCP auto-generate an `idempotency_key` per logical action; the daemon keeps a short-TTL (`idempotency_ttl`, default 300s) cache of `key → job_id`. A resubmit with a known key returns the existing job (in-flight or recently completed) instead of re-running. | Closes the double-execution hole even when a caller retries from a fresh process that lost the job-id. Matches the safety-first north-star. |
-| 5 | **Lifecycle fix: add a `shutdown` RPC** that terminates the process (sets `_running=False`, closes the socket, removes discovery). Keep `stop`/`resume` as the emergency kill-switch sentinel. Point `phonectl daemon stop` at `shutdown`. | Resolves the name collision; makes `daemon stop` actually stop the daemon. |
-| 6 | **Error taxonomy:** new `JobTimeoutError` (`code="job_timeout"`, `requires_user=True`, **not** auto-retryable) carrying the `job_id` and "still running; query with `phonectl job <id>`". Reserve `daemon_unreachable` strictly for connection-refused. | A poll-cap timeout no longer loses the job or masquerades as unreachable; the result is reattachable. Distinguishes "can't reach" (safe retry) from "running, may have acted" (do not blind-retry). |
+| 5 | **Lifecycle fix: add a `shutdown` RPC** that terminates the process (sets `_running=False`, closes the socket, removes discovery). Keep `stop`/`resume` as the emergency kill-switch sentinel. Point `droidjig daemon stop` at `shutdown`. | Resolves the name collision; makes `daemon stop` actually stop the daemon. |
+| 6 | **Error taxonomy:** new `JobTimeoutError` (`code="job_timeout"`, `requires_user=True`, **not** auto-retryable) carrying the `job_id` and "still running; query with `droidjig job <id>`". Reserve `daemon_unreachable` strictly for connection-refused. | A poll-cap timeout no longer loses the job or masquerades as unreachable; the result is reattachable. Distinguishes "can't reach" (safe retry) from "running, may have acted" (do not blind-retry). |
 
 ## 4. Architecture
 
@@ -128,7 +128,7 @@ JobRegistry(now=time.time, queue_max=8, idempotency_ttl=300):
   reachable (or submit-only when `--detach`); fast methods use `client.call` directly; no daemon → existing
   in-process path unchanged.
 - Auto-generate an `idempotency_key` (and `request_id`) for each act if absent.
-- New `phonectl job <id>` command (`--wait` to block on a detached job).
+- New `droidjig job <id>` command (`--wait` to block on a detached job).
 - `--detach` flag on the act verbs; on `--detach`, print the `job_id` and exit 0.
 - `_cmd_daemon` `stop` branch → call the new `shutdown` RPC (not `stop`).
 
@@ -144,16 +144,16 @@ JobRegistry(now=time.time, queue_max=8, idempotency_ttl=300):
 
 ## 5. Data flow — `act`, block-and-poll (default)
 
-1. `phonectl tap --xy 720 1500` → `_act_params` (auto `idempotency_key` + `request_id`) → `_dispatch`.
+1. `droidjig tap --xy 720 1500` → `_act_params` (auto `idempotency_key` + `request_id`) → `_dispatch`.
 2. Daemon reachable → `client.submit("act", params)` → daemon `JobRegistry.submit` enqueues, returns
    `{job_id, status:"accepted"}` **immediately**.
 3. Frontend polls `client.call("job_poll", {job_id})` every `poll_interval` until terminal or `act_timeout`.
 4. Terminal → print the result envelope (today's UX). Cap exceeded → `JobTimeoutError` with the `job_id` and
-   "query with `phonectl job <id>`" (the job keeps running; result lands in the registry + `runs.jsonl`).
+   "query with `droidjig job <id>`" (the job keeps running; result lands in the registry + `runs.jsonl`).
 5. Worker: dequeue → `_write_lock` → `runtime.run_action` + mint `snapshot_after` → append `runs.jsonl` →
    store `result_env` in the `Job`.
 
-`--detach`: steps 1–2 then print `job_id` and exit; the caller later runs `phonectl job <id> --wait`.
+`--detach`: steps 1–2 then print `job_id` and exit; the caller later runs `droidjig job <id> --wait`.
 
 ## 6. Error handling
 
@@ -174,7 +174,7 @@ JobRegistry(now=time.time, queue_max=8, idempotency_ttl=300):
 - **`client.py`:** `submit_and_wait` returns the result on completion; returns `JobTimeoutError` (with
   `job_id`) on cap; connection-refused → `DaemonUnreachableError`; reachable read-timeout → `timeout`
   envelope (not unreachable).
-- **`cli.py`:** `_dispatch` block-and-poll path; `--detach` prints job-id; `phonectl job <id>`; `daemon
+- **`cli.py`:** `_dispatch` block-and-poll path; `--detach` prints job-id; `droidjig job <id>`; `daemon
   stop` → `shutdown`.
 - **Regression:** update existing daemon tests that assume synchronous `act`/`observe` envelopes
   (`test_daemon_server.py`, `test_daemon_rpc.py`) to the job model. Re-run the full suite (was 434 passing).

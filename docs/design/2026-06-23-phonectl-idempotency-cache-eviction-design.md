@@ -1,4 +1,4 @@
-# phonectl — idempotency-cache TTL eviction
+# droidjig — idempotency-cache TTL eviction
 
 **Date:** 2026-06-23
 **Status:** Design spec (follow-up to the daemon async-job model). Required before its implementation plan.
@@ -6,7 +6,7 @@
 
 **Reads with:**
 
-- `docs/design/2026-06-22-phonectl-daemon-async-jobs-design.md` — the async-job model that
+- `docs/design/2026-06-22-droidjig-daemon-async-jobs-design.md` — the async-job model that
   introduced `JobRegistry` and relies on `runtime.run_action`'s idempotency replay. This spec closes the
   unbounded-growth follow-up that the async-jobs whole-branch review flagged.
 
@@ -21,11 +21,11 @@ The long-lived daemon process holds two idempotency-related caches that **never 
 without bound for the daemon's lifetime — counter to the autonomy north-star (a daemon meant to run for
 days/weeks).
 
-1. **`JobRegistry._jobs` + `_by_key`** (`src/phonectl/daemon/jobs.py`). Every `Job` is retained forever.
+1. **`JobRegistry._jobs` + `_by_key`** (`src/droidjig/daemon/jobs.py`). Every `Job` is retained forever.
    `_dedupe_locked` checks `idempotency_ttl` for *dedupe decisions* but never deletes; one `Job` (plus a
    `_by_key` entry when keyed) accumulates per logical action.
 
-2. **`runtime._idempotency_cache`** (`src/phonectl/runtime.py`). A module-global `dict[key -> env]` with
+2. **`runtime._idempotency_cache`** (`src/droidjig/runtime.py`). A module-global `dict[key -> env]` with
    **no timestamp and no TTL at all**. Besides unbounded growth, it replays a cached result for a key
    *forever*: a key reused long after its original action would silently replay a stale envelope and never
    re-execute. This is the worse of the two — a latent correctness hole, not just memory.
@@ -53,11 +53,11 @@ days/weeks).
 | 2 | **Opportunistic sweep** — evict on `submit()` (jobs) / on store (runtime), under the existing lock. | No background thread; deterministic; a quiescent daemon never accumulates because growth only happens on activity. |
 | 3 | **Reuse `idempotency_ttl`** (config default 300.0s) as the single retention TTL for both caches. | No new knob; both layers expire in lockstep so the daemon's two dedupe layers never disagree. |
 | 4 | **Only terminal jobs are evicted** (status `done`/`error`); queued/running are always kept. | Never drop an in-flight or pending job. |
-| 5 | Eviction of a finished job makes `job_poll`/`phonectl job <id>` return `unknown_job` after the TTL. | Acceptable: a finished job stays reattachable for `idempotency_ttl` (default 5 min); that is the same window dedupe already uses. |
+| 5 | Eviction of a finished job makes `job_poll`/`droidjig job <id>` return `unknown_job` after the TTL. | Acceptable: a finished job stays reattachable for `idempotency_ttl` (default 5 min); that is the same window dedupe already uses. |
 
 ## 4. Design
 
-### 4.1 `JobRegistry` (`src/phonectl/daemon/jobs.py`)
+### 4.1 `JobRegistry` (`src/droidjig/daemon/jobs.py`)
 
 Add a private sweep run under `self._cv`:
 
@@ -84,7 +84,7 @@ Boundary: a job exactly at the cutoff (`ts_finished == now - ttl`) is evicted (`
 "retained for *less than* ttl" the dedupe path uses (`now - ts_finished < ttl`). The two are consistent:
 within `[0, ttl)` the job is both dedupe-eligible and retained; at/after `ttl` it is neither.
 
-### 4.2 `runtime._idempotency_cache` (`src/phonectl/runtime.py`)
+### 4.2 `runtime._idempotency_cache` (`src/droidjig/runtime.py`)
 
 Change storage to `{key: (ts, env)}`. In `run_action`:
 

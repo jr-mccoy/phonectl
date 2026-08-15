@@ -1,7 +1,7 @@
 import pytest
 
-from phonectl import errors
-from phonectl.macro import triggers as T
+from droidjig import errors
+from droidjig.macro import triggers as T
 
 
 def _ev(type_, **data):

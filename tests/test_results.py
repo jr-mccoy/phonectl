@@ -1,4 +1,4 @@
-from phonectl import results, errors
+from droidjig import results, errors
 
 
 def test_ok_minimal():
@@ -14,7 +14,7 @@ def test_ok_with_capability_provider_and_extra():
     assert out["snapshot_after"] == "snap_def"
 
 
-def test_err_from_phonectl_error_maps_code_and_flags():
+def test_err_from_droidjig_error_maps_code_and_flags():
     out = results.err(errors.DeviceLockedError("device is locked, unlock it"),
                       user_action="Unlock the phone manually.")
     assert out["ok"] is False

@@ -1,4 +1,4 @@
-# phonectl — daemon & event runtime (single-writer core + event broker)
+# droidjig — daemon & event runtime (single-writer core + event broker)
 
 **Date:** 2026-06-22
 **Status:** Design spec (Phase 5 brainstorm→spec). Required before Plans 5.1 and 5.2.
@@ -23,7 +23,7 @@ Plans 5.1 and 5.2.
 
 ## 1. Goal
 
-Make phonectl's runtime a **long-lived process that is the single writer and the event broker for all
+Make droidjig's runtime a **long-lived process that is the single writer and the event broker for all
 phone actions.** Today every CLI invocation (and the MCP server) builds a fresh runtime, observes, acts,
 and exits — correct, but stateless: the provider graph is rebuilt per command, there is no shared
 snapshot identity across calls, and serialization is only process-local. The daemon closes that gap:
@@ -48,7 +48,7 @@ turns a pile of primitives into an observable, cancellable, single-owner automat
 
 ## 2. Non-goals
 
-- **No Android/Kotlin in this phase.** The daemon runs as a Python `phonectl daemon` process. Hosting it
+- **No Android/Kotlin in this phase.** The daemon runs as a Python `droidjig daemon` process. Hosting it
   inside the Plan 4.3 companion foreground service, or launching it from **Termux:Boot**, is a noted
   **seam only** (§9.4) — no native code is built here.
 - **No macro engine.** Triggers, conditions, declarative automations, and progressive autonomy are
@@ -60,7 +60,7 @@ turns a pile of primitives into an observable, cancellable, single-owner automat
 - **No new transport invention.** The wire protocol reuses Plan 4.3's loopback newline-delimited JSON
   framing; this spec does not define a second protocol.
 - **No remote access.** The daemon binds **loopback only** (`127.0.0.1`). Cross-device/cloud is a
-  permanent non-goal of phonectl (design spec §2).
+  permanent non-goal of droidjig (design spec §2).
 - **No fork of the action funnel.** `runtime.run_action` is reused verbatim; the daemon does not
   reimplement guardrails.
 
@@ -89,7 +89,7 @@ new execution path; it **hosts** the existing one and gives it identity, persist
 
 A frontend does, on each invocation:
 
-1. `discover()` → read `$PHONECTL_HOME/daemon.json`, `ping` the advertised port.
+1. `discover()` → read `$DROIDJIG_HOME/daemon.json`, `ping` the advertised port.
 2. **If reachable** → construct a `DaemonClient`, send the RPC, return the daemon's results envelope.
 3. **If not** (no file, stale file, failed ping) → fall back to the unchanged in-process path
    (`build_runtime` → `observe`/`run_action`), exactly as today.
@@ -144,7 +144,7 @@ than queuing. Queuing/priority is deliberately deferred (open question §12).
 ### D2 — Transport = reuse Plan 4.3's loopback newline-delimited JSON framing
 
 The daemon binds a **loopback TCP server on `127.0.0.1` only** and speaks the same framing as Plan 4.3's
-`SocketTransport` (`src/phonectl/providers/transport.py`: `SocketTransport`, `next_request_id`).
+`SocketTransport` (`src/droidjig/providers/transport.py`: `SocketTransport`, `next_request_id`).
 
 - **Request line:** `{"method", "params", "request_id", "timeout", "version"}`.
 - **Response line:** the results envelope shape — `{"ok", …, "request_id", "version"}` with either `"data"`
@@ -163,7 +163,7 @@ place for framing bugs, and stdlib-only (`socket`, `json`).
 > on 4.3 first or lift the small framing/`next_request_id` helper into a shared location — it must **not**
 > invent a second framing. This ordering is called out in the handoff (§13).
 
-### D3 — Daemon discovery via `$PHONECTL_HOME/daemon.json`
+### D3 — Daemon discovery via `$DROIDJIG_HOME/daemon.json`
 
 On start the daemon writes `daemon.json` and removes it on **clean** stop:
 
@@ -177,12 +177,12 @@ otherwise execute in-process (unchanged behavior). A **stale** `daemon.json` who
 ephemeral) and published via `daemon.json`.
 
 **Rationale.** A published-port file with a liveness ping is the simplest correct discovery: it survives
-crashes (stale file is self-correcting on failed ping), needs no registry, and keeps `PHONECTL_HOME`
-isolation (tests point `PHONECTL_HOME` at `tmp_path` and get a private daemon).
+crashes (stale file is self-correcting on failed ping), needs no registry, and keeps `DROIDJIG_HOME`
+isolation (tests point `DROIDJIG_HOME` at `tmp_path` and get a private daemon).
 **Trade-off.** A crashed daemon leaves a stale file until the next failed ping. Mitigated by treating any
 unreachable advertised endpoint as "no daemon."
 
-### D4 — New package `src/phonectl/daemon/`
+### D4 — New package `src/droidjig/daemon/`
 
 - **Plan 5.1:** `daemon/server.py` (accept loop + dispatch + warm lifecycle), `daemon/client.py`
   (`DaemonClient`), `daemon/rpc.py` (method registry), `daemon/discovery.py` (`daemon.json` read/write +
@@ -216,7 +216,7 @@ shared session, one discovery. Reusing 1.3's reconnect keeps recovery logic in o
 **Trade-off.** A warm process can drift (e.g., the ADB port rotates). `status`/health surface this, and
 `conn.ensure()` runs at the top of `run_action` so each action still self-heals.
 
-### D7 — Durable run records → `$PHONECTL_HOME/runs.jsonl` (extends audit v2)
+### D7 — Durable run records → `$DROIDJIG_HOME/runs.jsonl` (extends audit v2)
 
 Append one record per action (schema in §9). This **extends** Plan 2.1's audit
 (`audit.log_action`/`actions.jsonl`) with a higher layer keyed by `action_id`/`parent_task_id`. It does
@@ -255,7 +255,7 @@ cursor jump (open question §12).
 ### D10 — Termux:Boot autostart + companion foreground-service hosting = design-spec only
 
 The daemon **may later** be started by Termux:Boot or hosted in the Plan 4.3 foreground service. This spec
-**notes the seam and builds no Android/Kotlin.** For now the daemon runs as `phonectl daemon` (foreground).
+**notes the seam and builds no Android/Kotlin.** For now the daemon runs as `droidjig daemon` (foreground).
 `daemon_autostart` (config, default `false`) is the future hook the CLI can read to launch the daemon
 on first use.
 
@@ -370,7 +370,7 @@ One append-only JSON object per action, written by the daemon alongside (not ins
   out of `run_action`'s results envelope; the daemon captures them into the record. `snapshot_before`/
   `snapshot_after`, `retries`, and `user_approved` are added by the daemon.
 - **Relationship to audit v2.** `actions.jsonl` (Plan 2.1) remains the redaction-aware audit trail and is
-  unchanged. `runs.jsonl` extends it; neither replaces the other. Both honor `PHONECTL_HOME` isolation.
+  unchanged. `runs.jsonl` extends it; neither replaces the other. Both honor `DROIDJIG_HOME` isolation.
 
 ## 10. Security model
 
@@ -383,11 +383,11 @@ One append-only JSON object per action, written by the daemon alongside (not ins
   which calls the funnel.
 - **Kill-switch / emergency stop.** `stop`/`resume` map onto the existing STOP sentinel
   (`audit.kill_switch_active`); the Plan 4.3 companion emergency stop folds into the same state, so the
-  persistent "Stop phonectl" notification halts the daemon's actions identically to the file sentinel.
+  persistent "Stop droidjig" notification halts the daemon's actions identically to the file sentinel.
   Because the check is inside `run_action`, STOP halts the daemon *and* the in-process path uniformly.
 - **No new privilege.** The daemon talks to providers only through the warm `ProviderRegistry`; it gains
   no capability ADB/the companion didn't already grant, and never calls `adb`/`subprocess` itself.
-- **Discovery hygiene.** `daemon.json` lives under `PHONECTL_HOME`; a stale/unreachable advertisement is
+- **Discovery hygiene.** `daemon.json` lives under `DROIDJIG_HOME`; a stale/unreachable advertisement is
   ignored, so a crashed daemon cannot redirect a frontend to a wrong endpoint.
 
 ## 11. Risks & mitigations
@@ -402,7 +402,7 @@ One append-only JSON object per action, written by the daemon alongside (not ins
 | Executing 5.1 before Plan 4.3 lands `SocketTransport`. | Handoff (§13) requires depending on 4.3's framing or lifting the shared framing helper — never inventing a second protocol. |
 | Someone forks `run_action` inside the daemon. | Explicitly forbidden (D1); reuse verbatim so guardrails can't drift. |
 | Non-loopback `daemon_host` misconfigured. | Config validation rejects non-loopback hosts outright. |
-| Tests leak across daemons. | `PHONECTL_HOME` isolation; ephemeral OS-assigned port; `daemon.json` is per-`PHONECTL_HOME`. |
+| Tests leak across daemons. | `DROIDJIG_HOME` isolation; ephemeral OS-assigned port; `daemon.json` is per-`DROIDJIG_HOME`. |
 
 ## 12. Open questions
 
@@ -416,9 +416,9 @@ One append-only JSON object per action, written by the daemon alongside (not ins
 4. **Multi-frontend identity.** Should `parent_task_id` be minted by the frontend (so an MCP "task" spans
    many `act`s) or only by the daemon? Affects the run-record lineage join with Phase 6 macros.
 5. **Autostart trigger.** When `daemon_autostart=true`, does the *first frontend* spawn the daemon, or only
-   an explicit `phonectl daemon`/Termux:Boot? (Design-spec seam; no code in Phase 5.)
+   an explicit `droidjig daemon`/Termux:Boot? (Design-spec seam; no code in Phase 5.)
 6. **Health-driven restart.** Should a wedged warm runtime self-restart `build_runtime`, or only report
-   unhealthy via `status` and let the operator restart `phonectl daemon`?
+   unhealthy via `status` and let the operator restart `droidjig daemon`?
 
 ## 13. Handoff to implementation plans
 
@@ -431,7 +431,7 @@ existing primitive** (the in-process path is the unchanged fallback).
 single-writer routing of `act` through `run_action`), `daemon/rpc.py` (method registry for `ping`,
 `status`, `observe`, `act`, `find`, `capabilities`, `policy_explain`, `audit_query`, `stop`, `resume`),
 `daemon/client.py` (`DaemonClient`), the `runs.jsonl` run-record writer, the frontend routing in CLI/MCP
-(discover → route or in-process fallback), the `phonectl daemon` CLI verb, config keys `daemon_host`
+(discover → route or in-process fallback), the `droidjig daemon` CLI verb, config keys `daemon_host`
 (loopback-only, validated) and `daemon_autostart` (default `false`), and the additive daemon error codes
 (`daemon_unreachable`, `unknown_method`). **Reuses** Plan 4.3's `SocketTransport` framing /
 `next_request_id` — if 5.1 precedes 4.3, it depends on 4.3's framing first or lifts the shared helper; it

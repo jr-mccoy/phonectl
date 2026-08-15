@@ -1,8 +1,8 @@
 """Tests for daemon Scheduler: arms and fires scheduled macros."""
 from datetime import datetime
 
-from phonectl.daemon.triggers import Scheduler
-from phonectl.macro import registry
+from droidjig.daemon.triggers import Scheduler
+from droidjig.macro import registry
 
 
 class FakeEngine:
@@ -15,7 +15,7 @@ class FakeEngine:
 
 
 def test_due_fires_interval_macro(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "tick", "trigger": {"type": "schedule.interval", "every_seconds": 0.0001},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
     eng = FakeEngine()
@@ -27,7 +27,7 @@ def test_due_fires_interval_macro(tmp_path, monkeypatch):
 
 
 def test_due_returns_empty_when_no_scheduled_macros(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "notick", "trigger": {"type": "clipboard.changed"},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
     eng = FakeEngine()
@@ -38,7 +38,7 @@ def test_due_returns_empty_when_no_scheduled_macros(tmp_path, monkeypatch):
 
 
 def test_due_no_fire_before_interval(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "slow", "trigger": {"type": "schedule.interval", "every_seconds": 3600},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
     eng = FakeEngine()

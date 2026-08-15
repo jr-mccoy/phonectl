@@ -1,7 +1,7 @@
-# phonectl — Adversarial Technical Review
+# droidjig — Adversarial Technical Review
 
 > **Status: all 16 findings remediated.** This is a self-commissioned adversarial review of
-> phonectl, conducted 2026-07-01, followed by a full remediation pass. It is published as a
+> droidjig, conducted 2026-07-01, followed by a full remediation pass. It is published as a
 > record of the project's security posture and how it was arrived at. **The risk assessment
 > below is the snapshot as of the review date, before any fixes landed** — see
 > [Remediation](#remediation) for what shipped in response, and
@@ -34,7 +34,7 @@ workflow runs `./gradlew assembleDebug test`, building the debug APK and executi
   CI runs no emulator) and the manual on-device smoke matrix in `docs/integration-smoke.md`.
 - **Still open by design:** the longer-term human-only sensitive-action policy layer
   (roadmap item 16). Until it lands, the honest posture remains the one in the table
-  below — phonectl is built for *supervised* agent use, not unattended autonomy.
+  below — droidjig is built for *supervised* agent use, not unattended autonomy.
 
 ---
 
@@ -118,7 +118,7 @@ has no auth to detect the imposter — `providers/transport.py:43-78`).
 
 **Fix.** Add a shared token to both transports. The daemon can write a token into `daemon.json`
 (already unreadable by other apps) and require it per-RPC. The companion needs a pairing step
-(display a token in the APK UI, paste into `phonectl` config) since cross-UID file sharing is
+(display a token in the APK UI, paste into `droidjig` config) since cross-UID file sharing is
 awkward. Document explicitly that loopback is not a security boundary on Android.
 
 **Tests.** Kotlin `server_rejects_unauthenticated_request`; `test_daemon_rejects_rpc_without_token`.
@@ -133,9 +133,9 @@ awkward. Document explicitly that loopback is not a security boundary on Android
 (`CompanionForegroundService.kt:73`), which checks only per-capability toggles
 (`Capabilities.kt:95-98`) and never consults `state.isStopped()`. STOP only affects the
 handshake's reported flag and the notification UI; the comment admits enforcement is delegated
-to Python (`CompanionForegroundService.kt:25-27`). Worse, the `$PHONECTL_HOME/STOP` file
+to Python (`CompanionForegroundService.kt:25-27`). Worse, the `$DROIDJIG_HOME/STOP` file
 "hard guarantee" is inert cross-UID: `resolveStopFilePath()` reads the *APK's*
-`System.getenv("PHONECTL_HOME")` (`SharedPrefsTrustState.kt:56-60`), which the APK (a different
+`System.getenv("DROIDJIG_HOME")` (`SharedPrefsTrustState.kt:56-60`), which the APK (a different
 Android UID than Termux) will not have and cannot read.
 
 **Why it matters.** Any direct client bypasses STOP entirely, and the file fallback meant to
@@ -306,7 +306,7 @@ and two concurrent CLI processes get no mutual exclusion. The daemon (long-lived
 both, and the rate limit persists to disk (`ratelimit.json`). Idempotency's process-locality is
 disclosed (`README.md:423`); the single-writer lock claim (`README.md:414`) is not caveated.
 
-**Fix.** Persist idempotency + a file lock to `$PHONECTL_HOME` for the one-shot CLI, or make the
+**Fix.** Persist idempotency + a file lock to `$DROIDJIG_HOME` for the one-shot CLI, or make the
 docs unambiguous and warn at runtime when a key is supplied without a daemon.
 
 **Tests.** `test_idempotency_key_dedupes_across_processes`, `test_two_cli_processes_serialize`.

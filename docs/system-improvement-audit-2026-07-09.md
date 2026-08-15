@@ -1,12 +1,12 @@
-# phonectl System Improvement Audit
+# droidjig System Improvement Audit
 
 **Date:** 2026-07-09  
-**Goal audited against:** make phonectl maximally useful to an autonomous agent while allowing the agent to handle as much work independently as is safe.  
+**Goal audited against:** make droidjig maximally useful to an autonomous agent while allowing the agent to handle as much work independently as is safe.  
 **Scope:** Python CLI, MCP surface, daemon, macro engine, provider graph, safety policy, Android Accessibility companion APK, docs, and existing audit/roadmap material.
 
 ## Executive summary
 
-phonectl has the right core shape for an agent-operated Android control plane: structured observations, a single mutating-action funnel, provider capability discovery, idempotency, a daemon job model, redacted audit records, and a macro runtime. The biggest remaining opportunity is to raise the agent-facing layer from “safe low-level phone tools” to “self-directing task execution”: planners should be able to discover capabilities, choose fallbacks, run long tasks, recover from transient failures, and produce human-readable evidence without requiring constant prompt-level supervision.
+droidjig has the right core shape for an agent-operated Android control plane: structured observations, a single mutating-action funnel, provider capability discovery, idempotency, a daemon job model, redacted audit records, and a macro runtime. The biggest remaining opportunity is to raise the agent-facing layer from “safe low-level phone tools” to “self-directing task execution”: planners should be able to discover capabilities, choose fallbacks, run long tasks, recover from transient failures, and produce human-readable evidence without requiring constant prompt-level supervision.
 
 The highest-leverage improvements are:
 
@@ -75,7 +75,7 @@ Each task should contain:
 
 ### Why it helps autonomy
 
-Agents stop treating phonectl as a bag of syscalls and instead get a durable state machine. If the model context resets, the task can resume from daemon state. If a human reviews the run, they see the same checkpoints the agent used.
+Agents stop treating droidjig as a bag of syscalls and instead get a durable state machine. If the model context resets, the task can resume from daemon state. If a human reviews the run, they see the same checkpoints the agent used.
 
 ### Acceptance tests
 
@@ -143,7 +143,7 @@ Connection recovery exists in pieces: config stores volatile wireless-debugging 
 
 ### Proposed improvement
 
-Add `phonectl recover --json` and MCP `phone_recover`:
+Add `droidjig recover --json` and MCP `phone_recover`:
 
 1. Check current config, adb server, known serial, and daemon status.
 2. Try cached serial reconnect.
@@ -171,7 +171,7 @@ Instead of surfacing a raw `device offline` error, the agent can attempt a bound
 
 ### Proposed improvement
 
-Add `phone_capability_plan(goal=None)` and CLI `phonectl capabilities plan` that returns:
+Add `phone_capability_plan(goal=None)` and CLI `droidjig capabilities plan` that returns:
 
 - currently available capabilities;
 - unavailable capabilities relevant to the goal;
@@ -344,7 +344,7 @@ Future agents can quickly decide what to build next without re-auditing contradi
 
 ## Open questions
 
-- Should high-level task planning live inside phonectl, or should phonectl expose task state while the LLM remains the planner?
+- Should high-level task planning live inside droidjig, or should droidjig expose task state while the LLM remains the planner?
 - Should agent-facing MCP tools default to daemon-only mode once daemon autostart is stable?
 - What is the minimum human confirmation UX for approving an entire bounded task plan instead of individual actions?
 - Which evidence artifacts are acceptable to persist by default on a personal phone, and which require opt-in?

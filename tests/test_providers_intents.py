@@ -1,6 +1,6 @@
-from phonectl.providers.intents import IntentProvider
-from phonectl.providers.registry import ProviderRegistry
-from phonectl import capabilities
+from droidjig.providers.intents import IntentProvider
+from droidjig.providers.registry import ProviderRegistry
+from droidjig import capabilities
 
 
 class FakeIntentProv:

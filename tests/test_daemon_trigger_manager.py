@@ -1,6 +1,6 @@
 # tests/test_daemon_trigger_manager.py
-from phonectl.daemon.triggers import TriggerManager
-from phonectl.macro import registry
+from droidjig.daemon.triggers import TriggerManager
+from droidjig.macro import registry
 
 
 class FakeEngine:
@@ -27,7 +27,7 @@ def _ev(seq, type_, **data):
 
 
 def test_matching_event_fires_macro(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "reply", "trigger": {"type": "notification.posted",
                      "filters": {"package_in": ["com.x"]}},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
@@ -39,7 +39,7 @@ def test_matching_event_fires_macro(tmp_path, monkeypatch):
 
 
 def test_non_matching_event_does_not_fire(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "reply", "trigger": {"type": "notification.posted",
                      "filters": {"package_in": ["com.x"]}}, "actions": []})
     eng = FakeEngine()
@@ -49,7 +49,7 @@ def test_non_matching_event_does_not_fire(tmp_path, monkeypatch):
 
 
 def test_cooldown_suppresses_second_fire(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "reply", "trigger": {"type": "clipboard.changed"},
                      "limits": {"cooldown_seconds": 300},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
@@ -62,7 +62,7 @@ def test_cooldown_suppresses_second_fire(tmp_path, monkeypatch):
 
 def test_real_bus_notification_envelope_fires(tmp_path, monkeypatch):
     """Real bus envelopes use underscore names; the daemon must normalize to dotted names."""
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "wa_alert", "trigger": {"type": "notification.posted",
                      "filters": {"package_in": ["com.whatsapp"]}},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
@@ -81,7 +81,7 @@ def test_real_bus_notification_envelope_fires(tmp_path, monkeypatch):
 
 def test_conditions_gate_suppresses_fire(tmp_path, monkeypatch):
     """A macro whose conditions do not hold must not fire even when the trigger matches."""
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "gated", "trigger": {"type": "notification.posted"},
                      "conditions": [{"type": "never"}],
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
@@ -100,7 +100,7 @@ def test_conditions_gate_suppresses_fire(tmp_path, monkeypatch):
 
 def test_trigger_fire_passes_unattended_true(tmp_path, monkeypatch):
     """TriggerManager must pass unattended=True to the engine so auto-fired macros stay gated (D11)."""
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     registry.enable({"name": "ua_test", "trigger": {"type": "clipboard.changed"},
                      "actions": [{"type": "tap", "target": {"i": 0}}]})
     eng = FakeEngine()

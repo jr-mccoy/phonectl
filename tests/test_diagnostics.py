@@ -1,7 +1,7 @@
 import json
 import zipfile
 
-from phonectl import capabilities, diagnostics
+from droidjig import capabilities, diagnostics
 
 
 def test_redact_masks_sensitive_keys_only():
@@ -28,7 +28,7 @@ class DiagBackend:
 
 
 def test_collect_includes_redacted_config_and_capabilities(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "actions.jsonl").write_text(json.dumps({"ts": 1, "verb": "tap", "app": "com.x", "hash": "h", "text": "secret"}) + "\n")
     data = diagnostics.collect(DiagBackend(), {"serial": "127.0.0.1:41000", "pairing_code": "482913"})
     assert data["config"]["pairing_code"] == "***"
@@ -42,7 +42,7 @@ def test_collect_includes_redacted_config_and_capabilities(tmp_path, monkeypatch
 
 
 def test_bundle_writes_zip_with_manifest_and_blobs(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     out = str(tmp_path / "diag.zip")
     ret = diagnostics.bundle(out, DiagBackend(), {"serial": "127.0.0.1:41000", "pairing_code": "482913"})
     assert ret == out

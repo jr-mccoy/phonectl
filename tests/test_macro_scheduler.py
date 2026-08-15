@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from phonectl.macro import scheduler as S
+from droidjig.macro import scheduler as S
 
 
 def test_interval_next_fire():

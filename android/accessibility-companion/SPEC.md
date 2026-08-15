@@ -1,6 +1,6 @@
 # AccessibilityService Companion APK — Design Specification
 
-**Plan 4.1** | Phase 4 of the phonectl platform roadmap.
+**Plan 4.1** | Phase 4 of the droidjig platform roadmap.
 
 This document specifies the Kotlin AccessibilityService companion that the Python
 `AccessibilityProvider` talks to over a local transport (socket, Plan 4.3). The APK is built
@@ -8,7 +8,7 @@ separately from this spec; this document is the input to that build.
 
 **Transport spec:** See `android/foreground-service/SPEC.md` for the full wire protocol (framing,
 request/response envelope, `request_id`/`timeout`/`version`, capability negotiation,
-`handshake` method, stale-response protection, and the persistent "Stop phonectl" notification /
+`handshake` method, stale-response protection, and the persistent "Stop droidjig" notification /
 Quick-Settings tile / per-capability toggle UI).
 
 ---
@@ -309,8 +309,8 @@ The companion APK requires:
   bound. No analytics, no telemetry, no cloud calls.
 - The companion does not implement its own authentication. Trust is physical: only processes on
   the same device can reach the loopback socket.
-- The Python side (Plan 4.3) will add a trust toggle (enabled/disabled) in `phonectl setup`; the
-  companion respects a local enable-file or a `phonectl`-specific preference.
+- The Python side (Plan 4.3) will add a trust toggle (enabled/disabled) in `droidjig setup`; the
+  companion respects a local enable-file or a `droidjig`-specific preference.
 
 ---
 
@@ -389,7 +389,7 @@ The `NotificationListenerService` requires `android.permission.BIND_NOTIFICATION
 Settings → Notifications → Device & app notifications → [companion APK] → Allow
 ```
 
-`phonectl setup notifications` guides the user through this flow, checks the grant with
+`droidjig setup notifications` guides the user through this flow, checks the grant with
 `NotificationManager.isNotificationListenerAccessGranted`, and reports whether the service is
 currently active.
 
@@ -443,7 +443,7 @@ regions and applies a `min_confidence` filter.
 ## 8. Non-goals (Plan 4.1 scope)
 
 - The **Kotlin implementation** — this spec was the design input; the code now ships as
-  `com.phonectl.companion` under `android/accessibility-companion/`, built as a debug-APK
+  `com.droidjig.companion` under `android/accessibility-companion/`, built as a debug-APK
   artifact by the `android.yml` workflow.
 - **`SocketTransport`** — specified in `android/foreground-service/SPEC.md`.
 - **Multi-touch / pinch** — the `gesture` method is extensible; pinch is Phase 7 if needed.

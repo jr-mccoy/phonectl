@@ -1,8 +1,8 @@
 import socket
 
-from phonectl.daemon import PROTOCOL_VERSION
-from phonectl.daemon.client import DaemonClient
-from phonectl import results
+from droidjig.daemon import PROTOCOL_VERSION
+from droidjig.daemon.client import DaemonClient
+from droidjig import results
 
 
 class FakeTransport:
@@ -40,7 +40,7 @@ def test_is_running_true_on_ok_ping():
 
 
 def test_job_timeout_error_shape():
-    from phonectl import errors
+    from droidjig import errors
     e = errors.JobTimeoutError("still running")
     assert e.code == "job_timeout"
     assert e.retryable is False

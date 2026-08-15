@@ -9,7 +9,7 @@ import argparse
 import re
 from pathlib import Path
 
-from phonectl import cli, mcp_server, risk
+from droidjig import cli, mcp_server, risk
 
 README = Path(__file__).resolve().parent.parent / "README.md"
 
@@ -48,7 +48,7 @@ def test_conformance_cli_subcommands_are_documented():
         if isinstance(action, argparse._SubParsersAction):
             choices |= set(action.choices)
     text = _readme()
-    undocumented = {c for c in choices if not re.search(rf"`?phonectl {re.escape(c)}\b", text)
+    undocumented = {c for c in choices if not re.search(rf"`?droidjig {re.escape(c)}\b", text)
                     and c not in text}
     assert undocumented == set(), \
         f"CLI subcommands registered but never mentioned in the README: {undocumented}"

@@ -12,7 +12,8 @@ snap-*.png
 htmlcov/
 coverage.xml
 
-# Runtime state written by phonectl itself
+# Runtime state written by droidjig itself (.phonectl/ is the pre-rename name)
+.droidjig/
 .phonectl/
 daemon.json
 actions.jsonl

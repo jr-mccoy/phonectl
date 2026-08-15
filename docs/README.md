@@ -1,4 +1,4 @@
-# phonectl documentation
+# droidjig documentation
 
 Start with the [README](../README.md) for install, the command reference, and the safety model.
 These docs cover the reasoning underneath it.
@@ -8,7 +8,7 @@ These docs cover the reasoning underneath it.
 | Document | What it covers |
 |---|---|
 | [architecture.md](architecture.md) | The load-bearing invariants — backend isolation, the `runtime.run_action` choke-point, re-observe after every act — and why each one exists. **Read this before changing a core layer.** |
-| [strategy.md](strategy.md) | The product argument for evolving phonectl from an observe/act bridge into a local Android automation platform for agents. |
+| [strategy.md](strategy.md) | The product argument for evolving droidjig from an observe/act bridge into a local Android automation platform for agents. |
 | [roadmap.md](roadmap.md) | Phase-by-phase status: what is built, what is next, what is deliberately deferred. |
 | [design/](design/) | One design note per subsystem, written before the code: the ADB bridge, resilience, the daemon and its async-job model, the event runtime, the macro engine, idempotency and cache eviction, companion startup, and pushed-token v2 pairing. |
 

@@ -1,4 +1,4 @@
-from phonectl.macro import limits as L
+from droidjig.macro import limits as L
 
 
 def test_cooldown_blocks():

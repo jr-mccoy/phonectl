@@ -1,14 +1,14 @@
 import pytest
-from phonectl import errors
+from droidjig import errors
 
 
 def test_hierarchy_is_correct():
-    assert issubclass(errors.ObserveError, errors.PhonectlError)
+    assert issubclass(errors.ObserveError, errors.DroidjigError)
     assert issubclass(errors.DeviceLockedError, errors.ObserveError)
-    assert issubclass(errors.StaleSnapshotError, errors.PhonectlError)
-    assert issubclass(errors.CapabilityUnavailableError, errors.PhonectlError)
-    assert issubclass(errors.GuardedActionError, errors.PhonectlError)
-    assert issubclass(errors.RateLimitError, errors.PhonectlError)
+    assert issubclass(errors.StaleSnapshotError, errors.DroidjigError)
+    assert issubclass(errors.CapabilityUnavailableError, errors.DroidjigError)
+    assert issubclass(errors.GuardedActionError, errors.DroidjigError)
+    assert issubclass(errors.RateLimitError, errors.DroidjigError)
 
 
 def test_stable_codes():
@@ -28,7 +28,7 @@ def test_actionable_flags():
 
 
 def test_raisable_with_message_and_caught_as_base():
-    with pytest.raises(errors.PhonectlError) as e:
+    with pytest.raises(errors.DroidjigError) as e:
         raise errors.DeviceLockedError("device is locked, unlock it")
     assert "locked" in str(e.value)
     assert e.value.code == "device_locked"
@@ -42,4 +42,4 @@ def test_phase2_single_writer_codes_and_flags():
     assert errors.ConfirmationRequiredError.code == "confirmation_required"
     assert errors.ConfirmationRequiredError.requires_user is True
     for cls in (errors.BusyError, errors.StoppedError, errors.ConfirmationRequiredError):
-        assert issubclass(cls, errors.PhonectlError)
+        assert issubclass(cls, errors.DroidjigError)

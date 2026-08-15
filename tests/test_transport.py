@@ -1,6 +1,6 @@
 import json
 import pytest
-from phonectl.providers.transport import LoopbackTransport, next_request_id, SocketTransport
+from droidjig.providers.transport import LoopbackTransport, next_request_id, SocketTransport
 
 
 class FakeConn:
@@ -67,7 +67,7 @@ def test_socket_transport_rejects_non_loopback():
 
 def test_socket_transport_matches_request_id(monkeypatch):
     rid = "fixedid"
-    monkeypatch.setattr("phonectl.providers.transport.next_request_id", lambda: rid)
+    monkeypatch.setattr("droidjig.providers.transport.next_request_id", lambda: rid)
     resp_line = json.dumps({"ok": True, "request_id": rid, "version": 1, "data": {"pong": True}})
     t = SocketTransport("127.0.0.1", 8765, connect=_conn_factory([resp_line + "\n"]))
     out = t.request("ping", {}, request_id=rid, timeout=1.0)

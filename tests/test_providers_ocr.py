@@ -1,6 +1,6 @@
 import pytest
-from phonectl.providers.ocr import OcrProvider
-from phonectl.providers.transport import LoopbackTransport
+from droidjig.providers.ocr import OcrProvider
+from droidjig.providers.transport import LoopbackTransport
 
 
 def _which_found(name):

@@ -1,4 +1,4 @@
-# phonectl — Companion Startup (`phonectl companion setup`) Design
+# droidjig — Companion Startup (`droidjig companion setup`) Design
 
 **Date:** 2026-07-02
 **Status:** Approved design (brainstorming); implementation plan to follow.
@@ -12,11 +12,11 @@ partial machinery (`connection.rediscover()`) and gets its **own follow-up plan*
 
 ## Problem
 
-Standing up the companion so `phonectl` can drive it currently takes **many manual,
+Standing up the companion so `droidjig` can drive it currently takes **many manual,
 error-prone round-trips**. Observed first-hand on a Samsung Galaxy S25 Ultra (2026-07-02):
 
 1. **Install** the debug APK (`adb install`).
-2. **Enable the AccessibilityService** — no phonectl command; requires `adb shell settings put
+2. **Enable the AccessibilityService** — no droidjig command; requires `adb shell settings put
    secure enabled_accessibility_services …` or menu-diving.
 3. **Start the socket server** — the foreground service does **not** auto-start on this build;
    the only starts are the emergency-stop toggle or a token-authenticated `am broadcast`. This
@@ -25,22 +25,22 @@ error-prone round-trips**. Observed first-hand on a Samsung Galaxy S25 Ultra (20
    **new** token, so this repeats on every reinstall.
 5. **`POST_NOTIFICATIONS`** is ungranted on a fresh install → the FGS notification is silently
    suppressed.
-6. **No orchestration** — `phonectl setup` (`setup.py`) covers ADB pairing and prints
+6. **No orchestration** — `droidjig setup` (`setup.py`) covers ADB pairing and prints
    *informational* module reports only (`_MODULE_META`); it performs none of the above.
-7. **No `phonectl config set`** — the token had to be written via a raw Python one-liner.
+7. **No `droidjig config set`** — the token had to be written via a raw Python one-liner.
 
 Net: bring-up is undocumented tribal knowledge, and the reinstall loop (core to companion
 development) is painful.
 
 ## Goals
 
-- **One idempotent command** brings the companion from "APK on disk" to "phonectl verified it
-  end-to-end": `phonectl companion setup`.
+- **One idempotent command** brings the companion from "APK on disk" to "droidjig verified it
+  end-to-end": `droidjig companion setup`.
 - **No token copy-paste** on debug builds.
 - **Safe-by-default preserved** — powerful grants (accessibility, starting a remote-control
   socket) require explicit confirmation and are printed before they happen. "Seamless" =
   *one command + one informed confirmation*, never silent auto-arming.
-- **phonectl-only, stdlib-only** — no Android/Kotlin change, so it is fully testable in this
+- **droidjig-only, stdlib-only** — no Android/Kotlin change, so it is fully testable in this
   repo (no Android build needed).
 - **Re-runnable** — every step detects "already done" and skips; the reinstall loop becomes a
   single repeatable command.
@@ -60,25 +60,25 @@ Everything in bring-up is mechanical `adb` **except** obtaining the token. That 
 real design fork. Decision:
 
 **Primary — (B) read the companion's token via `run-as`.** Debug APKs are debuggable, so
-`adb shell run-as com.phonectl.companion cat shared_prefs/phonectl_companion.xml` succeeds and
-exposes `<string name="companion_token">…</string>`. phonectl parses it, no user involvement.
+`adb shell run-as com.droidjig.companion cat shared_prefs/droidjig_companion.xml` succeeds and
+exposes `<string name="companion_token">…</string>`. droidjig parses it, no user involvement.
 
 **Fallback — (C) guided prompt.** When `run-as` is denied (release build, or run-as
 unavailable), the command opens the app, tells the user where the token is, and prompts for it
 — today's flow, but wrapped and one-shot.
 
-**Deferred — (A) phonectl-generated pushed token.** phonectl mints the secret and pushes it to
+**Deferred — (A) droidjig-generated pushed token.** droidjig mints the secret and pushes it to
 the companion at first pair. This is the *right* end-user design for release builds (no
 run-as), but it requires an **APK/Kotlin change** plus a trust-on-first-use decision
 (unauthenticated first-pair, since `LifecycleReceiver` currently requires the existing token to
 authorize). Out of scope for v1; recorded as the natural v2.
 
-**Why B is correct here.** `run-as` requires adb + the debuggable flag; phonectl already **is**
+**Why B is correct here.** `run-as` requires adb + the debuggable flag; droidjig already **is**
 the adb-trusted party, so reading the token via run-as discloses it to no one who isn't already
 in control. It needs no Android build — which matters because Kotlin cannot be compiled/tested
 in this repo. It fails closed to C on release builds.
 
-> **De-risking note:** run-as readability was source-confirmed (`PREFS = "phonectl_companion"`,
+> **De-risking note:** run-as readability was source-confirmed (`PREFS = "droidjig_companion"`,
 > `KEY_TOKEN = "companion_token"` in `SharedPrefsTrustState.kt`) but not yet live-validated
 > (the device dropped its Wireless-Debugging port mid-check — the very issue deferred to the
 > connection plan). The implementation plan's **first task is a device spike** confirming the
@@ -88,7 +88,7 @@ in this repo. It fails closed to C on release builds.
 
 ## Architecture
 
-New stdlib module **`src/phonectl/companion_setup.py`**, mirroring `setup.py`'s dependency-
+New stdlib module **`src/droidjig/companion_setup.py`**, mirroring `setup.py`'s dependency-
 injection style (`setup.py` already threads `prompt`, `out`, `which`, `exists` seams for
 device-free unit tests). Every step is a **small pure-ish function** taking injectable seams so
 it unit-tests without a device.
@@ -105,7 +105,7 @@ it unit-tests without a device.
 
 | Step | Function | Idempotency check | Needs `--yes`? |
 |---|---|---|---|
-| 1 | `ensure_installed(adb, apk_path)` | `pm list packages` has `com.phonectl.companion` **and** installed hash == apk hash | no (install is benign) |
+| 1 | `ensure_installed(adb, apk_path)` | `pm list packages` has `com.droidjig.companion` **and** installed hash == apk hash | no (install is benign) |
 | 2 | `ensure_accessibility(adb)` | `settings get secure enabled_accessibility_services` already contains the component | **yes** |
 | 3 | `ensure_notifications(adb, out)` | `POST_NOTIFICATIONS` already granted (`dumpsys package`) | no |
 | 4 | `acquire_token(run_as, prompt, cfg)` | `cfg["companion_token"]` already present **and** validates against a live handshake | no |
@@ -118,10 +118,10 @@ it unit-tests without a device.
 - **Step 3** does what adb can (`pm grant POST_NOTIFICATIONS`) and *prints* the one step it
   cannot (the notification-listener toggle, which has no secure-settings equivalent), reusing
   `setup._MODULE_META["notifications"]` guidance text.
-- **Step 4** parses `shared_prefs/phonectl_companion.xml` for `companion_token` (B); on `None`
+- **Step 4** parses `shared_prefs/droidjig_companion.xml` for `companion_token` (B); on `None`
   from `run_as`, launches the app and prompts (C). Persists via the new `config set` path.
 - **Step 5** fires the token-authenticated `START_SERVICE` broadcast
-  (`am broadcast -a com.phonectl.companion.action.START_SERVICE --es token <t> -n …/.service.LifecycleReceiver`),
+  (`am broadcast -a com.droidjig.companion.action.START_SERVICE --es token <t> -n …/.service.LifecycleReceiver`),
   then polls `ss -tln` for `:8765` up to a timeout.
 - **Step 6** runs `trust.negotiate` over a token'd `SocketTransport` and prints
   `reachable`, `stopped`, and the capability list — identical to the manual verification used
@@ -136,11 +136,11 @@ sequences steps 1→6, short-circuiting each on its idempotency check, gating st
 
 ### CLI surface
 
-- `phonectl companion setup [--apk PATH] [--yes] [--json]` → `run_companion_setup`.
-- `phonectl companion status [--json]` → steps' idempotency checks as a readout (installed?
+- `droidjig companion setup [--apk PATH] [--yes] [--json]` → `run_companion_setup`.
+- `droidjig companion status [--json]` → steps' idempotency checks as a readout (installed?
   accessibility bound? socket up? token paired? handshake caps) — folds today's ad-hoc
   diagnostics into one command.
-- `phonectl config set <key> <value>` / `phonectl config get <key>` — real config CLI (fixes
+- `droidjig config set <key> <value>` / `droidjig config get <key>` — real config CLI (fixes
   friction #7; `get` partly exists). `set` validates known keys against `config.DEFAULTS`.
 
 `companion` becomes a subparser group alongside `setup`, mirroring the existing `clipboard` /
@@ -151,7 +151,7 @@ sequences steps 1→6, short-circuiting each on its idempotency check, gating st
 ## Data flow
 
 ```
-phonectl companion setup --apk app-debug.apk
+droidjig companion setup --apk app-debug.apk
   └─ run_companion_setup
        1 ensure_installed ─ adb pm list / install ────────────► package present
        2 ensure_accessibility ─ [--yes] settings put secure ──► service bound
@@ -167,7 +167,7 @@ phonectl companion setup --apk app-debug.apk
 
 - Any step failure prints a specific remediation and returns nonzero **without** proceeding
   (fail-closed): missing adb → `setup.INSTALL_GUIDANCE`; device offline → point at the
-  connection plan / `phonectl setup`; run-as denied → drop to prompt (not an error); socket
+  connection plan / `droidjig setup`; run-as denied → drop to prompt (not an error); socket
   never comes up → surface the FGS-start hint and `companion status`.
 - Uninstall-on-reinstall (signature mismatch) is announced before it wipes token + grants.
 - `--json` emits a structured per-step result envelope (`results.ok`/`results.err`) so an agent
@@ -189,10 +189,10 @@ phonectl companion setup --apk app-debug.apk
 - **Unit** — each step function against a fake `adb`/`run_as` that records issued commands and
   returns canned stdout: installed-vs-missing, hash-match skip, accessibility already-set skip,
   run-as success **and** denial→prompt, socket-up poll success/timeout, verify caps parsing.
-  `PHONECTL_HOME`-isolated, no device.
-- **Fixture** — a real `phonectl_companion.xml` sample drives the token parser; a
+  `DROIDJIG_HOME`-isolated, no device.
+- **Fixture** — a real `droidjig_companion.xml` sample drives the token parser; a
   parametrized case covers a blank/absent token entry.
-- **CLI** — `phonectl companion setup/status` and `config set/get` argparse wiring + exit codes
+- **CLI** — `droidjig companion setup/status` and `config set/get` argparse wiring + exit codes
   via the existing CLI test harness.
 - **Device spike (plan task 1, manual)** — confirm the run-as read on a debug build before the
   parser is built on it.
@@ -203,9 +203,9 @@ phonectl companion setup --apk app-debug.apk
 
 1. **ADB connection stability** — Wireless-Debugging port rotation + dead mDNS + reconnect.
    Own plan. Candidate directions: one-time USB `adb tcpip <fixed-port>`, persistent
-   `rediscover()` on every command, a `phonectl reconnect`. This design *assumes* a live adb
+   `rediscover()` on every command, a `droidjig reconnect`. This design *assumes* a live adb
    connection and points at that plan on `device offline`.
-2. **Approach A (pushed token)** — release-build token automation via a phonectl-minted secret
+2. **Approach A (pushed token)** — release-build token automation via a droidjig-minted secret
    pushed at first pair; requires an APK/Kotlin change + a TOFU first-pair path. Natural v2 once
    an Android build loop exists.
 3. **Kotlin Finding-5 gap** — `Capabilities.DEFAULT_ENABLED = true` was never flipped; the

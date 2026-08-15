@@ -3,12 +3,12 @@
 Guidance for Claude Code in this repo. Kept small — it points into the real docs rather
 than duplicating them.
 
-## Project: phonectl
+## Project: droidjig
 
 A Python CLI that lets an AI agent observe the host Android phone as structured JSON and
 act on it (`tap`/`type`/`swipe`/`key`/`launch`) over **ADB with no root**, from inside
 Termux + PRoot-Distro. The contract is an `observe → act → observe` loop driven by element
-indices, not pixels. The daemon (`phonectl daemon`) is the single-writer north star: CLI
+indices, not pixels. The daemon (`droidjig daemon`) is the single-writer north star: CLI
 and MCP are frontends; the daemon is optional but preferred when running.
 
 ## Read before changing core layers
@@ -23,7 +23,7 @@ and MCP are frontends; the daemon is optional but preferred when running.
 
 ## Current state
 
-Phases 1–6 are complete and green, plus the companion APK (`com.phonectl.companion`).
+Phases 1–6 are complete and green, plus the companion APK (`com.droidjig.companion`).
 836 tests pass; the runtime is stdlib-only, with an optional `mcp` extra. Core
 behavior is validated on a real Samsung Galaxy S25 Ultra over Wireless Debugging.
 See `docs/adversarial-review-2026-07.md` for the security review and its remediation status.
@@ -35,7 +35,7 @@ opt into `mode: auto` explicitly.
 ## Commands
 
 ```bash
-pip install -e ".[dev]"    # install the package + console-script `phonectl` + pytest
+pip install -e ".[dev]"    # install the package + console-script `droidjig` + pytest
 pip install -e ".[mcp]"    # also install the optional FastMCP transport
 pytest -v                  # full suite
 pytest tests/test_ui_parser.py -v                       # one file

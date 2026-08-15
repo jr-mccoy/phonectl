@@ -1,7 +1,7 @@
 import json
 import json as _json
 import pytest
-from phonectl import cli, config, errors, capabilities
+from droidjig import cli, config, errors, capabilities
 
 
 def test_version_flag_prints_and_exits_zero(capsys):
@@ -36,7 +36,7 @@ class FakeBackend:
     )
 
 def test_observe_prints_json(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["observe"])
     out = capsys.readouterr().out
@@ -45,7 +45,7 @@ def test_observe_prints_json(tmp_path, monkeypatch, capsys):
     assert data["elements"][0]["text"] == "Wi-Fi"
 
 def test_tap_auto_mode_acts_and_logs(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -56,7 +56,7 @@ def test_tap_auto_mode_acts_and_logs(tmp_path, monkeypatch, capsys):
     assert "tap" in log
 
 def test_tap_blocked_by_kill_switch(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "STOP").write_text("")
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -67,8 +67,8 @@ def test_tap_blocked_by_kill_switch(tmp_path, monkeypatch):
 def test_cli_stop_and_resume_toggle_kill_switch(tmp_path, monkeypatch):
     # Finding 1: the host CLI is the out-of-band human path for both engaging and
     # clearing the kill switch (resume is intentionally absent from agent surfaces).
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import audit
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import audit
     assert cli.main(["stop"]) == 0
     assert audit.kill_switch_active() is True
     assert cli.main(["resume"]) == 0
@@ -76,12 +76,12 @@ def test_cli_stop_and_resume_toggle_kill_switch(tmp_path, monkeypatch):
 
 
 def test_wait_for_requires_text_or_id(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     rc = cli.main(["wait-for"])
     assert rc == 2
 
 def test_tap_confirm_mode_refuses_without_yes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "confirm"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -90,7 +90,7 @@ def test_tap_confirm_mode_refuses_without_yes(tmp_path, monkeypatch):
     assert fb.calls == []  # confirm mode without --yes must NOT inject
 
 def test_tap_confirm_mode_acts_with_yes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "confirm"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -99,7 +99,7 @@ def test_tap_confirm_mode_acts_with_yes(tmp_path, monkeypatch):
     assert ("tap", 1, 2) in fb.calls
 
 def test_tap_dry_run_observes_but_does_not_inject(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "dry-run"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -109,7 +109,7 @@ def test_tap_dry_run_observes_but_does_not_inject(tmp_path, monkeypatch):
     assert not (tmp_path / "actions.jsonl").exists()  # dry-run must NOT audit-log
 
 def test_doctor_reports_connected(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     rc = cli.main(["doctor"])
@@ -119,7 +119,7 @@ def test_doctor_reports_connected(tmp_path, monkeypatch, capsys):
 
 # Fix C: type command redacts text in audit log
 def test_type_redacts_text_in_audit_log(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
@@ -133,7 +133,7 @@ def test_type_redacts_text_in_audit_log(tmp_path, monkeypatch):
 
 
 def test_observe_json_emits_ok_envelope(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["observe", "--json"])
     out = _json.loads(capsys.readouterr().out)
@@ -144,8 +144,8 @@ def test_observe_json_emits_ok_envelope(tmp_path, monkeypatch, capsys):
     assert out["data"]["elements"][0]["text"] == "Wi-Fi"
 
 
-def test_main_maps_phonectl_error_to_err_envelope(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+def test_main_maps_droidjig_error_to_err_envelope(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     def boom(args):
         raise errors.DeviceLockedError("device is locked, unlock it")
@@ -162,7 +162,7 @@ def test_main_maps_phonectl_error_to_err_envelope(tmp_path, monkeypatch, capsys)
 
 
 def test_doctor_json_emits_capabilities(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["doctor", "--json"])
     out = _json.loads(capsys.readouterr().out)
@@ -174,7 +174,7 @@ def test_doctor_json_emits_capabilities(tmp_path, monkeypatch, capsys):
 
 
 def test_tap_by_text_selector_resolves_and_logs(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     b = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: b)
     rc = cli.main(["tap", "--text", "Wi-Fi", "--yes"])
@@ -184,8 +184,8 @@ def test_tap_by_text_selector_resolves_and_logs(tmp_path, monkeypatch, capsys):
 
 
 def test_audit_tail_prints_recent(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import audit
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import audit
 
     audit.log_action("tap", {"i": 1}, {"app": {"package": "com.x"}, "hash": "h1"})
     rc = cli.main(["audit", "tail", "--limit", "1"])
@@ -194,8 +194,8 @@ def test_audit_tail_prints_recent(tmp_path, monkeypatch, capsys):
 
 
 def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import audit
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import audit
 
     audit.log_action("tap", {"i": 1}, {"app": {}, "hash": "h"})
     rc = cli.main(["audit", "purge"])
@@ -203,7 +203,7 @@ def test_audit_purge_clears(tmp_path, monkeypatch, capsys):
 
 
 def test_tap_json_emits_run_action_envelope(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["tap", "--xy", "1", "2", "--json"])
@@ -214,10 +214,10 @@ def test_tap_json_emits_run_action_envelope(tmp_path, monkeypatch, capsys):
 
 
 def test_tap_busy_when_lock_held_maps_to_exit_1(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
-    from phonectl import runtime
+    from droidjig import runtime
 
     runtime._action_lock.acquire()
     try:
@@ -229,7 +229,7 @@ def test_tap_busy_when_lock_held_maps_to_exit_1(tmp_path, monkeypatch, capsys):
 
 
 def test_policy_explain_reports_decision(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class PayBackend(FakeBackend):
         def ui_dump(self):
@@ -246,24 +246,24 @@ def test_policy_explain_reports_decision(tmp_path, monkeypatch, capsys):
     assert out["risk_level"] == "critical" and out["decision"] == "deny"
 
 def test_mcp_cli_reports_missing_sdk(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import mcp_server, errors
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import mcp_server, errors
 
     def boom(build=None):
-        raise errors.CapabilityUnavailableError("MCP SDK not installed; pip install phonectl[mcp]")
+        raise errors.CapabilityUnavailableError("MCP SDK not installed; pip install droidjig[mcp]")
 
     monkeypatch.setattr(mcp_server, "serve", boom)
     rc = cli.main(["mcp"])
     out = capsys.readouterr().out
-    assert rc == 1 and "phonectl[mcp]" in out
+    assert rc == 1 and "droidjig[mcp]" in out
 
 
 def test_setup_verb_wires_runtime_to_run_module(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     captured = {}
-    from phonectl import setup as setup_mod
+    from droidjig import setup as setup_mod
     monkeypatch.setattr(setup_mod, "run_module", lambda module, conn, **kw: captured.update(module=module, conn=conn) or 0)
     rc = cli.main(["setup", "notifications"])
     assert rc == 0
@@ -272,20 +272,20 @@ def test_setup_verb_wires_runtime_to_run_module(tmp_path, monkeypatch):
 
 
 def test_setup_verb_defaults_to_adb(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     seen = {}
-    from phonectl import setup as setup_mod
+    from droidjig import setup as setup_mod
     monkeypatch.setattr(setup_mod, "run_module", lambda module, conn, **kw: seen.update(m=module) or 0)
     assert cli.main(["setup"]) == 0
     assert seen["m"] == "adb"
 
 
 def test_doctor_bundle_writes_zip(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     out_zip = str(tmp_path / "diag.zip")
-    from phonectl import diagnostics
+    from droidjig import diagnostics
     monkeypatch.setattr(diagnostics, "bundle", lambda path, backend, cfg: path)
     rc = cli.main(["doctor", "--bundle", out_zip])
     assert rc == 0
@@ -294,20 +294,20 @@ def test_doctor_bundle_writes_zip(tmp_path, monkeypatch, capsys):
 
 # Task 3 tests — build_runtime returns ProviderRegistry
 
-from phonectl.providers.registry import ProviderRegistry
+from droidjig.providers.registry import ProviderRegistry
 
 
 def test_build_runtime_returns_registry(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import config, cli
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import config, cli
     cfg = config.load()
     backend, session, conn = cli.build_runtime(cfg)
     assert isinstance(backend, ProviderRegistry)
 
 
 def test_build_runtime_wraps_explicit_backend(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import config, cli
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import config, cli
     cfg = config.load()
     fake = FakeBackend()
     backend, session, conn = cli.build_runtime(cfg, backend=fake)
@@ -316,7 +316,7 @@ def test_build_runtime_wraps_explicit_backend(tmp_path, monkeypatch):
 
 
 def test_doctor_bundle_writes_zip_when_connection_fails(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class OfflineBackend(FakeBackend):
         def __init__(self):
@@ -333,7 +333,7 @@ def test_doctor_bundle_writes_zip_when_connection_fails(tmp_path, monkeypatch, c
     fb = OfflineBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     out_zip = str(tmp_path / "diag-offline.zip")
-    from phonectl import diagnostics
+    from droidjig import diagnostics
     monkeypatch.setattr(diagnostics, "bundle", lambda path, backend, cfg: path)
     rc = cli.main(["doctor", "--bundle", out_zip])
     assert rc == 0
@@ -342,7 +342,7 @@ def test_doctor_bundle_writes_zip_when_connection_fails(tmp_path, monkeypatch, c
 
 
 def test_clipboard_read_emits_unavailable(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["clipboard", "read", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -352,13 +352,13 @@ def test_clipboard_read_emits_unavailable(tmp_path, monkeypatch, capsys):
 
 
 def test_packages_list_emits_ok(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class FakePackageBackend(FakeBackend):
         def packages_list(self, include_system=False):
             return ["com.a", "com.b"]
         def capabilities(self):
-            from phonectl import capabilities
+            from droidjig import capabilities
             return capabilities.make(packages_list=True, requires_adb=True,
                                      act_tap=True, observe_ui_tree=True,
                                      launch_app=True, act_type=True, act_key=True)
@@ -374,7 +374,7 @@ def test_packages_list_emits_ok(tmp_path, monkeypatch, capsys):
 # --- Task 6: new gesture CLI verbs ---
 
 def test_swipe_named_direction(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["swipe", "up", "--json"])
@@ -384,7 +384,7 @@ def test_swipe_named_direction(tmp_path, monkeypatch, capsys):
 
 
 def test_scroll_until_cli(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["scroll-until", "--text", "NotHere", "--max", "1", "--json"])
@@ -395,7 +395,7 @@ def test_scroll_until_cli(tmp_path, monkeypatch, capsys):
 # ── Task 5: extraction CLI verbs ─────────────────────────────────────────────
 
 def test_extract_list_returns_ok_envelope(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["extract", "list", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -405,7 +405,7 @@ def test_extract_list_returns_ok_envelope(tmp_path, monkeypatch, capsys):
 
 
 def test_find_text_regex_returns_ok(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["find", "--text-regex", "Wi.*Fi", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -415,7 +415,7 @@ def test_find_text_regex_returns_ok(tmp_path, monkeypatch, capsys):
 
 
 def test_get_focused_field_returns_ok(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["get", "focused-field", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -426,8 +426,8 @@ def test_get_focused_field_returns_ok(tmp_path, monkeypatch, capsys):
 # Task 5: build_runtime wires TermuxApiProvider
 
 def test_build_runtime_includes_termux_when_available(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl.providers.termux import TermuxApiProvider
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig.providers.termux import TermuxApiProvider
 
     fake_termux = TermuxApiProvider(
         which=lambda name: "/usr/bin/" + name  # always found
@@ -440,7 +440,7 @@ def test_build_runtime_includes_termux_when_available(tmp_path, monkeypatch):
 
 
 def test_build_runtime_excludes_termux_when_not_available(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
     cfg = config.load()
     registry, session, conn = cli.build_runtime(cfg)
@@ -450,7 +450,7 @@ def test_build_runtime_excludes_termux_when_not_available(tmp_path, monkeypatch)
 # Task 6: device battery|wifi and tts speak CLI verbs
 
 def test_device_battery_unavailable_without_termux(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
     rc = cli.main(["device", "battery", "--json"])
@@ -461,7 +461,7 @@ def test_device_battery_unavailable_without_termux(tmp_path, monkeypatch, capsys
 
 
 def test_tts_speak_unavailable_without_termux(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
     rc = cli.main(["tts", "speak", "hello", "--json"])
@@ -471,7 +471,7 @@ def test_tts_speak_unavailable_without_termux(tmp_path, monkeypatch, capsys):
 
 
 def test_device_battery_ok_with_termux(tmp_path, monkeypatch, capsys):
-    from phonectl.providers.termux import TermuxApiProvider
+    from droidjig.providers.termux import TermuxApiProvider
 
     battery_data = {"percentage": 42, "status": "DISCHARGING", "health": "GOOD",
                     "plugged": "UNPLUGGED", "temperature": 27.0}
@@ -484,7 +484,7 @@ def test_device_battery_ok_with_termux(tmp_path, monkeypatch, capsys):
                                      write_clipboard=True)
         def battery_status(self): return battery_data
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: FakeTermux())
     rc = cli.main(["device", "battery", "--json"])
@@ -497,9 +497,9 @@ def test_device_battery_ok_with_termux(tmp_path, monkeypatch, capsys):
 # --- Task 7: AccessibilityProvider wired into build_runtime ---
 
 def test_build_runtime_prepends_accessibility_when_present(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl.providers.accessibility import AccessibilityProvider
-    from phonectl.providers.transport import LoopbackTransport
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig.providers.accessibility import AccessibilityProvider
+    from droidjig.providers.transport import LoopbackTransport
 
     acc = AccessibilityProvider(LoopbackTransport({}))  # available
     monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: acc)
@@ -511,7 +511,7 @@ def test_build_runtime_prepends_accessibility_when_present(tmp_path, monkeypatch
 
 
 def test_build_runtime_without_accessibility_uses_adb(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
     cfg = config.load()
@@ -520,9 +520,9 @@ def test_build_runtime_without_accessibility_uses_adb(tmp_path, monkeypatch):
 
 
 def test_build_runtime_includes_notifications_when_available(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl.providers.notifications import NotificationsProvider
-    from phonectl.providers.transport import LoopbackTransport
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig.providers.notifications import NotificationsProvider
+    from droidjig.providers.transport import LoopbackTransport
     np = NotificationsProvider(transport=LoopbackTransport({}))
     monkeypatch.setattr(cli, "_make_notifications_provider", lambda: np)
     monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
@@ -533,7 +533,7 @@ def test_build_runtime_includes_notifications_when_available(tmp_path, monkeypat
 
 
 def test_notifications_list_unavailable(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
     monkeypatch.setattr(cli, "_make_notifications_provider", lambda: None)
@@ -545,13 +545,13 @@ def test_notifications_list_unavailable(tmp_path, monkeypatch, capsys):
 
 
 def test_notifications_list_ok(tmp_path, monkeypatch, capsys):
-    from phonectl.providers.notifications import NotificationsProvider
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.notifications import NotificationsProvider
+    from droidjig.providers.transport import LoopbackTransport
     raw = {"key": "k", "package": "com.msg", "title": "Alice", "text": "hi",
            "category": "msg", "post_time": 1, "actions": [{"title": "Reply", "remote_input": True}]}
     np = NotificationsProvider(transport=LoopbackTransport(
         {"notifications_list": lambda p: {"notifications": [raw]}}))
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_accessibility_provider", lambda: None)
     monkeypatch.setattr(cli, "_make_notifications_provider", lambda: np)
@@ -565,7 +565,7 @@ def test_notifications_list_ok(tmp_path, monkeypatch, capsys):
 # --- Plan 4.3: trust status CLI ---
 
 def test_trust_status_reports_unreachable_without_companion(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: None)
     rc = cli.main(["trust", "status", "--json"])
@@ -575,11 +575,11 @@ def test_trust_status_reports_unreachable_without_companion(tmp_path, monkeypatc
 
 
 def test_trust_status_reports_toggles(tmp_path, monkeypatch, capsys):
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.transport import LoopbackTransport
     t = LoopbackTransport({"handshake": lambda p: {
         "version": 3, "capabilities": {"act_gesture_native": True, "act_set_text_native": False},
         "stopped": False}})
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
     rc = cli.main(["trust", "status", "--json"])
@@ -592,7 +592,7 @@ def test_trust_status_reports_toggles(tmp_path, monkeypatch, capsys):
 # --- Plan 4.4: OCR provider ---
 
 def test_ocr_screen_unavailable(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_ocr_provider", lambda: None)
     rc = cli.main(["ocr", "screen", "--json"])
@@ -602,19 +602,19 @@ def test_ocr_screen_unavailable(tmp_path, monkeypatch, capsys):
 
 
 def test_ocr_screen_ok(tmp_path, monkeypatch, capsys):
-    from phonectl.providers.ocr import OcrProvider
+    from droidjig.providers.ocr import OcrProvider
 
     class FakeOcr(OcrProvider):
         def __init__(self): pass
         def is_available(self): return True
         def capabilities(self):
-            from phonectl import capabilities
+            from droidjig import capabilities
             return capabilities.make(observe_ocr=True)
         def ocr_screen(self, registry, **kw):
             return {"regions": [{"text": "Balance", "bounds": [0, 0, 10, 10],
                                  "confidence": 0.9}], "source": "tesseract"}
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_ocr_provider", lambda: FakeOcr())
     rc = cli.main(["ocr", "screen", "--json"])
@@ -624,13 +624,13 @@ def test_ocr_screen_ok(tmp_path, monkeypatch, capsys):
 
 
 def test_find_ocr_text_returns_matching_regions(tmp_path, monkeypatch, capsys):
-    from phonectl.providers.ocr import OcrProvider
+    from droidjig.providers.ocr import OcrProvider
 
     class FakeOcr(OcrProvider):
         def __init__(self): pass
         def is_available(self): return True
         def capabilities(self):
-            from phonectl import capabilities
+            from droidjig import capabilities
             return capabilities.make(observe_ocr=True)
         def ocr_screen(self, registry, **kw):
             return {"regions": [
@@ -638,7 +638,7 @@ def test_find_ocr_text_returns_matching_regions(tmp_path, monkeypatch, capsys):
                 {"text": "Settings", "bounds": [0, 20, 10, 30], "confidence": 0.8},
             ], "source": "tesseract"}
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     monkeypatch.setattr(cli, "_make_ocr_provider", lambda: FakeOcr())
     rc = cli.main(["find", "--ocr-text", "Bal.*", "--json"])
@@ -651,7 +651,7 @@ def test_find_ocr_text_returns_matching_regions(tmp_path, monkeypatch, capsys):
 # ── Task 8: _dispatch + daemon routing ────────────────────────────────────
 
 def test_dispatch_in_process_when_no_daemon(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     called = {"n": 0}
 
@@ -665,7 +665,7 @@ def test_dispatch_in_process_when_no_daemon(tmp_path, monkeypatch):
 
 
 def test_dispatch_routes_to_daemon_when_reachable(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
 
     class FakeClient:
         def call(self, method, params, **kw):
@@ -678,7 +678,7 @@ def test_dispatch_routes_to_daemon_when_reachable(tmp_path, monkeypatch):
 
 
 def test_observe_command_unchanged_without_daemon(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     rc = cli.main(["observe", "--json"])
@@ -689,7 +689,7 @@ def test_observe_command_unchanged_without_daemon(tmp_path, monkeypatch, capsys)
 # ── Task 9: daemon command ─────────────────────────────────────────────────
 
 def test_daemon_status_reports_not_running(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     rc = cli.main(["daemon", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -717,7 +717,7 @@ class _FakeClient:
 
 
 def test_act_routes_through_submit_and_wait(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient(submit_and_wait={"ok": True, "data": {"tapped": True},
                                         "capability": "ui.act"})
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
@@ -737,7 +737,7 @@ def test_act_params_autogenerates_idempotency_key():
 
 
 def test_detach_prints_job_id(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient(act={"ok": True, "data": {"job_id": "JID42", "status": "accepted"}})
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
     rc = cli.main(["tap", "--xy", "10", "20", "--detach"])
@@ -746,7 +746,7 @@ def test_detach_prints_job_id(tmp_path, monkeypatch, capsys):
 
 
 def test_job_command_polls_and_prints(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient(job_poll={"ok": True, "data": {"status": "done",
                                 "result": {"ok": True, "data": {"done": True}}}})
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
@@ -757,7 +757,7 @@ def test_job_command_polls_and_prints(tmp_path, monkeypatch, capsys):
 
 
 def test_daemon_stop_calls_shutdown_rpc(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient(shutdown={"ok": True, "data": {"stopping": True}})
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
     rc = cli.main(["daemon", "stop"])
@@ -765,10 +765,10 @@ def test_daemon_stop_calls_shutdown_rpc(tmp_path, monkeypatch, capsys):
     assert any(c[0] == "call" and c[1] == "shutdown" for c in fake.calls)
 
 
-# ── Task 9: phonectl macro CLI group ──────────────────────────────────────
+# ── Task 9: droidjig macro CLI group ──────────────────────────────────────
 
 def test_macro_validate_valid(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     macro_path = tmp_path / "m.json"
     macro_path.write_text(json.dumps({"name": "m", "actions": []}))
@@ -778,7 +778,7 @@ def test_macro_validate_valid(tmp_path, monkeypatch, capsys):
 
 
 def test_macro_validate_invalid(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     macro_path = tmp_path / "bad.json"
     macro_path.write_text(json.dumps({"actions": []}))
@@ -788,7 +788,7 @@ def test_macro_validate_invalid(tmp_path, monkeypatch, capsys):
 
 
 def test_macro_run_in_process(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: FakeBackend())
     macro_path = tmp_path / "m.json"
@@ -802,7 +802,7 @@ def test_macro_run_routes_through_submit_and_wait(tmp_path, monkeypatch, capsys)
     # Over the daemon, macro run submits a job and polls it: a plain call()
     # times out client-side while a long macro is still (successfully) running
     # (Finding 2, 2026-07-04).
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient(submit_and_wait={"ok": True, "capability": "macro.run",
         "data": {"run_id": "run_1", "outcome": "ok", "steps_run": 1}})
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
@@ -817,7 +817,7 @@ def test_macro_run_routes_through_submit_and_wait(tmp_path, monkeypatch, capsys)
 
 
 def test_macro_status_empty(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     rc = cli.main(["macro", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
@@ -827,7 +827,7 @@ def test_macro_status_empty(tmp_path, monkeypatch, capsys):
 # ── Task 7: macro enable / disable / list CLI ────────────────────────────────
 
 def test_macro_enable_cli(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     macro_path = tmp_path / "tick.json"
     macro_path.write_text(json.dumps({
@@ -841,7 +841,7 @@ def test_macro_enable_cli(tmp_path, monkeypatch, capsys):
 
 
 def test_macro_list_cli(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     macro_path = tmp_path / "tick.json"
     macro_path.write_text(json.dumps({
@@ -859,7 +859,7 @@ def test_macro_list_cli(tmp_path, monkeypatch, capsys):
 
 
 def test_macro_disable_cli(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     macro_path = tmp_path / "tick.json"
     macro_path.write_text(json.dumps({
@@ -875,7 +875,7 @@ def test_macro_disable_cli(tmp_path, monkeypatch, capsys):
 
 
 def test_autonomy_grant_cli(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "high", "--json"])
     assert rc == 0
@@ -887,7 +887,7 @@ def test_autonomy_grant_cli(tmp_path, monkeypatch, capsys):
 
 def test_autonomy_grant_expires_is_seconds_from_now(tmp_path, monkeypatch, capsys):
     import time
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     before = time.time()
     rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "medium",
@@ -903,7 +903,7 @@ def test_autonomy_grant_expires_is_seconds_from_now(tmp_path, monkeypatch, capsy
 
 def test_autonomy_grant_expires_lapses_after_duration(tmp_path, monkeypatch, capsys):
     import time
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: None)
     real_now = time.time()
     rc = cli.main(["autonomy", "grant", "reply", "--max-risk", "medium",
@@ -918,7 +918,7 @@ def test_autonomy_grant_expires_lapses_after_duration(tmp_path, monkeypatch, cap
 
 def test_autonomy_grant_expires_sent_absolute_to_daemon(tmp_path, monkeypatch):
     import time
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fake = _FakeClient()
     monkeypatch.setattr(cli, "_daemon_client", lambda cfg: fake)
     before = time.time()
@@ -931,7 +931,7 @@ def test_autonomy_grant_expires_sent_absolute_to_daemon(tmp_path, monkeypatch):
 # --- Companion handshake gating for notifications/OCR factories ---
 
 def test_make_notifications_provider_gates_disabled_observe_notifications(tmp_path, monkeypatch):
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.transport import LoopbackTransport
 
     t = LoopbackTransport({"handshake": lambda _p: {
         "version": 1,
@@ -939,7 +939,7 @@ def test_make_notifications_provider_gates_disabled_observe_notifications(tmp_pa
                          "notifications_dismiss": True},
         "stopped": False,
     }})
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
 
@@ -950,7 +950,7 @@ def test_make_notifications_provider_gates_disabled_observe_notifications(tmp_pa
 
 
 def test_make_notifications_provider_gates_notifications_reply_and_dismiss(tmp_path, monkeypatch):
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.transport import LoopbackTransport
 
     t = LoopbackTransport({"handshake": lambda _p: {
         "version": 1,
@@ -958,7 +958,7 @@ def test_make_notifications_provider_gates_notifications_reply_and_dismiss(tmp_p
                          "notifications_dismiss": False},
         "stopped": False,
     }})
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: None)
 
@@ -974,7 +974,7 @@ def test_make_notifications_provider_preserves_termux_only_observe(tmp_path, mon
     class FakeTermux:
         def is_available(self): return True
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: None)
     monkeypatch.setattr(cli, "_make_termux_provider", lambda: FakeTermux())
 
@@ -987,15 +987,15 @@ def test_make_notifications_provider_preserves_termux_only_observe(tmp_path, mon
 
 
 def test_make_ocr_provider_gates_companion_observe_ocr(tmp_path, monkeypatch):
-    from phonectl.providers.ocr import OcrProvider
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.ocr import OcrProvider
+    from droidjig.providers.transport import LoopbackTransport
 
     t = LoopbackTransport({"handshake": lambda _p: {
         "version": 1,
         "capabilities": {"observe_ocr": False},
         "stopped": False,
     }})
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
     monkeypatch.setattr(cli, "OcrProvider", lambda transport=None: OcrProvider(
         which=lambda _name: None, transport=transport))
@@ -1007,15 +1007,15 @@ def test_make_ocr_provider_gates_companion_observe_ocr(tmp_path, monkeypatch):
 
 
 def test_make_ocr_provider_preserves_local_tesseract_when_companion_disabled(tmp_path, monkeypatch):
-    from phonectl.providers.ocr import OcrProvider
-    from phonectl.providers.transport import LoopbackTransport
+    from droidjig.providers.ocr import OcrProvider
+    from droidjig.providers.transport import LoopbackTransport
 
     t = LoopbackTransport({"handshake": lambda _p: {
         "version": 1,
         "capabilities": {"observe_ocr": False},
         "stopped": False,
     }})
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "_make_companion_transport", lambda cfg: t)
     monkeypatch.setattr(cli, "OcrProvider", lambda transport=None: OcrProvider(
         which=lambda _name: "/usr/bin/tesseract", transport=transport))
@@ -1028,7 +1028,7 @@ def test_make_ocr_provider_preserves_local_tesseract_when_companion_disabled(tmp
 
 def test_default_mode_requires_confirmation(tmp_path, monkeypatch, capsys):
     # Finding 5: with no config at all, actions must not run unconfirmed.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     fb = FakeBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     rc = cli.main(["tap", "--xy", "100", "200"])
@@ -1060,7 +1060,7 @@ class _IntentClipBackend(FakeBackend):
 
 
 def test_intent_start_stopped_exits_2(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     (tmp_path / "STOP").write_text("")
     fb = _IntentClipBackend()
@@ -1071,7 +1071,7 @@ def test_intent_start_stopped_exits_2(tmp_path, monkeypatch):
 
 
 def test_clipboard_write_confirm_required_exits_3(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))  # default mode = confirm
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))  # default mode = confirm
     fb = _IntentClipBackend()
     monkeypatch.setattr(cli, "_make_backend", lambda cfg: fb)
     rc = cli.main(["clipboard", "write", "hello"])
@@ -1080,25 +1080,25 @@ def test_clipboard_write_confirm_required_exits_3(tmp_path, monkeypatch):
 
 
 def test_cli_config_set_and_get(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import cli
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import cli
     assert cli.main(["config", "set", "companion_port", "8765"]) == 0
     assert cli.main(["config", "get", "companion_port"]) == 0
     assert "8765" in capsys.readouterr().out
 
 
 def test_cli_config_set_unknown_key_exits_2(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import cli
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import cli
     assert cli.main(["config", "set", "not_a_real_key", "x"]) == 2
 
 
 # ── Task 12: companion setup/status CLI wiring ────────────────────────────────
 
 def test_cli_companion_setup_dispatches(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     apk = tmp_path / "app-debug.apk"; apk.write_bytes(b"X")
-    from phonectl import cli, companion_setup
+    from droidjig import cli, companion_setup
 
     class _Backend:  # stands in for AdbBackend
         serial = "1.2.3.4:5"
@@ -1117,14 +1117,14 @@ def test_cli_companion_setup_dispatches(tmp_path, monkeypatch, capsys):
 
 
 def test_cli_companion_status_dispatches(tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     import subprocess
-    from phonectl import cli, companion_setup
+    from droidjig import cli, companion_setup
     config.save({"companion_token": "t"})
 
     def fake_run_adb(*a):
         if a[:3] == ("shell", "pm", "list"):
-            return subprocess.CompletedProcess(a, 0, stdout="package:com.phonectl.companion", stderr="")
+            return subprocess.CompletedProcess(a, 0, stdout="package:com.droidjig.companion", stderr="")
         if a[:4] == ("shell", "settings", "get", "secure"):
             return subprocess.CompletedProcess(a, 0, stdout=companion_setup.ACCESSIBILITY_COMPONENT, stderr="")
         if a[:2] == ("shell", "ss"):
@@ -1177,7 +1177,7 @@ def _parser_returning(func, *, json_flag):
 
 # ── Unexpected-error handling (audit D2) ───────────────────────────────────
 # errors.py promises envelopes "without raw tracebacks", but main() caught only
-# PhonectlError, so anything else — a bug, an OSError, a corrupt state file —
+# DroidjigError, so anything else — a bug, an OSError, a corrupt state file —
 # escaped as a traceback and bypassed the whole structured-result contract.
 
 def _boom(args):
@@ -1208,7 +1208,7 @@ def test_unexpected_error_is_reported_as_a_result_envelope_under_json(monkeypatc
 def test_unexpected_error_reraises_under_debug(monkeypatch):
     # The traceback stays available for developers, just off the default path.
     monkeypatch.setattr(cli, "build_parser", _parser_returning(_boom, json_flag=False))
-    monkeypatch.setenv("PHONECTL_DEBUG", "1")
+    monkeypatch.setenv("DROIDJIG_DEBUG", "1")
     with pytest.raises(RuntimeError):
         cli.main(["observe"])
 
@@ -1226,7 +1226,7 @@ def test_keyboard_interrupt_is_not_swallowed_as_an_internal_error(monkeypatch, c
 
 
 def test_broken_pipe_exits_quietly(monkeypatch, capsys):
-    # `phonectl observe --json | head` closes the pipe; that is not an error.
+    # `droidjig observe --json | head` closes the pipe; that is not an error.
     def broken(args):
         raise BrokenPipeError
 

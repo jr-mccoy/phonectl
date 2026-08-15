@@ -1,5 +1,5 @@
-from phonectl.daemon.events import EventBus
-from phonectl.daemon.poller import EventPoller
+from droidjig.daemon.events import EventBus
+from droidjig.daemon.poller import EventPoller
 
 
 class FakeUiSource:

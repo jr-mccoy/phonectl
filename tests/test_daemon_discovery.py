@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from phonectl import errors
-from phonectl.daemon import discovery
+from droidjig import errors
+from droidjig.daemon import discovery
 
 
 def test_daemon_unreachable_and_unknown_method_codes():
@@ -12,7 +12,7 @@ def test_daemon_unreachable_and_unknown_method_codes():
 
 
 def test_write_read_remove_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     info = {"pid": 4321, "host": "127.0.0.1", "port": 8799, "version": 1, "started_at": 1.0}
     path = discovery.write(info)
     assert path.exists()
@@ -23,19 +23,19 @@ def test_write_read_remove_roundtrip(tmp_path, monkeypatch):
 
 
 def test_write_rejects_non_loopback(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     with pytest.raises(ValueError):
         discovery.write({"pid": 1, "host": "10.0.0.5", "port": 8799, "version": 1, "started_at": 0.0})
 
 
 def test_read_corrupt_file_is_none(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "daemon.json").write_text("{not json")
     assert discovery.read() is None
 
 
 def test_discover_reachable_calls_ping(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     discovery.write({"pid": 1, "host": "127.0.0.1", "port": 8799, "version": 1, "started_at": 0.0})
     seen = {}
 
@@ -48,12 +48,12 @@ def test_discover_reachable_calls_ping(tmp_path, monkeypatch):
 
 
 def test_discover_stale_file_failing_ping_is_ignored(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     discovery.write({"pid": 1, "host": "127.0.0.1", "port": 8799, "version": 1, "started_at": 0.0})
     assert discovery.discover(ping=lambda h, p: False) is None
     assert discovery.read() is not None  # not removed, just ignored
 
 
 def test_discover_no_file_is_none(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     assert discovery.discover(ping=lambda h, p: True) is None

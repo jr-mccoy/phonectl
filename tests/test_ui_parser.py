@@ -1,5 +1,5 @@
 from pathlib import Path
-from phonectl import ui_parser
+from droidjig import ui_parser
 
 FIXTURE = (Path(__file__).parent / "fixtures" / "settings_dump.xml").read_text()
 

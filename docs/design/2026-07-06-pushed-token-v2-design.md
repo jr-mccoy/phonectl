@@ -6,23 +6,23 @@ is enabled for release builds.
 ## Problem
 
 Today the companion mints its own pairing token on first read of
-`SharedPrefsTrustState.companionToken()` and phonectl obtains it one of two ways:
+`SharedPrefsTrustState.companionToken()` and droidjig obtains it one of two ways:
 
-- **B (debug builds):** `adb shell run-as com.phonectl.companion cat …` reads the SharedPrefs value.
+- **B (debug builds):** `adb shell run-as com.droidjig.companion cat …` reads the SharedPrefs value.
 - **C (fallback):** the token is shown in the Settings UI and the user pastes it into
-  `phonectl config` (`companion_token`).
+  `droidjig config` (`companion_token`).
 
 `run-as` only works on **debuggable** builds; a release build leaves only manual paste. v2 lets
-phonectl **mint** the token and **push** it to the companion at first pair, so release builds need
+droidjig **mint** the token and **push** it to the companion at first pair, so release builds need
 neither `run-as` nor manual paste.
 
-## Approach A — phonectl-minted token, pushed via a first-pair broadcast
+## Approach A — droidjig-minted token, pushed via a first-pair broadcast
 
-phonectl generates a random token and sends it to the companion:
+droidjig generates a random token and sends it to the companion:
 
 ```
-adb shell am broadcast -n com.phonectl.companion/.service.LifecycleReceiver \
-    -a com.phonectl.companion.action.SET_TOKEN --es token <minted-token>
+adb shell am broadcast -n com.droidjig.companion/.service.LifecycleReceiver \
+    -a com.droidjig.companion.action.SET_TOKEN --es token <minted-token>
 ```
 
 The companion adopts it **trust-on-first-use**: only when no token is set yet. Once a token exists,
@@ -46,11 +46,11 @@ token) creates a token and closes the TOFU window. The receiver therefore checks
 
 - **TOFU race:** between install and the push, a malicious local app could send its own `SET_TOKEN`
   first (loopback is not a UID boundary on Android — Finding 2). Whoever sets first wins. On a
-  personal device the setup flow pushes during `phonectl companion setup`, immediately after
+  personal device the setup flow pushes during `droidjig companion setup`, immediately after
   install, minimizing the window — but the window is non-zero. Document this; do not enable
   pushed-token as the default for release builds until reviewed.
 - **Ordering:** if the user opens the Settings UI before the push, the UI's `companionToken()` read
-  mints a token and the push is (correctly) ignored; phonectl then falls back to B/C. The push path
+  mints a token and the push is (correctly) ignored; droidjig then falls back to B/C. The push path
   is therefore best-effort and additive, never a regression.
 - START/STOP lifecycle broadcasts continue to require the **already-paired** token
   (`LifecycleAuth.authorized`); only `SET_TOKEN` uses the first-pair rule.

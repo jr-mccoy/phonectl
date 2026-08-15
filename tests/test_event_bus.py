@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from phonectl.daemon.events import EventBus
+from droidjig.daemon.events import EventBus
 
 
 def _clock():

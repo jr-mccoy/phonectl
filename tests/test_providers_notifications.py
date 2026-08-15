@@ -2,9 +2,9 @@ import json as _json
 
 import pytest
 
-from phonectl.providers import notifications as nmod
-from phonectl.providers.notifications import NotificationsProvider
-from phonectl.providers.transport import LoopbackTransport
+from droidjig.providers import notifications as nmod
+from droidjig.providers.notifications import NotificationsProvider
+from droidjig.providers.transport import LoopbackTransport
 
 COMPANION_RAW = {
     "key": "0|com.msg|42|tag|10123", "package": "com.msg",

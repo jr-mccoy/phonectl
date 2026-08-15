@@ -1,5 +1,5 @@
-from phonectl.macro import schema
-from phonectl.macro.engine import Engine, CancellationToken
+from droidjig.macro import schema
+from droidjig.macro.engine import Engine, CancellationToken
 
 
 def _engine(recorder, **kw):

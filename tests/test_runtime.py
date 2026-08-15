@@ -1,6 +1,6 @@
 import pytest
 
-from phonectl import config, errors, runtime
+from droidjig import config, errors, runtime
 
 
 class FakeConn:
@@ -23,7 +23,7 @@ class FakeSession:
 
 
 def test_run_action_success_returns_ok_envelope_and_audits(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -53,7 +53,7 @@ def test_run_action_success_returns_ok_envelope_and_audits(tmp_path, monkeypatch
 
 
 def test_run_action_kill_switch_returns_stopped_envelope(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     (tmp_path / "STOP").write_text("")
     called = []
 
@@ -69,7 +69,7 @@ def test_run_action_kill_switch_returns_stopped_envelope(tmp_path, monkeypatch):
 
 
 def test_run_action_confirm_mode_requires_yes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "confirm"})
     env = runtime.run_action(
         "tap",
@@ -99,7 +99,7 @@ def test_run_action_confirm_mode_requires_yes(tmp_path, monkeypatch):
 
 
 def test_run_action_dry_run_observes_but_does_not_act_or_audit(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -121,8 +121,8 @@ def test_run_action_dry_run_observes_but_does_not_act_or_audit(tmp_path, monkeyp
     assert not (tmp_path / "actions.jsonl").exists()
 
 
-def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+def test_run_action_catches_droidjig_error_into_envelope(tmp_path, monkeypatch):
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -147,7 +147,7 @@ def test_run_action_catches_phonectl_error_into_envelope(tmp_path, monkeypatch):
 
 
 def test_run_action_reports_busy_when_lock_held(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._action_lock.acquire()
     try:
@@ -165,7 +165,7 @@ def test_run_action_reports_busy_when_lock_held(tmp_path, monkeypatch):
 
 
 def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     backend = FakeBackend()
     sess = FakeSession()
     monkeypatch.setattr(
@@ -184,7 +184,7 @@ def test_run_action_releases_lock_after_success(tmp_path, monkeypatch):
 
 
 def test_idempotency_key_replays_first_envelope(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     backend = FakeBackend()
@@ -235,7 +235,7 @@ def _observed(monkeypatch):
 
 
 def test_idempotency_key_dedupes_across_processes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     _observed(monkeypatch)
@@ -261,7 +261,7 @@ def test_idempotency_key_dedupes_across_processes(tmp_path, monkeypatch):
 
 
 def test_idempotency_disk_entry_expires_after_ttl(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     _observed(monkeypatch)
@@ -285,7 +285,7 @@ def test_idempotency_disk_entry_expires_after_ttl(tmp_path, monkeypatch):
 
 
 def test_corrupt_idempotency_file_is_ignored(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     (tmp_path / "idempotency.json").write_text("{not json")
@@ -298,10 +298,10 @@ def test_corrupt_idempotency_file_is_ignored(tmp_path, monkeypatch):
 
 
 def test_two_cli_processes_serialize_via_file_lock(tmp_path, monkeypatch):
-    # A second phonectl process (simulated by an independently held flock on action.lock)
+    # A second droidjig process (simulated by an independently held flock on action.lock)
     # must get a retryable busy envelope, not run concurrently.
     fcntl = pytest.importorskip("fcntl")
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     holder = open(tmp_path / "action.lock", "a+")
     try:
@@ -321,7 +321,7 @@ def test_two_cli_processes_serialize_via_file_lock(tmp_path, monkeypatch):
 
 def test_file_lock_released_after_action(tmp_path, monkeypatch):
     fcntl = pytest.importorskip("fcntl")
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     _observed(monkeypatch)
     backend, sess = FakeBackend(), FakeSession()
@@ -344,7 +344,7 @@ def _payment_observe(b, s, **kw):
 
 
 def test_run_action_denies_critical_risk(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -363,7 +363,7 @@ def test_run_action_denies_critical_risk(tmp_path, monkeypatch):
 
 
 def test_run_action_high_risk_confirm_requires_yes(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -401,7 +401,7 @@ def test_run_action_high_risk_confirm_requires_yes(tmp_path, monkeypatch):
 
 
 def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -426,7 +426,7 @@ def test_run_action_low_risk_success_carries_level(tmp_path, monkeypatch):
 
 
 def test_run_action_rate_limits_after_bucket_fills(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto", "rate_limits": {"tap": 1, "global": 100}})
     backend = FakeBackend()
     sess = FakeSession()
@@ -466,7 +466,7 @@ def test_run_action_rate_limits_after_bucket_fills(tmp_path, monkeypatch):
 def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
     import json as _json
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto", "rate_limits": {"tap": 1, "global": 100}})
     backend = FakeBackend()
     sess = FakeSession()
@@ -502,9 +502,9 @@ def test_rate_history_persisted_and_pruned(tmp_path, monkeypatch):
 
 
 def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import config, capabilities as caps_mod
-    from phonectl.providers.registry import ProviderRegistry
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import config, capabilities as caps_mod
+    from droidjig.providers.registry import ProviderRegistry
 
     class RegistryFakeBackend:
         serial = "r:5555"
@@ -528,8 +528,8 @@ def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
     registry = ProviderRegistry([fake])
 
     def build(cfg):
-        from phonectl.session import Session
-        from phonectl.connection import Connection
+        from droidjig.session import Session
+        from droidjig.connection import Connection
         sess = Session()
         conn = Connection(registry, cfg)
         conn.ensure = lambda: None
@@ -556,11 +556,11 @@ def test_run_action_reports_provider_from_registry(tmp_path, monkeypatch):
 
 
 def test_run_action_blocked_by_companion_stop(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import config, runtime
-    from phonectl.providers.transport import LoopbackTransport
-    from phonectl.providers.registry import ProviderRegistry
-    from phonectl import capabilities as caps_mod
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import config, runtime
+    from droidjig.providers.transport import LoopbackTransport
+    from droidjig.providers.registry import ProviderRegistry
+    from droidjig import capabilities as caps_mod
 
     class MinimalBackend:
         serial = "fake"
@@ -586,8 +586,8 @@ def test_run_action_blocked_by_companion_stop(tmp_path, monkeypatch):
     registry = ProviderRegistry([MinimalBackend()])
 
     def build(cfg):
-        from phonectl.session import Session
-        from phonectl.connection import Connection
+        from droidjig.session import Session
+        from droidjig.connection import Connection
         sess = Session()
         conn = Connection(registry, cfg)
         conn.ensure = lambda: None
@@ -605,7 +605,7 @@ def test_run_action_blocked_by_companion_stop(tmp_path, monkeypatch):
 def test_blocked_action_is_audited(tmp_path, monkeypatch):
     import json as _json
 
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     backend = FakeBackend()
     sess = FakeSession()
@@ -621,7 +621,7 @@ def test_blocked_action_is_audited(tmp_path, monkeypatch):
 
 
 def test_idempotency_key_reexecutes_after_ttl(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     runtime._idempotency_cache.clear()
     backend = FakeBackend()
@@ -652,7 +652,7 @@ def test_idempotency_key_reexecutes_after_ttl(tmp_path, monkeypatch):
 
 
 def test_idempotency_cache_sweeps_expired_on_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     runtime._idempotency_cache.clear()
     backend = FakeBackend()
     sess = FakeSession()
@@ -678,9 +678,9 @@ def test_idempotency_cache_sweeps_expired_on_store(tmp_path, monkeypatch):
 def test_stop_check_failclosed_when_companion_configured_but_unreachable(tmp_path, monkeypatch):
     # Finding 8: kill_switch_active swallows check exceptions, so the check
     # itself must treat "configured but unreachable" as stopped.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    from phonectl import config as _config
-    from phonectl.providers.transport import LoopbackTransport
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    from droidjig import config as _config
+    from droidjig.providers.transport import LoopbackTransport
 
     unreachable = LoopbackTransport({}, available=False)
     env = runtime.run_action(
@@ -696,7 +696,7 @@ def test_run_action_consults_configured_companion_from_cfg(tmp_path, monkeypatch
     # A companion configured via companion_port must be consulted by every
     # run_action call even when the caller does not pass companion_transport —
     # otherwise the companion STOP flag never gates CLI/MCP/daemon actions.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     cfg = {"companion_port": 1, "companion_timeout": 0.05}  # nothing listens on port 1
     env = runtime.run_action(
         "tap", lambda b, s: {}, "i=0",
@@ -721,7 +721,7 @@ def _observe_counter(monkeypatch):
 
 
 def test_action_observe_ttl_reuses_fresh_snapshot(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     calls = _observe_counter(monkeypatch)
     sess = FakeSession()
     sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
@@ -736,7 +736,7 @@ def test_action_observe_ttl_reuses_fresh_snapshot(tmp_path, monkeypatch):
 
 
 def test_action_observe_ttl_default_always_reobserves(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     calls = _observe_counter(monkeypatch)
     sess = FakeSession()
     sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
@@ -751,7 +751,7 @@ def test_action_observe_ttl_default_always_reobserves(tmp_path, monkeypatch):
 
 
 def test_action_observe_ttl_stale_snapshot_reobserves(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     calls = _observe_counter(monkeypatch)
     sess = FakeSession()
     sess.last = {"hash": "h", "app": {"package": "com.x"}, "observed_at": 1000.0}
@@ -766,7 +766,7 @@ def test_action_observe_ttl_stale_snapshot_reobserves(tmp_path, monkeypatch):
 
 
 def test_action_observe_ttl_no_snapshot_reobserves(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     calls = _observe_counter(monkeypatch)
     sess = FakeSession()   # sess.last is None
     env = runtime.run_action(
@@ -782,8 +782,8 @@ def test_action_observe_ttl_no_snapshot_reobserves(tmp_path, monkeypatch):
 # ── companion transport reuse: one persistent transport per (host,port,token) ─
 
 def test_companion_transport_reused_across_actions(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
-    import phonectl.providers.transport as tmod
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
+    import droidjig.providers.transport as tmod
     made = []
 
     class FakeTransport:
@@ -816,7 +816,7 @@ def test_run_action_survives_a_corrupt_ratelimit_file(tmp_path, monkeypatch):
     # A truncated ratelimit.json (kill -9 / full disk mid-write) used to raise
     # JSONDecodeError straight out of run_action, blocking every action forever.
     # Losing the history is recoverable; a dead CLI is not.
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     (tmp_path / "ratelimit.json").write_text('[{"bucket": "tap", "ts": 1')
 
@@ -837,7 +837,7 @@ def test_run_action_survives_a_corrupt_ratelimit_file(tmp_path, monkeypatch):
 
 
 def test_run_action_survives_a_corrupt_idempotency_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    monkeypatch.setenv("DROIDJIG_HOME", str(tmp_path))
     config.save({"mode": "auto"})
     (tmp_path / "idempotency.json").write_text("{not json")
 
