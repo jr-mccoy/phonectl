@@ -23,3 +23,14 @@ def test_kill_switch_file_takes_precedence_over_extra(tmp_path, monkeypatch):
     (tmp_path / "STOP").write_text("")
     # Even if extra check says False, file wins
     assert audit.kill_switch_active(extra_checks=[lambda: False]) is True
+
+
+def test_read_entries_skips_a_torn_trailing_line(tmp_path, monkeypatch):
+    # Appends are not atomic: a crash mid-append tears the last line. The complete
+    # records before it must still be readable (audit D1).
+    monkeypatch.setenv("PHONECTL_HOME", str(tmp_path))
+    from phonectl import audit
+    (tmp_path / "actions.jsonl").write_text(
+        '{"verb": "tap", "ts": 1}\n{"verb": "type", "ts": 2}\n{"verb":')
+    entries = audit.read_entries()
+    assert [e["verb"] for e in entries] == ["tap", "type"]

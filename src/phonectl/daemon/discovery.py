@@ -5,6 +5,7 @@ import json
 import secrets
 from pathlib import Path
 
+from phonectl import state
 from phonectl.config import config_dir
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
@@ -30,18 +31,12 @@ def write(info: dict) -> Path:
     if host not in LOOPBACK:
         raise ValueError(f"daemon is loopback-only; refusing host {host!r}")
     p = _path()
-    p.write_text(json.dumps(info))
+    state.write_json(p, info)
     return p
 
 
 def read() -> dict | None:
-    p = _path()
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text())
-    except (ValueError, OSError):
-        return None
+    return state.read_json(_path(), None) or None
 
 
 def remove() -> None:

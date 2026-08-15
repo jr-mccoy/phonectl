@@ -1,6 +1,7 @@
-import json
 import os
 from pathlib import Path
+
+from phonectl import state
 
 DEFAULTS: dict = {
     "companion_host": "127.0.0.1",
@@ -37,15 +38,20 @@ def _path() -> Path:
 
 
 def load() -> dict:
-    p = _path()
+    """Defaults overlaid with the stored config.
+
+    A corrupt config.json falls back to defaults rather than raising: config is loaded
+    by every command, so raising here would take out `phonectl doctor` — the command
+    whose job is diagnosing a broken install. The fallback is also the safe direction,
+    since `mode` reverts to `confirm` (see `get_mode`).
+    """
     base = dict(DEFAULTS)
-    if p.exists():
-        base.update(json.loads(p.read_text()))
+    base.update(state.read_json(_path(), {}))
     return base
 
 
 def save(cfg: dict) -> None:
-    _path().write_text(json.dumps(cfg, indent=2))
+    state.write_json(_path(), cfg, indent=2)
 
 
 def get_mode(cfg: dict) -> str:

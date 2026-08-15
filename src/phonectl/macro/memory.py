@@ -2,8 +2,8 @@
 """Narrow, redacted, user-controlled memory stores (strategy §25, D12)."""
 from __future__ import annotations
 
-import json
 
+from phonectl import state
 from phonectl.config import config_dir
 
 try:
@@ -38,15 +38,12 @@ def _redact(value):
 
 def read(store) -> dict:
     _check(store)
-    p = _dir() / f"{store}.json"
-    if not p.exists():
-        return {}
-    return json.loads(p.read_text())
+    return state.read_json(_dir() / f"{store}.json", {})
 
 
 def write(store, data) -> None:
     _check(store)
-    (_dir() / f"{store}.json").write_text(json.dumps(_redact(data)))
+    state.write_json(_dir() / f"{store}.json", _redact(data))
 
 
 def update(store, key, value) -> None:

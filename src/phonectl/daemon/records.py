@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import time
 
+from phonectl import state
 from phonectl.config import config_dir
 
 
@@ -59,8 +60,5 @@ def append(record: dict) -> None:
 
 
 def read(limit=None) -> list:
-    p = _path()
-    if not p.exists():
-        return []
-    rows = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    rows = state.read_jsonl(_path())
     return rows[-limit:] if limit else rows

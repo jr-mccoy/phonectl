@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from phonectl import errors
+from phonectl import errors, state
 from phonectl.config import config_dir
 from phonectl.macro import schema, scheduler, triggers
 
@@ -22,21 +22,23 @@ def enable(doc) -> None:
             errs = scheduler.validate(macro.trigger)
             if errs:
                 raise errors.MacroValidationError("; ".join(errs))
-    (_dir() / f"{macro.name}.json").write_text(json.dumps({**doc, "enabled": True}))
+    state.write_json(_dir() / f"{macro.name}.json", {**doc, "enabled": True})
 
 
 def disable(name) -> None:
     p = _dir() / f"{name}.json"
     if p.exists():
-        doc = json.loads(p.read_text())
+        doc = state.read_json(p, {})
         doc["enabled"] = False
-        p.write_text(json.dumps(doc))
+        state.write_json(p, doc)
 
 
 def all() -> list:
     out = []
     for p in sorted(_dir().glob("*.json")):
-        out.append(json.loads(p.read_text()))
+        doc = state.read_json(p, {})
+        if doc:
+            out.append(doc)   # a torn/corrupt macro file is skipped, not fatal
     return out
 
 
