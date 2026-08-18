@@ -24,7 +24,7 @@ and MCP are frontends; the daemon is optional but preferred when running.
 ## Current state
 
 Phases 1–6 are complete and green, plus the companion APK (`com.droidjig.companion`).
-836 tests pass; the runtime is stdlib-only, with an optional `mcp` extra. Core
+877 tests pass; the runtime is stdlib-only, with an optional `mcp` extra. Core
 behavior is validated on a real Samsung Galaxy S25 Ultra over Wireless Debugging.
 See `docs/adversarial-review-2026-07.md` for the security review and its remediation status.
 **Next: Phase 7.1 (Shizuku provider).**

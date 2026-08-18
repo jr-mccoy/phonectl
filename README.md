@@ -1158,7 +1158,7 @@ Config directory: `~/.config/droidjig/` (override: `DROIDJIG_HOME` env var)
 
 ## Status
 
-**Shipped and unit-tested (836 tests):** structured results and capabilities; selector and tree
+**Shipped and unit-tested (877 tests):** structured results and capabilities; selector and tree
 observation; resilience and the setup wizard; the `run_action` single-writer funnel with risk
 policy and audit v2; the provider/capability graph (clipboard, intents, packages, gestures,
 extraction, Termux:API); the companion APK and its event providers (accessibility,
@@ -1555,7 +1555,9 @@ pytest tests/test_ui_parser.py -v                       # one file
 pytest tests/test_ui_parser.py::test_parse_bounds -v    # one test
 ```
 
-The suite is 836 tests, all against injected fakes — no device required (one test needs the optional `mcp` extra and skips without it). Tests marked
+The suite is 879 tests, all against injected fakes — no device required. One test needs the
+optional `mcp` extra and skips without it; one file-permission test skips when the suite runs
+as root. Tests marked
 `device` need real hardware over Wireless Debugging and are excluded in CI
 (`pytest -m "not device"`).
 
