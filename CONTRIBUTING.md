@@ -23,8 +23,8 @@ one per subsystem, written before the code.
 ## Development setup
 
 ```bash
-git clone https://github.com/jr-mccoy/phonectl.git
-cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git
+cd droidjig
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp,yaml]"
 ```
@@ -75,6 +75,24 @@ Tests marked `device` need real hardware over Wireless Debugging and are exclude
 rule and the reason its docs can be trusted. Where a claim is unvalidated, say so in the text.
 If you verify something on real hardware, add it to
 [`docs/integration-smoke.md`](docs/integration-smoke.md) with the device and Android version.
+
+## Cutting a release
+
+Releases are maintainer-only, and the APK attaches itself — do not upload one by hand.
+
+1. Move the `## [Unreleased]` section of [`CHANGELOG.md`](CHANGELOG.md) under a new version
+   heading, and open a fresh `## [Unreleased]` above it.
+2. Set the version in `pyproject.toml`, and `versionName` in
+   `android/accessibility-companion/app/build.gradle.kts` if the companion changed.
+3. Tag the commit and push the tag.
+4. Draft the GitHub release against that tag and **publish** it. Publishing — not drafting — is
+   what fires `android.yml`, which rebuilds the companion from the tag and attaches the APK to
+   the release page as `droidjig-companion-<tag>-debug.apk`.
+
+The attached APK is a **debug** build: signed with Android's universal debug key and flagged
+debuggable. That is deliberate for now — a distribution build needs a real keystore in repo
+secrets, which does not exist yet — and the asset name says so, so nobody installs it thinking
+otherwise.
 
 ## Reporting a security issue
 

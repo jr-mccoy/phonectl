@@ -13,7 +13,7 @@ backported.
 **Please do not open a public issue for a security problem.**
 
 Use GitHub's private vulnerability reporting on this repository:
-[**Report a vulnerability**](https://github.com/jr-mccoy/phonectl/security/advisories/new).
+[**Report a vulnerability**](https://github.com/jr-mccoy/droidjig/security/advisories/new).
 That opens a private advisory visible only to the maintainer.
 
 A useful report includes:

@@ -1,7 +1,7 @@
 # droidjig
 
-[![Python tests](https://github.com/jr-mccoy/phonectl/actions/workflows/python.yml/badge.svg)](https://github.com/jr-mccoy/phonectl/actions/workflows/python.yml)
-[![Android companion APK](https://github.com/jr-mccoy/phonectl/actions/workflows/android.yml/badge.svg)](https://github.com/jr-mccoy/phonectl/actions/workflows/android.yml)
+[![Python tests](https://github.com/jr-mccoy/droidjig/actions/workflows/python.yml/badge.svg)](https://github.com/jr-mccoy/droidjig/actions/workflows/python.yml)
+[![Android companion APK](https://github.com/jr-mccoy/droidjig/actions/workflows/android.yml/badge.svg)](https://github.com/jr-mccoy/droidjig/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -56,7 +56,7 @@ around is a safety control you do not have.
 # 1. Install adb (Termux: pkg install android-tools · Debian: apt install android-tools-adb)
 
 # 2. Install droidjig
-git clone https://github.com/jr-mccoy/phonectl.git && cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git && cd droidjig
 pip install -e .
 
 # 3. Pair with the phone — Settings > Developer options > Wireless debugging
@@ -104,16 +104,17 @@ Wireless Debugging.
 device topology. The real-device connectivity proof and the end-to-end smoke matrix are manual
 steps needing a physical Android 11+ phone with Wireless Debugging enabled; see
 [docs/integration-smoke.md](docs/integration-smoke.md). The Android instrumented tests
-(`connectedAndroidTest`) do not run in CI. Nothing has been released yet — no tag, no PyPI
-package, and the companion APK is a CI artifact rather than a release asset. Phase status lives
+(`connectedAndroidTest`) do not run in CI. Nothing has been released yet — no tag and no PyPI
+package — though publishing a GitHub release now builds the companion and attaches the APK to
+it automatically; until one is published the APK is a CI artifact only. Phase status lives
 in [docs/roadmap.md](docs/roadmap.md); security posture and remaining risk in
 [docs/adversarial-review-2026-07.md](docs/adversarial-review-2026-07.md).
 
 ## Development
 
 ```bash
-git clone https://github.com/jr-mccoy/phonectl.git
-cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git
+cd droidjig
 pip install -e ".[dev]"     # package + console script + pytest
 pip install -e ".[dev,mcp]" # also the optional FastMCP transport
 

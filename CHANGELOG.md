@@ -81,6 +81,10 @@ device.
   required in practice — the metadata simply now says something true. CI runs 3.10, 3.11, 3.13.
 - Made the defaults safe: `mode: confirm`, and unknown companion capabilities disabled rather
   than enabled.
+- Publishing a GitHub release now rebuilds the companion from the tag and attaches the APK to
+  the release page. Previously the APK existed only as a workflow artifact, which expires and
+  requires a GitHub login. The release job is the only job in that workflow with write
+  permission; the build job runs read-only.
 
 ### Fixed
 
@@ -109,8 +113,9 @@ opt-in `action_observe_ttl` lets an action reuse a sufficiently fresh pre-action
 
 ### Known limitations
 
-- No release artifacts: no tag, no PyPI package, and the companion APK is a CI build artifact
-  rather than a GitHub release asset.
+- No release artifacts yet: no tag and no PyPI package. The release pipeline exists — publishing
+  a GitHub release builds the companion from the tag and attaches the APK — but nothing has been
+  published through it, so the APK is still only a CI build artifact.
 - The Kotlin companion is compiled and JVM-unit-tested in CI, but CI runs no emulator, so
   runtime behavior is proven only by the manual on-device matrix in
   [`docs/integration-smoke.md`](docs/integration-smoke.md).
