@@ -4,6 +4,12 @@
 **Status:** Strategy / critique / standalone roadmap  
 **Scope:** This document reviews the project's original design plans and turns the critique into a standalone product and architecture roadmap for evolving `droidjig` from an ADB observe/act bridge into a local Android automation platform for agents.
 
+> **Internal planning document.** This is a working instrument, not user documentation:
+> it thinks in phase numbers and plan IDs, and it records intent that may not have shipped.
+> For what droidjig actually does today, read the [README](../README.md); for what is built
+> versus deferred, read [roadmap.md § Phase status](roadmap.md). The `plans/` directory it
+> references is a local working tree and is not published.
+
 ## 1. Executive summary
 
 The existing plans are a strong foundation. They define a local, no-root Android control layer that observes the phone as structured JSON and acts through ADB primitives, then exposes those capabilities through CLI and MCP. The plans are especially strong on testability, stdlib-only Python for the core, real-device validation, backend isolation, auditability, and safety gating.
