@@ -8,6 +8,10 @@ on:
       - "eval/**"
       - "pyproject.toml"
       - ".github/workflows/python.yml"
+      # test_conformance.py pins the docs' tables to the code, so a docs-only
+      # edit can turn the suite red. CI has to see those edits.
+      - "README.md"
+      - "docs/**"
   pull_request:
     paths:
       - "src/**"
@@ -15,6 +19,10 @@ on:
       - "eval/**"
       - "pyproject.toml"
       - ".github/workflows/python.yml"
+      # test_conformance.py pins the docs' tables to the code, so a docs-only
+      # edit can turn the suite red. CI has to see those edits.
+      - "README.md"
+      - "docs/**"
   workflow_dispatch: {}
 
 jobs:
@@ -39,3 +47,7 @@ jobs:
       - name: Run tests
         # The `device` lane needs real hardware over Wireless Debugging; never run it in CI.
         run: pytest -v -m "not device"
+
+      - name: Run the agent benchmark
+        # Prints the per-scenario metrics table and exits non-zero if any scenario fails.
+        run: python -m eval

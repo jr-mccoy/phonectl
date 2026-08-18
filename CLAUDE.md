@@ -21,10 +21,17 @@ and MCP are frontends; the daemon is optional but preferred when running.
    idempotency, companion startup, pushed-token v2). Read the relevant one before
    reworking that subsystem.
 
+The README is the landing page, not the reference. User-facing detail lives in
+`docs/{install,cli-reference,safety,providers,daemon,configuration,macros,evaluation}.md`,
+and `docs/README.md` indexes everything. **`tests/test_conformance.py` pins those pages to
+the code** — the MCP tool table, the risk signal/level table, and the CLI subcommand set —
+so adding a verb or a risk signal without documenting it turns the suite red. That is
+deliberate; update the doc rather than the test.
+
 ## Current state
 
 Phases 1–6 are complete and green, plus the companion APK (`com.droidjig.companion`).
-836 tests pass; the runtime is stdlib-only, with an optional `mcp` extra. Core
+877 tests pass; the runtime is stdlib-only, with an optional `mcp` extra. Core
 behavior is validated on a real Samsung Galaxy S25 Ultra over Wireless Debugging.
 See `docs/adversarial-review-2026-07.md` for the security review and its remediation status.
 **Next: Phase 7.1 (Shizuku provider).**
@@ -40,6 +47,7 @@ pip install -e ".[mcp]"    # also install the optional FastMCP transport
 pytest -v                  # full suite
 pytest tests/test_ui_parser.py -v                       # one file
 pytest tests/test_ui_parser.py::test_parse_bounds -v    # one test
+python -m eval             # the seven-scenario agent benchmark (also runs in CI)
 ```
 
 No linter or formatter is configured; do not add one unless asked.
@@ -55,3 +63,7 @@ No linter or formatter is configured; do not add one unless asked.
   `docs/integration-smoke.md`.
 - **Never bypass `runtime.run_action`.** Every action goes through it: mode gate,
   kill-switch, risk/policy, rate limit, idempotency, audit.
+- **Docs describe what the code does, not what it was meant to do.** The single most
+  common defect found by review in this repo is prose that describes the intended system
+  — see the eleven mismatches in `docs/adversarial-review-2026-07.md`. When changing
+  behavior, check the claim against the source, not against the previous sentence.

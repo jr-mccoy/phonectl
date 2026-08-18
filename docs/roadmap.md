@@ -6,6 +6,12 @@
 autonomous AI harness/toolkit for Android — an "agent operating system for Android" — as a set of
 phased, test-first implementation plans.
 
+> **Internal planning document.** This is a working instrument, not user documentation:
+> it thinks in phase numbers and plan IDs, and it records intent that may not have shipped.
+> For what droidjig actually does today, read the [README](../README.md); for what is built
+> versus deferred, read § 5 Phase model below. The `plans/` directory referenced throughout
+> is a local working tree and is not published.
+
 ---
 
 ## 1. Why this document exists

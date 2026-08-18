@@ -1907,7 +1907,7 @@ def build_parser() -> argparse.ArgumentParser:
 INTERNAL_ERROR_EXIT = 4
 SIGINT_EXIT = 130   # 128 + SIGINT, the shell convention
 
-_ISSUES_URL = "https://github.com/jumbodaddystack/phonectl/issues"
+_ISSUES_URL = "https://github.com/jr-mccoy/phonectl/issues"
 
 
 def main(argv=None) -> int:

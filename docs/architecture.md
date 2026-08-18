@@ -6,7 +6,7 @@ Read this before changing a core layer.
 
 ## Architecture invariants (must hold across changes)
 
-- **Backend isolation.** Only `adb_backend.py` knows about `adb`. All other layers speak the `backend.Backend` Protocol or the `ProviderRegistry`. Never call `subprocess` or `adb` from anywhere else.
+- **Backend isolation.** Only `adb_backend.py` knows about `adb`. All other layers speak the `backend.Backend` Protocol or the `ProviderRegistry`. Never call `adb` from anywhere else. Providers may shell out to non-`adb` tools (`termux-*`, an OCR binary), but only behind an injected `runner=` seam so tests never spawn a process.
 - **Provider graph.** `ProviderRegistry` (`providers/registry.py`) selects the best provider per capability with graceful degradation and reports the provider path that satisfied each call. Add new providers to the registry, not to `cli.py` directly. Each provider has capability discovery, opt-in config, and degrades cleanly when its underlying service is absent.
 - **`ui_parser` is pure.** XML → `list[dict]` of indexed elements, plus `screen_hash`. No I/O, no subprocess. All edge cases (the trailing `UI hierchary dumped to: /dev/tty` line, missing attrs) live here, fixture-tested.
 - **Element index `i` is the primary target.** Raw `(x,y)` is an escape hatch. This is what makes the agent portable across screen sizes.
