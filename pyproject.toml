@@ -29,9 +29,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jumbodaddystack/phonectl"
-Repository = "https://github.com/jumbodaddystack/phonectl"
-Issues = "https://github.com/jumbodaddystack/phonectl/issues"
+Homepage = "https://github.com/jr-mccoy/phonectl"
+Repository = "https://github.com/jr-mccoy/phonectl"
+Issues = "https://github.com/jr-mccoy/phonectl/issues"
 
 [project.optional-dependencies]
 # The FastMCP transport imports `mcp.server.fastmcp`, which SDK 2.0 removed.
