@@ -104,8 +104,9 @@ Wireless Debugging.
 device topology. The real-device connectivity proof and the end-to-end smoke matrix are manual
 steps needing a physical Android 11+ phone with Wireless Debugging enabled; see
 [docs/integration-smoke.md](docs/integration-smoke.md). The Android instrumented tests
-(`connectedAndroidTest`) do not run in CI. Nothing has been released yet — no tag, no PyPI
-package, and the companion APK is a CI artifact rather than a release asset. Phase status lives
+(`connectedAndroidTest`) do not run in CI. Nothing has been released yet — no tag and no PyPI
+package — though publishing a GitHub release now builds the companion and attaches the APK to
+it automatically; until one is published the APK is a CI artifact only. Phase status lives
 in [docs/roadmap.md](docs/roadmap.md); security posture and remaining risk in
 [docs/adversarial-review-2026-07.md](docs/adversarial-review-2026-07.md).
 

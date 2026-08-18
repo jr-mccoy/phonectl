@@ -9,15 +9,21 @@ on:
     paths:
       - "android/accessibility-companion/**"
       - ".github/workflows/android.yml"
+  # Publishing a release triggers nothing on its own — there is no implicit
+  # "build on release" behavior — so it has to be asked for explicitly.
+  release:
+    types: [published]
   workflow_dispatch: {}
 
-defaults:
-  run:
-    working-directory: android/accessibility-companion
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android/accessibility-companion
     steps:
       - uses: actions/checkout@v4
 
@@ -39,3 +45,40 @@ jobs:
           name: droidjig-companion-debug
           path: android/accessibility-companion/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  # A workflow artifact is not a release asset: it expires and it needs a
+  # GitHub login to download. This job is what actually puts a downloadable
+  # APK on the release page, and it is the only job allowed to write.
+  publish:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the APK the build job produced
+        uses: actions/download-artifact@v4
+        with:
+          name: droidjig-companion-debug
+          path: dist
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          apk="$(find dist -name '*.apk' -print -quit)"
+          if [ -z "$apk" ]; then
+            echo "::error::no APK in the build artifact — nothing to attach"
+            exit 1
+          fi
+          # This is a DEBUG build: signed with Android's universal debug key and
+          # flagged debuggable. The asset name says so, because the one thing a
+          # release page must not do is imply a distribution build.
+          asset="droidjig-companion-${TAG}-debug.apk"
+          mv "$apk" "$asset"
+          gh release upload "$TAG" "$asset" --clobber
+          echo "attached $asset to $TAG"
