@@ -1,7 +1,7 @@
 # droidjig
 
-[![Python tests](https://github.com/jr-mccoy/phonectl/actions/workflows/python.yml/badge.svg)](https://github.com/jr-mccoy/phonectl/actions/workflows/python.yml)
-[![Android companion APK](https://github.com/jr-mccoy/phonectl/actions/workflows/android.yml/badge.svg)](https://github.com/jr-mccoy/phonectl/actions/workflows/android.yml)
+[![Python tests](https://github.com/jr-mccoy/droidjig/actions/workflows/python.yml/badge.svg)](https://github.com/jr-mccoy/droidjig/actions/workflows/python.yml)
+[![Android companion APK](https://github.com/jr-mccoy/droidjig/actions/workflows/android.yml/badge.svg)](https://github.com/jr-mccoy/droidjig/actions/workflows/android.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -56,7 +56,7 @@ around is a safety control you do not have.
 # 1. Install adb (Termux: pkg install android-tools · Debian: apt install android-tools-adb)
 
 # 2. Install droidjig
-git clone https://github.com/jr-mccoy/phonectl.git && cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git && cd droidjig
 pip install -e .
 
 # 3. Pair with the phone — Settings > Developer options > Wireless debugging
@@ -113,8 +113,8 @@ in [docs/roadmap.md](docs/roadmap.md); security posture and remaining risk in
 ## Development
 
 ```bash
-git clone https://github.com/jr-mccoy/phonectl.git
-cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git
+cd droidjig
 pip install -e ".[dev]"     # package + console script + pytest
 pip install -e ".[dev,mcp]" # also the optional FastMCP transport
 

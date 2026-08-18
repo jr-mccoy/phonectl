@@ -23,8 +23,8 @@ one per subsystem, written before the code.
 ## Development setup
 
 ```bash
-git clone https://github.com/jr-mccoy/phonectl.git
-cd phonectl
+git clone https://github.com/jr-mccoy/droidjig.git
+cd droidjig
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,mcp,yaml]"
 ```
