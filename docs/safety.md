@@ -9,9 +9,7 @@ use. The project's honest position is that it is built for *supervised* agent us
 
 ---
 
-## Safety
-
-### Three action modes
+## Three action modes
 
 The `mode` key in `~/.config/droidjig/config.json` (or `$DROIDJIG_HOME/config.json`) controls how action verbs behave:
 
@@ -32,11 +30,11 @@ droidjig tap --index 3 --yes
 droidjig type "hello" --yes
 ```
 
-### Audit log
+## Audit log
 
 Every executed action (tap, type, swipe, key, launch) is appended to `~/.config/droidjig/actions.jsonl` as a JSONL record containing the timestamp, verb, target, resulting foreground app, screen hash, and `outcome` (`ok` or `blocked`). Dry-run actions are not logged.
 
-### Single-writer runtime & audit
+## Single-writer runtime & audit
 
 All mutating action verbs route through `runtime.run_action`, the single writer for UI changes. The funnel applies the kill switch and mode checks, serializes concurrent writers — both within a process (thread lock) and across droidjig processes (an `flock` on `$DROIDJIG_HOME/action.lock`) — stamps each call with a `request_id`, executes the action, re-observes, and writes the audit record.
 
@@ -57,7 +55,7 @@ Single-writer control errors use stable codes:
 | `stopped` | `2` | The `STOP` kill-switch file is present. |
 | `confirmation_required` | `3` | Confirm mode refused the action because `--yes` was not supplied. |
 
-### Risk ledger & policy
+## Risk ledger & policy
 
 Before any mutating action executes, `runtime.run_action` observes the current screen and classifies the pending action as `low`, `medium`, `high`, or `critical`. The classifier reads the foreground package and parsed UI element metadata; it does not call adb directly.
 
@@ -135,7 +133,7 @@ droidjig audit export audit-full.json --no-redact
 droidjig audit purge
 ```
 
-### Kill switch
+## Kill switch
 
 Engage the kill switch to instantly refuse all action verbs regardless of mode. Any of these work:
 

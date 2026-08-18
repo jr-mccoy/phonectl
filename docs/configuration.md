@@ -7,7 +7,7 @@ recovers a dropped connection, and what to turn when it feels slow.
 
 ## Structured results & capabilities
 
-`droidjig` now has a stable structured-result contract for JSON-capable surfaces. `droidjig observe --json` and `droidjig doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
+`droidjig` has a stable structured-result contract for JSON-capable surfaces. `droidjig observe --json` and `droidjig doctor --json` return an envelope with `ok: true`; typed platform errors return `ok: false` with actionable flags instead of tracebacks.
 
 Successful envelope shape:
 
